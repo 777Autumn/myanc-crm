@@ -13,10 +13,15 @@ import os
 import re
 import secrets
 import sqlite3
+import time
 import unicodedata
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Mapping, Protocol, Sequence
+from typing import Any, Callable, Mapping, Protocol, Sequence
+
+
+READBACK_TIMEOUT_SECONDS = 30.0
+READBACK_INTERVAL_SECONDS = 1.0
 
 
 class Backend(Protocol):
@@ -386,15 +391,17 @@ def apply_followup(
         return _finish_existing(backend, ledger, staged, existing, moment)
 
     payload = _followup_payload(staged)
+    verification_payload = _followup_verification_payload(staged)
     try:
         created = backend.create_followup(payload)
         followup_id = _created_record_id(created)
-        actual_followup = backend.get_followup(followup_id)
+        actual_followup = _poll_read(
+            lambda: backend.get_followup(followup_id), verification_payload
+        )
     except Exception:
-        try:
-            actual_followup = backend.find_followup_by_change(change_id)
-        except Exception:
-            actual_followup = None
+        actual_followup = _poll_read(
+            lambda: backend.find_followup_by_change(change_id)
+        )
         if actual_followup is not None:
             return _finish_existing(
                 backend, ledger, staged, _mapping(actual_followup, "followup"), moment
@@ -612,14 +619,7 @@ def _update_and_verify_customer(
 ) -> dict[str, Any]:
     try:
         backend.update_customer(staged["customer_record_id"], staged["customer_patch"])
-        current = backend.get_customer(staged["customer_record_id"])
-        current = _mapping(current, "customer") if current is not None else None
     except Exception as exc:
-        try:
-            current = backend.get_customer(staged["customer_record_id"])
-            current = _mapping(current, "customer") if current is not None else None
-        except Exception:
-            current = None
         uncertain = getattr(exc, "kind", None) in {
             "timeout",
             "protocol_error",
@@ -627,6 +627,10 @@ def _update_and_verify_customer(
         }
     else:
         uncertain = False
+    current = _poll_read(
+        lambda: backend.get_customer(staged["customer_record_id"]),
+        staged["customer_patch"],
+    )
     return _finish_after_customer_write(
         backend, ledger, staged, followup, current, moment, uncertain=uncertain
     )
@@ -860,6 +864,30 @@ def _created_record_id(value: str | Mapping[str, Any]) -> str:
 
 def _fields_match(actual: Mapping[str, Any], expected: Mapping[str, Any]) -> bool:
     return all(_equal(actual.get(key), value) for key, value in expected.items())
+
+
+def _poll_read(
+    read: Callable[[], Mapping[str, Any] | None],
+    expected: Mapping[str, Any] | None = None,
+) -> Mapping[str, Any] | None:
+    """Poll a read after one write; never retries or performs a write itself."""
+
+    deadline = time.monotonic() + max(0.0, READBACK_TIMEOUT_SECONDS)
+    last: Mapping[str, Any] | None = None
+    while True:
+        try:
+            value = read()
+            if value is not None:
+                last = _mapping(value, "readback")
+                if expected is None or _fields_match(last, expected):
+                    return last
+        except Exception:
+            pass
+
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return last
+        time.sleep(min(max(0.0, READBACK_INTERVAL_SECONDS), remaining))
 
 
 def _equal(left: Any, right: Any) -> bool:

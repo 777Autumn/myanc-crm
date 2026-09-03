@@ -3,8 +3,10 @@ from __future__ import annotations
 import copy
 import unittest
 from datetime import datetime, timedelta, timezone
+from unittest import mock
 
 from myanc_crm import Ledger, apply_followup, stage_followup
+from myanc_crm import core as core_module
 
 
 NOW = datetime(2026, 9, 3, 2, 0, tzinfo=timezone.utc)
@@ -67,8 +69,13 @@ class MemoryBackend:
             "followups": ["change_id", "customer_record_id", "occurred_at", "content"],
         }
         self.actions: list[str] = []
+        self.create_mode = "normal"
         self.update_mode = "normal"
         self.hide_followup_readback = False
+        self.followup_read_misses = 0
+        self.find_followup_misses = 0
+        self.customer_read_misses = 0
+        self.stale_customer = None
 
     def read_schema(self):
         return copy.deepcopy(self.schema)
@@ -77,10 +84,16 @@ class MemoryBackend:
         return [copy.deepcopy(row) for row in self.customers.values()]
 
     def get_customer(self, record_id):
+        if self.stale_customer is not None and self.customer_read_misses:
+            self.customer_read_misses -= 1
+            return copy.deepcopy(self.stale_customer)
         row = self.customers.get(record_id)
         return copy.deepcopy(row) if row else None
 
     def find_followup_by_change(self, change_id):
+        if self.find_followup_misses:
+            self.find_followup_misses -= 1
+            return None
         for row in self.followups.values():
             if row["change_id"] == change_id:
                 result = copy.deepcopy(row)
@@ -92,6 +105,8 @@ class MemoryBackend:
         self.actions.append("create_followup")
         record_id = f"followup-{len(self.followups) + 1}"
         self.followups[record_id] = {"record_id": record_id, **copy.deepcopy(dict(fields))}
+        if self.create_mode == "raise_after_write":
+            raise RuntimeError("simulated lost create response")
         return record_id
 
     def update_customer(self, record_id, fields):
@@ -99,11 +114,17 @@ class MemoryBackend:
         if self.update_mode == "raise":
             raise RuntimeError("simulated rejection")
         if self.update_mode != "noop":
+            self.stale_customer = copy.deepcopy(self.customers[record_id])
             self.customers[record_id].update(copy.deepcopy(dict(fields)))
+        if self.update_mode == "raise_after_write":
+            raise RuntimeError("simulated lost update response")
         return None
 
     def get_followup(self, record_id):
         if self.hide_followup_readback:
+            return None
+        if self.followup_read_misses:
+            self.followup_read_misses -= 1
             return None
         row = self.followups.get(record_id)
         if row is None:
@@ -123,6 +144,9 @@ class FollowupCoreTests(unittest.TestCase):
     def setUp(self):
         self.backend = MemoryBackend()
         self.ledger = Ledger()
+        timeout = mock.patch.object(core_module, "READBACK_TIMEOUT_SECONDS", 0)
+        timeout.start()
+        self.addCleanup(timeout.stop)
 
     def tearDown(self):
         self.ledger.close()
@@ -334,6 +358,73 @@ class FollowupCoreTests(unittest.TestCase):
         self.assertEqual(["create_followup", "update_customer"], self.backend.actions)
         self.assertEqual(1, len(self.backend.followups))
 
+    def test_apply_polls_delayed_readback_without_repeating_writes(self):
+        self.backend.followup_read_misses = 2
+        self.backend.customer_read_misses = 2
+        staged = self.stage()
+
+        with (
+            mock.patch.object(core_module, "READBACK_TIMEOUT_SECONDS", 1),
+            mock.patch.object(core_module, "READBACK_INTERVAL_SECONDS", 0),
+        ):
+            result = self.apply(staged["change_id"])
+
+        self.assertEqual("verified", result["status"])
+        self.assertEqual(
+            ["create_followup", "update_customer"], self.backend.actions
+        )
+
+    def test_lost_write_responses_are_resolved_by_reads_not_write_retries(self):
+        self.backend.create_mode = "raise_after_write"
+        self.backend.find_followup_misses = 2
+        self.backend.update_mode = "raise_after_write"
+        self.backend.customer_read_misses = 2
+        staged = self.stage()
+
+        with (
+            mock.patch.object(core_module, "READBACK_TIMEOUT_SECONDS", 1),
+            mock.patch.object(core_module, "READBACK_INTERVAL_SECONDS", 0),
+        ):
+            result = self.apply(staged["change_id"])
+
+        self.assertEqual("verified", result["status"])
+        self.assertEqual(
+            ["create_followup", "update_customer"], self.backend.actions
+        )
+        self.assertEqual("确认需求", self.backend.customers["rec-1"]["last_followup_content"])
+        self.assertEqual("ou-enterprise", next(iter(self.backend.followups.values()))["created_by"])
+        self.assertTrue(all(change["verified"] for change in result["customer_changes"]))
+
+        replay = self.apply(staged["change_id"])
+        self.assertEqual("verified", replay["status"])
+        self.assertTrue(replay["replayed"])
+        self.assertEqual(["create_followup", "update_customer"], self.backend.actions)
+        self.assertEqual(1, len(self.backend.followups))
+
+    def test_readback_polling_stops_at_the_configured_deadline(self):
+        now = 0.0
+        sleeps = []
+
+        def monotonic():
+            return now
+
+        def sleep(seconds):
+            nonlocal now
+            sleeps.append(seconds)
+            now += seconds
+
+        with (
+            mock.patch.object(core_module, "READBACK_TIMEOUT_SECONDS", 30),
+            mock.patch.object(core_module, "READBACK_INTERVAL_SECONDS", 7),
+            mock.patch.object(core_module.time, "monotonic", side_effect=monotonic),
+            mock.patch.object(core_module.time, "sleep", side_effect=sleep),
+        ):
+            result = core_module._poll_read(lambda: None)
+
+        self.assertIsNone(result)
+        self.assertEqual(30, sum(sleeps))
+        self.assertEqual([7, 7, 7, 7, 2], sleeps)
+
     def test_older_followup_is_recorded_without_regressing_latest_summary(self):
         staged = self.stage(
             stage_command(
@@ -362,6 +453,9 @@ class FollowupCoreTests(unittest.TestCase):
         self.assertEqual("customer_update_failed", result["code"])
         self.assertEqual(1, len(self.backend.followups))
         self.assertEqual("首次沟通", self.backend.customers["rec-1"]["last_followup_content"])
+        self.assertEqual(
+            ["create_followup", "update_customer"], self.backend.actions
+        )
 
         self.backend.update_mode = "normal"
         repaired = self.apply(staged["change_id"])

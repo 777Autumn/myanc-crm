@@ -104,8 +104,9 @@ approval should pass the returned `change_id` to `apply`:
 
 This approval is a cooperative soft gate, not a tamper-proof host authorization
 boundary. `apply` still requires the same configured sender and chat, rechecks the
-schema and customer snapshot, writes once, and reads both records back. If the
-preview expired or data drifted, stage a new plan instead of reusing it.
+schema and customer snapshot, writes once, and polls read-only verification for up
+to 30 seconds after each write. It never repeats a write inside that apply attempt.
+If the preview expired or data drifted, stage a new plan instead of reusing it.
 
 Only `status: "verified"` is success. `replan_required`, `partial`,
 `verification_unknown`, and `failed` require inspection or a new plan. Replaying a
@@ -114,14 +115,12 @@ follow-up.
 
 ## Deployment boundary
 
-**This PR does not deploy anything.** It does not install a service, copy runtime
-configuration, change the VPS, or schedule ledger maintenance.
-
-Before any future deployment, the code and configuration must be owned by
-`root` (or the platform administrator) and be read-only to the service account.
-Grant that account only the configuration read access it needs. Its writable
-state directory must have mode `0700`, and the SQLite ledger must have mode
-`0600`.
+Deploy only the five files in `myanc_crm/`; no package installation or extra
+service is required. Production selects `/etc/myanc-crm/config.json` directly and
+does not accept an environment-variable override. The code, launcher, and
+configuration must be owned by `root` and read-only to the service account. Grant
+that account only the configuration read access it needs. Its writable state
+directory must have mode `0700`, and the SQLite ledger must have mode `0600`.
 
 The deployment runbook must also schedule receipt cleanup. Retain terminal
 receipts (`verified`, `replan_required`, `verification_unknown`, and `failed`) for

@@ -63,18 +63,23 @@ class CliBoundaryTests(unittest.TestCase):
         self.config_path.write_text(
             json.dumps(self.config, ensure_ascii=False), encoding="utf-8"
         )
-        self.env = mock.patch.dict(
-            os.environ, {cli.CONFIG_ENV: str(self.config_path)}, clear=False
-        )
-        self.env.start()
-        self.addCleanup(self.env.stop)
 
     def run_cli(self, argv, payload="{}"):
         output = io.StringIO()
-        code = cli.main(argv, stdin=io.StringIO(payload), stdout=output)
+        with mock.patch.object(cli, "_config_path", return_value=self.config_path):
+            code = cli.main(argv, stdin=io.StringIO(payload), stdout=output)
         lines = output.getvalue().splitlines()
         self.assertEqual(1, len(lines))
         return code, json.loads(lines[0])
+
+    def test_environment_cannot_override_the_protected_config_path(self):
+        attacker_path = Path(self.temp.name) / "attacker.json"
+        with mock.patch.dict(
+            os.environ, {"MYANC_CRM_CONFIG": str(attacker_path)}, clear=False
+        ):
+            selected = cli._config_path()
+
+        self.assertNotEqual(attacker_path.resolve(), selected)
 
     def test_only_stage_or_apply_is_accepted_and_no_overrides_exist(self):
         for argv in ([], ["stage", "--profile", "other"], ["--as", "user"]):
@@ -119,7 +124,7 @@ class CliBoundaryTests(unittest.TestCase):
             },
         )
         ledger_type.assert_called_once_with(
-            self.config_path.resolve().parent / ".crm-state/ledger.sqlite3"
+            self.config_path.parent / ".crm-state/ledger.sqlite3"
         )
         stage.assert_called_once()
         ledger_type.return_value.close.assert_called_once_with()

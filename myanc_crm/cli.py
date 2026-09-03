@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Any, Mapping, TextIO
@@ -13,7 +12,6 @@ from .lark import LarkCliBackend
 
 
 MAX_INPUT_BYTES = 256 * 1024
-CONFIG_ENV = "MYANC_CRM_CONFIG"
 
 
 class CliConfigurationError(ValueError):
@@ -21,10 +19,6 @@ class CliConfigurationError(ValueError):
 
 
 def _config_path() -> Path:
-    override = os.environ.get(CONFIG_ENV)
-    if override:
-        return Path(override).expanduser().resolve()
-
     development = Path(__file__).resolve().parents[1] / "config.local.json"
     if development.is_file():
         return development
