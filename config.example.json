@@ -1,0 +1,57 @@
+{
+  "wrapper_path": "/absolute/path/to/lark-enterprise",
+  "base_token": "replace-with-base-token",
+  "customer_table_id": "replace-with-customer-table-id",
+  "followup_table_id": "replace-with-followup-table-id",
+  "base_url": "https://example.feishu.cn/base/replace-with-base-token",
+  "fields": {
+    "customers": {
+      "name": "replace-with-field-id",
+      "customer_number": "replace-with-field-id",
+      "contact": "replace-with-field-id",
+      "phone": "replace-with-field-id",
+      "email": "replace-with-field-id",
+      "stage": "replace-with-field-id",
+      "owner": "replace-with-field-id",
+      "last_followup_at": "replace-with-field-id",
+      "last_followup_content": "replace-with-field-id",
+      "next_action": "replace-with-field-id",
+      "next_followup_at": "replace-with-field-id",
+      "updated_at": "replace-with-field-id"
+    },
+    "followups": {
+      "title": "replace-with-field-id",
+      "change_id": "replace-with-field-id",
+      "customer_record_id": "replace-with-field-id",
+      "occurred_at": "replace-with-field-id",
+      "channel": "replace-with-field-id",
+      "content": "replace-with-field-id",
+      "next_action": "replace-with-field-id",
+      "next_followup_at": "replace-with-field-id",
+      "created_by": "replace-with-field-id",
+      "created_at": "replace-with-field-id"
+    }
+  },
+  "allowed_actors": {
+    "replace-with-sender-id": {
+      "display_name": "replace-with-display-name",
+      "feishu_user_id": "replace-with-feishu-user-id"
+    }
+  },
+  "ttl_seconds": 600,
+  "ledger_path": ".crm-state/ledger.sqlite3",
+  "identity_summary": {
+    "application_id": "replace-with-application-id",
+    "brand": "feishu",
+    "bot": {
+      "identity": "bot",
+      "available": true
+    },
+    "user": {
+      "identity": "user",
+      "available": true,
+      "display_name": "replace-with-display-name",
+      "open_id": "replace-with-feishu-user-id"
+    }
+  }
+}

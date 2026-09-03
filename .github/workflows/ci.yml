@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Validate configuration template
+        run: python -m json.tool config.example.json > /dev/null
+      - name: Compile Python
+        run: python -m compileall -q myanc_crm ops tests
+      - name: Check bootstrap dry run
+        run: >-
+          python ops/bootstrap_base.py
+          --lark-cli /opt/lark-cli
+          --profile ci-placeholder
+          --wrapper-path /opt/lark-enterprise
+          --dry-run
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+      - name: Scan tracked files for credential-shaped values
+        shell: bash
+        run: |
+          test -z "$(git ls-files config.local.json)"
+          if git grep -En 'cli_[[:alnum:]]{16,}|ou_[[:alnum:]]{16,}|(app_secret|client_secret|access_token|refresh_token)[^[:alnum:]]{1,12}[[:alnum:]_./+-]{16,}' -- .; then
+            echo "credential-shaped value found in a tracked file" >&2
+            exit 1
+          fi
