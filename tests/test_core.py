@@ -1,16 +1,37 @@
 from __future__ import annotations
 
 import copy
+import json
+import os
+import sqlite3
+import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from unittest import mock
 
-from myanc_crm import Ledger, apply_followup, stage_followup
+from myanc_crm import (
+    Ledger,
+    apply_followup,
+    begin_approval,
+    bind_approval_card,
+    claim_approval_decision,
+    decide_approval,
+    execute_claimed_approval,
+    stage_followup,
+)
 from myanc_crm import core as core_module
 
 
 NOW = datetime(2026, 9, 3, 2, 0, tzinfo=timezone.utc)
-ACTOR = {"sender_id": "sender-1", "chat_id": "chat-1"}
+TOKEN = "session-action-token-000000000001"
+PRINCIPAL = {
+    "platform": "feishu",
+    "user_id": "sender-1",
+    "chat_id": "chat-1",
+    "session_key": "feishu:chat-1:sender-1",
+    "project": "claude-local",
+    "message_id": "message-1",
+}
 CONFIG = {
     "allowed_actors": {
         "sender-1": {"display_name": "777秋", "feishu_user_id": "ou-enterprise"}
@@ -45,17 +66,13 @@ def stage_command(
     query: str = "C-001",
     occurred_at: str = "2026-09-03T10:00:00+08:00",
     content: str = "确认需求",
-    actor: dict | None = None,
     **followup,
 ) -> dict:
     return {
-        "actor": actor or ACTOR,
         "customer_query": query,
-        "followup": {
-            "occurred_at": occurred_at,
-            "content": content,
-            **followup,
-        },
+        "occurred_at": occurred_at,
+        "content": content,
+        **followup,
     }
 
 
@@ -144,6 +161,7 @@ class FollowupCoreTests(unittest.TestCase):
     def setUp(self):
         self.backend = MemoryBackend()
         self.ledger = Ledger()
+        self.approvals = {}
         timeout = mock.patch.object(core_module, "READBACK_TIMEOUT_SECONDS", 0)
         timeout.start()
         self.addCleanup(timeout.stop)
@@ -153,17 +171,48 @@ class FollowupCoreTests(unittest.TestCase):
 
     def stage(self, command=None):
         return stage_followup(
-            command or stage_command(), self.backend, self.ledger, CONFIG, NOW
+            command or stage_command(), self.backend, self.ledger, CONFIG, TOKEN, NOW
         )
 
-    def apply(self, change_id, actor=None):
-        return apply_followup(
-            {"actor": actor or ACTOR, "change_id": change_id},
+    def begin(self, change_id, principal=None, now=NOW, token=TOKEN):
+        return begin_approval(
+            {"change_id": change_id, "principal": principal or PRINCIPAL},
             self.backend,
             self.ledger,
             CONFIG,
-            NOW,
+            token,
+            now,
         )
+
+    def decide(self, approval_id, decision="approve", principal=None, now=NOW):
+        callback = principal or PRINCIPAL
+        approval = self.ledger.get_approval(approval_id)
+        if approval is not None and approval["card_message_id"] is None:
+            bind_approval_card(
+                {"approval_id": approval_id, "principal": callback},
+                self.ledger,
+                CONFIG,
+            )
+        return decide_approval(
+            {
+                "approval_id": approval_id,
+                "decision": decision,
+                "principal": callback,
+            },
+            self.backend,
+            self.ledger,
+            CONFIG,
+            now,
+        )
+
+    def apply(self, change_id):
+        approval_id = self.approvals.get(change_id)
+        if approval_id is None:
+            approval = self.begin(change_id)
+            self.assertEqual("pending", approval["status"])
+            approval_id = approval["approval_id"]
+            self.approvals[change_id] = approval_id
+        return self.decide(approval_id)
 
     def test_stage_is_read_only_prefers_exact_customer_number_and_fences_crm_text(self):
         first = self.backend.customers["rec-1"]
@@ -219,7 +268,7 @@ class FollowupCoreTests(unittest.TestCase):
 
     def test_missing_followup_time_asks_for_time_without_staging(self):
         command = stage_command()
-        del command["followup"]["occurred_at"]
+        del command["occurred_at"]
 
         result = self.stage(command)
 
@@ -239,9 +288,7 @@ class FollowupCoreTests(unittest.TestCase):
         self.assertEqual([], self.backend.actions)
 
     def test_stage_failures_stay_in_stage_status_set(self):
-        denied = self.stage(
-            stage_command(actor={"sender_id": "unknown", "chat_id": "chat-1"})
-        )
+        denied = self.stage({**stage_command(), "actor": {"sender_id": "unknown"}})
         self.assertEqual(("blocked", "invalid_request"), (denied["status"], denied["code"]))
 
         def unavailable():
@@ -252,62 +299,440 @@ class FollowupCoreTests(unittest.TestCase):
         self.assertEqual("blocked", unavailable_result["status"])
         self.assertEqual("backend_read_failed", unavailable_result["code"])
 
-    def test_apply_invalid_input_uses_only_apply_statuses(self):
-        no_change_id = apply_followup(
-            {"actor": ACTOR}, self.backend, self.ledger, CONFIG, NOW
-        )
-        self.assertEqual("failed", no_change_id["status"])
-
+    def test_public_apply_is_always_blocked(self):
         staged = self.stage()
         result = apply_followup(
-            {
-                "actor": ACTOR,
-                "change_id": staged["change_id"],
-                "content": "attempt to alter approved payload",
-            },
+            {"change_id": staged["change_id"]},
             self.backend,
             self.ledger,
             CONFIG,
             NOW,
         )
-        self.assertEqual("replan_required", result["status"])
+        self.assertEqual(("blocked", "host_approval_required"), (result["status"], result["code"]))
         self.assertEqual([], self.backend.actions)
 
-    def test_apply_binds_sender_and_chat(self):
+    def test_host_decision_requires_the_bound_sender_chat_session_and_project(self):
         staged = self.stage()
+        approval = self.begin(staged["change_id"])
+        for field, value in (
+            ("user_id", "other-user"),
+            ("chat_id", "other-chat"),
+            ("session_key", "other-session"),
+            ("project", "other-project"),
+        ):
+            with self.subTest(field=field):
+                other = {**PRINCIPAL, field: value, "message_id": "callback"}
+                result = self.decide(approval["approval_id"], principal=other)
+                self.assertEqual("blocked", result["status"])
+                self.assertEqual(
+                    "invalid_host_request" if field == "user_id" else "principal_mismatch",
+                    result["code"],
+                )
+        self.assertEqual([], self.backend.actions)
 
-        result = self.apply(
-            staged["change_id"], {"sender_id": "sender-1", "chat_id": "other-chat"}
+        callback = {**PRINCIPAL, "message_id": "card-callback-message"}
+        bound = bind_approval_card(
+            {"approval_id": approval["approval_id"], "principal": callback},
+            self.ledger,
+            CONFIG,
+        )
+        self.assertEqual("bound", bound["status"])
+        accepted = self.decide(approval["approval_id"], principal=callback)
+        self.assertEqual("verified", accepted["status"])
+        stored = self.ledger.get_approval(approval["approval_id"])
+        self.assertEqual("card-callback-message", stored["card_message_id"])
+
+        copied_card = self.decide(
+            approval["approval_id"],
+            principal={**PRINCIPAL, "message_id": "different-card-message"},
+        )
+        self.assertEqual(("blocked", "card_mismatch"), (copied_card["status"], copied_card["code"]))
+
+    def test_host_claim_precedes_card_update_and_execution(self):
+        staged = self.stage()
+        approval = self.begin(staged["change_id"])
+        callback = {**PRINCIPAL, "message_id": "approval-card"}
+        self.assertEqual(
+            "bound",
+            bind_approval_card(
+                {"approval_id": approval["approval_id"], "principal": callback},
+                self.ledger,
+                CONFIG,
+            )["status"],
         )
 
-        self.assertEqual("replan_required", result["status"])
-        self.assertEqual("actor_or_chat_mismatch", result["code"])
+        claimed = claim_approval_decision(
+            {
+                "approval_id": approval["approval_id"],
+                "decision": "approve",
+                "principal": callback,
+            },
+            self.ledger,
+            CONFIG,
+            NOW,
+        )
+
+        self.assertEqual("executing", claimed["status"])
+        self.assertTrue(claimed["execute"])
         self.assertEqual([], self.backend.actions)
+        stored = self.ledger.get_approval(approval["approval_id"])
+        self.assertEqual("executing", stored["state"])
+        self.assertEqual("approval-card", stored["card_message_id"])
+
+        completed = execute_claimed_approval(
+            {"approval_id": approval["approval_id"], "principal": callback},
+            self.backend,
+            self.ledger,
+            CONFIG,
+            NOW,
+        )
+
+        self.assertEqual("verified", completed["status"])
+        self.assertEqual(["create_followup", "update_customer"], self.backend.actions)
+
+    def test_conflicting_or_duplicate_click_during_execution_is_non_mutating(self):
+        staged = self.stage()
+        approval = self.begin(staged["change_id"])
+        callback = {**PRINCIPAL, "message_id": "approval-card"}
+        self.assertEqual(
+            "bound",
+            bind_approval_card(
+                {"approval_id": approval["approval_id"], "principal": callback},
+                self.ledger,
+                CONFIG,
+            )["status"],
+        )
+        first = claim_approval_decision(
+            {
+                "approval_id": approval["approval_id"],
+                "decision": "approve",
+                "principal": callback,
+            },
+            self.ledger,
+            CONFIG,
+            NOW,
+        )
+        self.assertTrue(first["execute"])
+
+        for decision in ("approve", "modify", "cancel"):
+            with self.subTest(decision=decision):
+                later = claim_approval_decision(
+                    {
+                        "approval_id": approval["approval_id"],
+                        "decision": decision,
+                        "principal": callback,
+                    },
+                    self.ledger,
+                    CONFIG,
+                    NOW + timedelta(seconds=1),
+                )
+                self.assertEqual(
+                    ("executing", False),
+                    (later["status"], later["execute"]),
+                )
+                self.assertIn(later["code"], {"apply_in_progress", "execution_in_progress"})
+
+        self.assertEqual("executing", self.ledger.get_approval(approval["approval_id"])["state"])
+        self.assertEqual([], self.backend.actions)
+
+    def test_wrong_principal_cannot_claim_or_bind_the_card(self):
+        staged = self.stage()
+        approval = self.begin(staged["change_id"])
+        original = {**PRINCIPAL, "message_id": "approval-card"}
+        self.assertEqual(
+            "bound",
+            bind_approval_card(
+                {"approval_id": approval["approval_id"], "principal": original},
+                self.ledger,
+                CONFIG,
+            )["status"],
+        )
+        wrong = {**PRINCIPAL, "chat_id": "other-chat", "message_id": "wrong-card"}
+
+        rejected = claim_approval_decision(
+            {
+                "approval_id": approval["approval_id"],
+                "decision": "approve",
+                "principal": wrong,
+            },
+            self.ledger,
+            CONFIG,
+            NOW,
+        )
+
+        self.assertEqual(("blocked", "principal_mismatch"), (rejected["status"], rejected["code"]))
+        stored = self.ledger.get_approval(approval["approval_id"])
+        self.assertEqual("pending", stored["state"])
+        self.assertEqual("approval-card", stored["card_message_id"])
+        self.assertEqual([], self.backend.actions)
+
+    def test_unbound_card_cannot_claim_an_approval(self):
+        staged = self.stage()
+        approval = self.begin(staged["change_id"])
+
+        result = claim_approval_decision(
+            {
+                "approval_id": approval["approval_id"],
+                "decision": "approve",
+                "principal": {**PRINCIPAL, "message_id": "unpublished-card"},
+            },
+            self.ledger,
+            CONFIG,
+            NOW,
+        )
+
+        self.assertEqual(("blocked", "card_unbound"), (result["status"], result["code"]))
+        self.assertEqual("pending", self.ledger.get_approval(approval["approval_id"])["state"])
+        self.assertEqual([], self.backend.actions)
+
+    def test_card_binding_is_idempotent_only_for_the_emitted_message(self):
+        staged = self.stage()
+        approval = self.begin(staged["change_id"])
+        emitted = {**PRINCIPAL, "message_id": "card-emitted"}
+
+        first = bind_approval_card(
+            {"approval_id": approval["approval_id"], "principal": emitted},
+            self.ledger,
+            CONFIG,
+        )
+        replay = bind_approval_card(
+            {"approval_id": approval["approval_id"], "principal": emitted},
+            self.ledger,
+            CONFIG,
+        )
+        copied = bind_approval_card(
+            {
+                "approval_id": approval["approval_id"],
+                "principal": {**PRINCIPAL, "message_id": "card-copied"},
+            },
+            self.ledger,
+            CONFIG,
+        )
+
+        self.assertEqual("bound", first["status"])
+        self.assertEqual("bound", replay["status"])
+        self.assertEqual(("blocked", "card_mismatch"), (copied["status"], copied["code"]))
+
+    def test_host_begin_requires_the_unmodified_session_token_and_allowed_user(self):
+        staged = self.stage()
+        wrong_token = self.begin(staged["change_id"], token="wrong-token-000000000000000000000")
+        self.assertEqual(("blocked", "session_mismatch"), (wrong_token["status"], wrong_token["code"]))
+
+        other_user = {**PRINCIPAL, "user_id": "not-allowed"}
+        denied = self.begin(staged["change_id"], principal=other_user)
+        self.assertEqual(("blocked", "invalid_host_request"), (denied["status"], denied["code"]))
+        self.assertEqual([], self.backend.actions)
+
+    def test_host_begin_is_idempotent_for_the_same_change_and_principal(self):
+        staged = self.stage()
+        first = self.begin(staged["change_id"])
+        second = self.begin(
+            staged["change_id"], principal={**PRINCIPAL, "message_id": "retry-message"}
+        )
+        self.assertEqual(first["approval_id"], second["approval_id"])
+        self.assertEqual(first["preview"], second["preview"])
+
+    def test_preview_tampering_blocks_the_write(self):
+        staged = self.stage()
+        approval = self.begin(staged["change_id"])
+        body = self.ledger.get(staged["change_id"])
+        body["followup"]["content"] = "tampered after preview"
+        body.pop("state")
+        body.pop("receipt")
+        body.pop("action_token_hash")
+        with self.ledger._db:
+            self.ledger._db.execute(
+                "UPDATE staged_changes SET body_json = ? WHERE change_id = ?",
+                (core_module._json(body), staged["change_id"]),
+            )
+
+        result = self.decide(approval["approval_id"])
+        self.assertEqual(("blocked", "preview_changed"), (result["status"], result["code"]))
+        self.assertEqual([], self.backend.actions)
+
+    def test_cancel_and_modify_are_terminal_zero_write_decisions(self):
+        for decision, status in (("cancel", "cancelled"), ("modify", "superseded")):
+            with self.subTest(decision=decision):
+                staged = self.stage(stage_command(content=decision))
+                approval = self.begin(staged["change_id"])
+                result = self.decide(approval["approval_id"], decision=decision)
+                self.assertEqual(status, result["status"])
+                replay = self.decide(approval["approval_id"], decision="approve")
+                self.assertEqual(status, replay["status"])
+                self.assertTrue(replay["replayed"])
+        self.assertEqual([], self.backend.actions)
+
+    def test_approval_expires_without_writing(self):
+        staged = self.stage()
+        approval = self.begin(staged["change_id"])
+        result = self.decide(
+            approval["approval_id"], now=NOW + timedelta(seconds=601)
+        )
+        self.assertEqual("expired", result["status"])
+        self.assertEqual([], self.backend.actions)
+
+    def test_ledger_survives_restart_and_never_returns_raw_action_token(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = f"{directory}/ledger.sqlite3"
+            first = Ledger(path)
+            staged = stage_followup(
+                stage_command(), self.backend, first, CONFIG, TOKEN, NOW
+            )
+            first.close()
+            second = Ledger(path)
+            try:
+                stored = second.get(staged["change_id"])
+                self.assertNotEqual(TOKEN, stored["action_token_hash"])
+                approval = begin_approval(
+                    {"change_id": staged["change_id"], "principal": PRINCIPAL},
+                    self.backend,
+                    second,
+                    CONFIG,
+                    TOKEN,
+                    NOW,
+                )
+                self.assertEqual("pending", approval["status"])
+            finally:
+                second.close()
+
+    def test_existing_ledger_is_migrated_additively_and_old_stage_cannot_bind(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = f"{directory}/ledger.sqlite3"
+            connection = sqlite3.connect(path)
+            connection.execute(
+                """
+                CREATE TABLE staged_changes (
+                    change_id TEXT PRIMARY KEY,
+                    sender_id TEXT NOT NULL,
+                    chat_id TEXT NOT NULL,
+                    state TEXT NOT NULL,
+                    body_json TEXT NOT NULL,
+                    receipt_json TEXT
+                )
+                """
+            )
+            connection.execute(
+                "INSERT INTO staged_changes VALUES (?, ?, ?, ?, ?, NULL)",
+                (
+                    "chg_legacy",
+                    "legacy-user",
+                    "legacy-chat",
+                    "staged",
+                    json.dumps({"change_id": "chg_legacy"}),
+                ),
+            )
+            connection.commit()
+            connection.close()
+            os.chmod(path, 0o600)
+
+            ledger = Ledger(path)
+            try:
+                columns = {
+                    row["name"]
+                    for row in ledger._db.execute("PRAGMA table_info(staged_changes)")
+                }
+                self.assertIn("action_token_hash", columns)
+                self.assertIsNotNone(
+                    ledger._db.execute(
+                        "SELECT name FROM sqlite_master WHERE name = 'approvals'"
+                    ).fetchone()
+                )
+                result = begin_approval(
+                    {"change_id": "chg_legacy", "principal": PRINCIPAL},
+                    self.backend,
+                    ledger,
+                    CONFIG,
+                    TOKEN,
+                    NOW,
+                )
+                self.assertEqual(("blocked", "session_mismatch"), (result["status"], result["code"]))
+            finally:
+                ledger.close()
 
     def test_new_stage_supersedes_previous_pending_change(self):
         old = self.stage()
+        approval = self.begin(old["change_id"])
         new = self.stage(stage_command(content="修订方案"))
 
-        result = self.apply(old["change_id"])
+        result = self.decide(approval["approval_id"])
 
-        self.assertEqual("replan_required", result["status"])
-        self.assertEqual("superseded", result["code"])
+        self.assertEqual("superseded", result["status"])
         self.assertEqual("staged", self.ledger.get(new["change_id"])["state"])
+        self.assertEqual([], self.backend.actions)
+
+        replacement = self.begin(new["change_id"])
+        self.assertEqual([approval["approval_id"]], replacement["superseded_approval_ids"])
+
+    def test_later_begin_reports_every_stale_card_in_the_same_session(self):
+        first = self.stage(stage_command(content="A"))
+        stale_card = self.begin(first["change_id"])
+        self.stage(stage_command(content="B"))
+        latest = self.stage(stage_command(content="C"))
+
+        approval = self.begin(latest["change_id"])
+
+        self.assertEqual([stale_card["approval_id"]], approval["superseded_approval_ids"])
+        result = self.decide(stale_card["approval_id"])
+        self.assertEqual("superseded", result["status"])
+        self.assertEqual([], self.backend.actions)
+
+    def test_completed_modify_is_not_reported_as_a_stale_card_again(self):
+        first = self.stage(stage_command(content="A"))
+        approval = self.begin(first["change_id"])
+        self.assertEqual(
+            "superseded",
+            self.decide(approval["approval_id"], decision="modify")["status"],
+        )
+
+        latest = self.stage(stage_command(content="B"))
+        replacement = self.begin(latest["change_id"])
+
+        self.assertEqual([], replacement["superseded_approval_ids"])
+        self.assertEqual([], self.backend.actions)
+
+    def test_a_different_session_token_does_not_supersede_pending_work(self):
+        old = self.stage()
+        approval = self.begin(old["change_id"])
+        other = stage_followup(
+            stage_command(content="other session"),
+            self.backend,
+            self.ledger,
+            CONFIG,
+            "other-session-token-00000000000001",
+            NOW,
+        )
+        self.assertEqual("staged", other["status"])
+        result = self.decide(approval["approval_id"])
+        self.assertEqual("verified", result["status"])
+
+    def test_host_begin_supersedes_same_principal_after_action_token_rotation(self):
+        old = self.stage(stage_command(content="before restart"))
+        stale_card = self.begin(old["change_id"])
+        rotated_token = "rotated-session-token-0000000000001"
+        new = stage_followup(
+            stage_command(content="after restart"),
+            self.backend,
+            self.ledger,
+            CONFIG,
+            rotated_token,
+            NOW,
+        )
+
+        current = self.begin(new["change_id"], token=rotated_token)
+        stale_result = self.decide(stale_card["approval_id"])
+
+        self.assertEqual([stale_card["approval_id"]], current["superseded_approval_ids"])
+        self.assertEqual("superseded", stale_result["status"])
+        self.assertEqual("superseded", self.ledger.get(old["change_id"])["state"])
         self.assertEqual([], self.backend.actions)
 
     def test_expired_change_is_rejected_without_a_write(self):
         staged = self.stage(stage_command())
         self.backend.actions.clear()
 
-        result = apply_followup(
-            {"actor": ACTOR, "change_id": staged["change_id"]},
-            self.backend,
-            self.ledger,
-            CONFIG,
-            NOW + timedelta(seconds=601),
-        )
+        result = self.begin(staged["change_id"], now=NOW + timedelta(seconds=601))
 
-        self.assertEqual("replan_required", result["status"])
+        self.assertEqual("blocked", result["status"])
         self.assertEqual("expired", result["code"])
         self.assertEqual([], self.backend.actions)
 
@@ -322,10 +747,30 @@ class FollowupCoreTests(unittest.TestCase):
         backend = MemoryBackend()
         ledger = Ledger()
         try:
-            staged = stage_followup(stage_command(), backend, ledger, CONFIG, NOW)
+            staged = stage_followup(stage_command(), backend, ledger, CONFIG, TOKEN, NOW)
             backend.customers["rec-1"]["owner"] = "销售乙"
-            result = apply_followup(
-                {"actor": ACTOR, "change_id": staged["change_id"]},
+            approval = begin_approval(
+                {"change_id": staged["change_id"], "principal": PRINCIPAL},
+                backend,
+                ledger,
+                CONFIG,
+                TOKEN,
+                NOW,
+            )
+            self.assertEqual(
+                "bound",
+                bind_approval_card(
+                    {"approval_id": approval["approval_id"], "principal": PRINCIPAL},
+                    ledger,
+                    CONFIG,
+                )["status"],
+            )
+            result = decide_approval(
+                {
+                    "approval_id": approval["approval_id"],
+                    "decision": "approve",
+                    "principal": PRINCIPAL,
+                },
                 backend,
                 ledger,
                 CONFIG,
@@ -458,7 +903,22 @@ class FollowupCoreTests(unittest.TestCase):
         )
 
         self.backend.update_mode = "normal"
-        repaired = self.apply(staged["change_id"])
+        replay = self.apply(staged["change_id"])
+        self.assertEqual("partial", replay["status"])
+        self.assertTrue(replay["replayed"])
+
+        repair_approval = self.begin(staged["change_id"], now=NOW + timedelta(minutes=1))
+        self.assertEqual("pending", repair_approval["status"])
+        self.assertNotEqual(self.approvals[staged["change_id"]], repair_approval["approval_id"])
+        old_card_replay = self.apply(staged["change_id"])
+        self.assertEqual("partial", old_card_replay["status"])
+        self.assertEqual(
+            "already_verified",
+            repair_approval["preview"]["effects"]["followup"]["action"],
+        )
+        repaired = self.decide(
+            repair_approval["approval_id"], now=NOW + timedelta(minutes=1)
+        )
         self.assertEqual("verified", repaired["status"])
         self.assertEqual(1, len(self.backend.followups))
         self.assertEqual(
@@ -466,9 +926,96 @@ class FollowupCoreTests(unittest.TestCase):
             self.backend.actions,
         )
 
-    def test_apply_recovers_after_process_stops_between_the_two_writes(self):
+    def test_cancelled_partial_repair_can_be_approved_later_without_duplicate_followup(self):
+        self.backend.update_mode = "noop"
+        staged = self.stage()
+        first_result = self.apply(staged["change_id"])
+        self.assertEqual("partial", first_result["status"])
+
+        repair = self.begin(staged["change_id"], now=NOW + timedelta(minutes=1))
+        cancelled = self.decide(
+            repair["approval_id"], decision="cancel", now=NOW + timedelta(minutes=1)
+        )
+        self.assertEqual("cancelled", cancelled["status"])
+        self.assertEqual("partial", self.ledger.get(staged["change_id"])["state"])
+
+        self.backend.update_mode = "normal"
+        retried = self.begin(staged["change_id"], now=NOW + timedelta(minutes=2))
+        self.assertNotEqual(repair["approval_id"], retried["approval_id"])
+        completed = self.decide(
+            retried["approval_id"], now=NOW + timedelta(minutes=2)
+        )
+        self.assertEqual("verified", completed["status"])
+        self.assertEqual(1, len(self.backend.followups))
+
+    def test_partial_repair_rebinds_after_restart_token_rotation(self):
+        self.backend.update_mode = "noop"
+        staged = self.stage()
+        self.assertEqual("partial", self.apply(staged["change_id"])["status"])
+        rotated_token = "rotated-repair-token-00000000000001"
+
+        rejected = self.begin(
+            staged["change_id"],
+            principal={**PRINCIPAL, "chat_id": "other-chat"},
+            now=NOW + timedelta(minutes=1),
+            token=rotated_token,
+        )
+        self.assertEqual(("blocked", "principal_mismatch"), (rejected["status"], rejected["code"]))
+        self.assertNotEqual(
+            core_module._action_token_hash(rotated_token),
+            self.ledger.get(staged["change_id"])["action_token_hash"],
+        )
+
+        self.backend.update_mode = "normal"
+        repair = self.begin(
+            staged["change_id"],
+            now=NOW + timedelta(minutes=1),
+            token=rotated_token,
+        )
+        self.assertEqual("pending", repair["status"])
+        self.assertEqual(
+            core_module._action_token_hash(rotated_token),
+            self.ledger.get(staged["change_id"])["action_token_hash"],
+        )
+        completed = self.decide(
+            repair["approval_id"], now=NOW + timedelta(minutes=1)
+        )
+
+        self.assertEqual("verified", completed["status"])
+        self.assertEqual(1, len(self.backend.followups))
+        self.assertEqual(
+            ["create_followup", "update_customer", "update_customer"],
+            self.backend.actions,
+        )
+
+    def test_new_stage_closes_a_partial_repair_card_without_losing_repair_state(self):
+        self.backend.update_mode = "noop"
+        staged = self.stage()
+        self.assertEqual("partial", self.apply(staged["change_id"])["status"])
+        repair = self.begin(staged["change_id"], now=NOW + timedelta(minutes=1))
+
+        self.stage(stage_command(content="new request"))
+
+        self.assertEqual("superseded", self.decide(repair["approval_id"])["status"])
+        self.assertEqual("partial", self.ledger.get(staged["change_id"])["state"])
+        reopened = self.begin(staged["change_id"], now=NOW + timedelta(minutes=2))
+        self.assertEqual("pending", reopened["status"])
+        self.assertNotEqual(repair["approval_id"], reopened["approval_id"])
+
+    def test_stale_worker_is_never_automatically_reclaimed_after_one_write(self):
         staged = self.stage()
         change_id = staged["change_id"]
+        approval = self.begin(change_id)
+        self.approvals[change_id] = approval["approval_id"]
+        self.assertEqual(
+            "bound",
+            bind_approval_card(
+                {"approval_id": approval["approval_id"], "principal": PRINCIPAL},
+                self.ledger,
+                CONFIG,
+            )["status"],
+        )
+        self.assertTrue(self.ledger.claim_approval(approval["approval_id"], "2026-09-03T02:00:00Z"))
         body = self.ledger.get(change_id)
         self.assertTrue(self.ledger.claim(change_id))
         self.backend.create_followup(
@@ -481,16 +1028,141 @@ class FollowupCoreTests(unittest.TestCase):
             }
         )
 
-        result = self.apply(change_id)
+        in_progress = self.apply(change_id)
+        self.assertEqual(("verification_unknown", "apply_in_progress"), (in_progress["status"], in_progress["code"]))
 
-        self.assertEqual("verified", result["status"])
-        self.assertEqual(1, len(self.backend.followups))
-        self.assertEqual(
-            ["create_followup", "update_customer"], self.backend.actions
+        still_owned = self.decide(
+            approval["approval_id"], now=NOW + timedelta(seconds=121)
         )
         self.assertEqual(
+            ("verification_unknown", "apply_in_progress", "executing"),
+            (
+                still_owned["status"],
+                still_owned["code"],
+                still_owned["approval_state"],
+            ),
+        )
+        self.assertEqual(["create_followup"], self.backend.actions)
+
+        result = self.decide(
+            approval["approval_id"],
+            now=NOW
+            + timedelta(seconds=core_module.APPROVAL_EXECUTION_UNCERTAIN_SECONDS + 1),
+        )
+
+        self.assertEqual(
+            ("verification_unknown", "execution_result_unknown", "executing"),
+            (result["status"], result["code"], result["approval_state"]),
+        )
+        self.assertEqual(1, len(self.backend.followups))
+        self.assertEqual(["create_followup"], self.backend.actions)
+        self.assertNotEqual(
             "确认需求", self.backend.customers["rec-1"]["last_followup_content"]
         )
+
+    def test_second_ledger_connection_cannot_take_an_executing_approval(self):
+        with tempfile.TemporaryDirectory() as directory:
+            ledger_path = f"{directory}/ledger.sqlite3"
+            first = Ledger(ledger_path)
+            second = None
+            try:
+                staged = stage_followup(
+                    stage_command(), self.backend, first, CONFIG, TOKEN, NOW
+                )
+                approval = begin_approval(
+                    {"change_id": staged["change_id"], "principal": PRINCIPAL},
+                    self.backend,
+                    first,
+                    CONFIG,
+                    TOKEN,
+                    NOW,
+                )
+                self.assertTrue(
+                    first.bind_card_message(
+                        approval["approval_id"], PRINCIPAL["message_id"]
+                    )
+                )
+                self.assertTrue(
+                    first.claim_approval(
+                        approval["approval_id"], "2026-09-03T02:00:00Z"
+                    )
+                )
+                self.assertTrue(first.claim(staged["change_id"]))
+
+                second = Ledger(ledger_path)
+                result = decide_approval(
+                    {
+                        "approval_id": approval["approval_id"],
+                        "decision": "approve",
+                        "principal": PRINCIPAL,
+                    },
+                    self.backend,
+                    second,
+                    CONFIG,
+                    NOW + timedelta(seconds=121),
+                )
+
+                self.assertEqual(
+                    ("verification_unknown", "apply_in_progress", "executing"),
+                    (
+                        result["status"],
+                        result["code"],
+                        result["approval_state"],
+                    ),
+                )
+                self.assertEqual([], self.backend.actions)
+            finally:
+                if second is not None:
+                    second.close()
+                first.close()
+
+    def test_stale_execution_before_first_write_requires_manual_reconciliation(self):
+        staged = self.stage()
+        approval = self.begin(staged["change_id"])
+        self.assertEqual(
+            "bound",
+            bind_approval_card(
+                {"approval_id": approval["approval_id"], "principal": PRINCIPAL},
+                self.ledger,
+                CONFIG,
+            )["status"],
+        )
+        self.assertTrue(
+            self.ledger.claim_approval(approval["approval_id"], "2026-09-03T02:00:00Z")
+        )
+        self.assertTrue(self.ledger.claim(staged["change_id"]))
+
+        still_owned = self.decide(
+            approval["approval_id"], now=NOW + timedelta(seconds=121)
+        )
+        self.assertEqual(
+            ("verification_unknown", "apply_in_progress", "executing"),
+            (
+                still_owned["status"],
+                still_owned["code"],
+                still_owned["approval_state"],
+            ),
+        )
+        self.assertEqual([], self.backend.actions)
+
+        result = self.decide(
+            approval["approval_id"],
+            now=NOW
+            + timedelta(seconds=core_module.APPROVAL_EXECUTION_UNCERTAIN_SECONDS + 1),
+        )
+
+        self.assertEqual(
+            ("verification_unknown", "execution_result_unknown"),
+            (result["status"], result["code"]),
+        )
+        self.assertEqual([], self.backend.actions)
+        replay = self.decide(
+            approval["approval_id"],
+            now=NOW
+            + timedelta(seconds=core_module.APPROVAL_EXECUTION_UNCERTAIN_SECONDS + 2),
+        )
+        self.assertFalse(replay.get("execute", False))
+        self.assertEqual("execution_result_unknown", replay["code"])
 
     def test_missing_followup_readback_is_verification_unknown_and_stops_customer_write(self):
         self.backend.hide_followup_readback = True

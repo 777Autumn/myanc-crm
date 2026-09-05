@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -17,6 +18,7 @@ CUSTOMER_TABLE = "客户"
 FOLLOWUP_TABLE = "跟进记录"
 TIMEZONE = "Asia/Shanghai"
 CONFIG_PATH = Path(__file__).resolve().parents[1] / "config.local.json"
+LEDGER_PATH = (Path.home() / ".myanc-crm" / "ledger.sqlite3").resolve()
 
 CUSTOMER_FIELDS = [
     {"name": "客户名称", "type": "text"},
@@ -433,12 +435,20 @@ def _checkpoint(
         },
         "allowed_actors": {owner_sender_id: owner},
         "ttl_seconds": 600,
-        "ledger_path": ".crm-state/ledger.sqlite3",
+        "ledger_path": str(LEDGER_PATH),
+        "host_secret_sha256": _host_secret_hash(),
         "identity_summary": identity_summary,
     }
     if status != "verified":
         config["_bootstrap_status"] = status
     _write_config(config)
+
+
+def _host_secret_hash() -> str:
+    secret = os.environ.get("MYANC_CRM_HOST_SECRET", "")
+    if len(secret) < 32 or len(secret) > 4096:
+        raise BootstrapError("MYANC_CRM_HOST_SECRET must contain 32-4096 characters")
+    return hashlib.sha256(secret.encode("utf-8")).hexdigest()
 
 
 def _followup_fields(customer_table_id: str) -> list[dict[str, Any]]:

@@ -1,4 +1,4 @@
-"""Feishu Base adapter for the fixed bot-only ``lark-enterprise`` wrapper."""
+"""Feishu Base adapter for one fixed host-only bot wrapper."""
 
 from __future__ import annotations
 
@@ -257,6 +257,30 @@ class LarkCliBackend:
                 details={"match_count": len(matches)},
             )
         return _followup(matches[0], self.followup_fields) if matches else None
+
+    def read_customer_history(self, record_id: str, limit: int = 11) -> list[Mapping[str, Any]]:
+        """Newest bounded history for one resolved customer, never a full-table scan."""
+        record_id = _record_id(record_id)
+        if type(limit) is not int or not 1 <= limit <= 11:
+            raise LarkBackendError("invalid_input", "validate history limit")
+        # CLI 1.0.90 help + official filter SOP document field-name tuples.
+        # Validate those names against pinned IDs before using them as selectors.
+        schema = self._read_table_schema(self.followup_table_id, "read history schema")
+        self._validate_schema(schema, _FOLLOWUP_SCHEMA, _FOLLOWUP_CANONICAL,
+                              self.followup_fields, "follow-up")
+        rows = self._read_records(
+            ["base", "+record-list", "--base-token", self.base_token,
+             "--table-id", self.followup_table_id,
+             "--filter-json", json.dumps({"logic": "and", "conditions": [
+                 ["关联客户", "intersects", [{"id": record_id}]]]}, ensure_ascii=False),
+             "--sort-json", json.dumps([{"field": "沟通时间", "desc": True}], ensure_ascii=False),
+             "--limit", str(limit)],
+            tuple(self.followup_fields.values()), "read customer history",
+        )
+        history = [_followup(row, self.followup_fields) for row in rows]
+        if len(history) > limit or any(row.get("customer_record_id") != record_id for row in history):
+            raise LarkBackendError("protocol_error", "read customer history")
+        return history
 
     def create_followup(self, fields: Mapping[str, Any]) -> str:
         allowed = {

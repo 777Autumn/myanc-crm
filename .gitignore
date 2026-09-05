@@ -2,8 +2,8 @@ __pycache__/
 *.py[cod]
 .coverage
 .crm-state/
+.crm-input/
 *.sqlite3
 *.ndjson
 *.manifest.json
 config.local.json
-
