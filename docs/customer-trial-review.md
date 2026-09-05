@@ -72,3 +72,28 @@ Draft PRs: [CRM #5](https://github.com/77AutumN/myanc-crm/pull/5) and
 and CI must pass before merge. Real CRM creation/switching still requires separate
 confirmation after merge; no real records, private configuration or ledger are
 included in these changes.
+
+## Re-review and current handoff
+
+The independent Standards re-review of CRM `44c4e24` and gateway `afab16cc`
+closed both heuristic findings with zero outstanding findings. The independent
+Spec re-review closed all three P2 findings, reran the eight customer-journey
+tests and two gateway receipt tests, and reproduced the uncertain-create path.
+
+Current local checks: 176 Python tests and 16 spike tests pass; the full gateway
+CRM adapter suite (including both real Python IPC journeys), core CUJs, targeted
+approval/Feishu tests and compilation pass. CRM Linux CI passed on `44c4e24`.
+Gateway Linux CI exposed inherited baseline lint issues; fixes are submitted
+without changing lint rules or skipping the full suite. Its final result remains
+a gate, not implied by these local checks.
+
+The 14 customer model cases are wired into the existing native harness with
+paired graders and semantic rubrics; their offline grader tests pass. Actual
+model execution remains **NOT RUN**: the previously configured gateway SSH
+entry rejected public-key authentication on 2026-09-06. No alternate account or
+credential was tried and no remote command ran. Restore the existing authorized
+test access before continuing isolated model trials and semantic review. This is
+not permission to switch real CRM data or restart the live service.
+
+Both PRs remain drafts and unmerged while these gates are outstanding. The
+running installation, Sandbox, production configuration and ledger are unchanged.
