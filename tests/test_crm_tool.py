@@ -82,6 +82,9 @@ class CrmToolClientTests(unittest.TestCase):
             (["stage"], b'{"content":"A","profile":"other"}', "invalid_input"),
             (["stage"], b'{"content":"A","approved":true}', "invalid_input"),
             (["result"], b'{"change_id":"chg_test","principal":{}}', "invalid_input"),
+            (["assignee"], b'{"query":"member@example.com","profile":"other"}', "invalid_input"),
+            (["stage-customer-create"], b'{"name":"test","approved":true}', "invalid_input"),
+            (["stage-customer-update"], b'{"customer_query":"C-001","record_id":"other"}', "invalid_input"),
             (["customer"], b'{"customer_query":"A","customer_query":"B"}', "invalid_input"),
             (["stage"], b'{"content":{"text":"A","text":"B"}}', "invalid_input"),
             (["stage"], b'{"content":NaN}', "invalid_input"),
@@ -109,6 +112,9 @@ class CrmToolClientTests(unittest.TestCase):
         for command, request, expected in (
             ("stage", {"customer_query": "演示客户", "content": "确认了需求"}, {"status": "needs_time", "question": "When?"}),
             ("result", {"change_id": "chg_test"}, {"status": "partial", "followup": "verified", "customer_update": "failed"}),
+            ("assignee", {"query": "member@example.com"}, {"status": "resolved", "owner_ref": "own_fixture", "name": "示例同事"}),
+            ("stage-customer-create", {"name": "虚构公司"}, {"status": "needs_input", "missing": ["stage", "owner_ref", "contact_detail"]}),
+            ("stage-customer-update", {"customer_query": "C-001", "changes": {"stage": "沟通中"}}, {"status": "pending", "change_id": "chg_fixture"}),
         ):
             with self.subTest(command=command):
                 peer = ProxyPeer(expected)

@@ -41,8 +41,11 @@ PRINCIPAL_FIELDS = frozenset(
     {"platform", "user_id", "chat_id", "session_key", "project", "message_id"}
 )
 NON_PENDING_STAGE_STATUSES = frozenset(
-    {"needs_time", "needs_selection", "not_found", "blocked"}
+    {"needs_time", "needs_input", "needs_selection", "not_found", "blocked"}
 )
+CREATE_FIELDS = frozenset({"name", "contact", "phone", "email", "stage", "owner_ref",
+                           "allow_same_name", "followup"})
+UPDATE_FIELDS = frozenset({"customer_query", "changes", "allow_same_name", "followup"})
 
 
 class CliConfigurationError(ValueError):
@@ -182,7 +185,10 @@ def _host_tool_payload(value, config):
     if set(value) != {"command", "request", "principal"}:
         raise ValueError("host-tool requires exactly command, request and principal.")
     fields = {"customer": frozenset({"customer_query"}),
-              "stage": BUSINESS_FIELDS, "result": frozenset({"change_id"})}
+              "stage": BUSINESS_FIELDS, "result": frozenset({"change_id"}),
+              "assignee": frozenset({"query"}),
+              "stage-customer-create": CREATE_FIELDS,
+              "stage-customer-update": UPDATE_FIELDS}
     command = value.get("command")
     if not isinstance(command, str) or command not in fields:
         raise ValueError("Unsupported controlled tool.")
@@ -233,7 +239,7 @@ def _customer_result(request, backend, principal, ledger):
             "history": [core._display_followup(item, backend) for item in history[:10]]}
 
 
-def _change_result(request, principal, ledger):
+def _change_result(request, principal, ledger, *, include_related=True):
     approval = ledger.get_approval_for_change(request["change_id"])
     if approval is None or not core._same_principal(approval["principal"], principal):
         return {"status": "blocked", "code": "result_not_accessible"}
@@ -261,6 +267,25 @@ def _change_result(request, principal, ledger):
                 if uncertain else "The approved write is still executing; no receipt is available yet."
             ),
         )
+    if include_related:
+        parent_id = staged.get("parent_change_id")
+        child_id = ledger.child_change_id(parent_id or staged["change_id"])
+        expects_child = staged.get("operation_type") in {"customer_create", "customer_update"} and bool(staged.get("followup"))
+        if parent_id or child_id or expects_child:
+            parent_id = parent_id or staged["change_id"]
+            result["related_operations"] = {
+                "parent": _change_result({"change_id": parent_id}, principal, ledger,
+                                         include_related=False),
+                "child": (_change_result({"change_id": child_id}, principal, ledger,
+                                         include_related=False) if child_id else None),
+            }
+            if child_id is None:
+                result["followup_status"] = "not_prepared"
+                result["followup_message"] = (
+                    "客户操作已成功；尚无跟进子方案，请人工重新发起跟进，不要重复客户操作。"
+                    if staged["state"] == "verified" else
+                    "跟进尚未暂存；须先完成并核验客户操作，之后仍需单独批准跟进。"
+                )
     return result
 
 
@@ -364,14 +389,22 @@ def main(
             result = _customer_result(prepare_request, backend, prepare_principal, ledger)
         elif tool_command == "result":
             result = _change_result(prepare_request, prepare_principal, ledger)
-        elif command == "host-prepare" or tool_command == "stage":
-            staged = stage_followup(
-                prepare_request,
-                backend,
-                ledger,
-                config,
-                action_token,
-            )
+        elif tool_command == "assignee":
+            from .customers import resolve_assignee
+            result = resolve_assignee(prepare_request, backend, ledger, config, prepare_principal)
+        elif command == "host-prepare" or tool_command in {
+            "stage", "stage-customer-create", "stage-customer-update",
+        }:
+            if tool_command in {"stage-customer-create", "stage-customer-update"}:
+                from .customers import stage_customer
+                operation = "customer_create" if tool_command.endswith("create") else "customer_update"
+                staged = stage_customer(prepare_request, operation, backend, ledger, config,
+                                        action_token, prepare_principal)
+            else:
+                staged = stage_followup(
+                    prepare_request, backend, ledger, config, action_token,
+                    trusted_principal=prepare_principal,
+                )
             if staged.get("status") == "staged":
                 result = begin_approval(
                     {

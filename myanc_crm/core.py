@@ -182,6 +182,27 @@ class Ledger:
             self._db.execute(
                 "ALTER TABLE staged_changes ADD COLUMN action_token_hash TEXT"
             )
+        for name, declaration in (
+            ("operation_type", "TEXT NOT NULL DEFAULT 'followup'"),
+            ("parent_change_id", "TEXT"),
+            ("resolved_customer_record_id", "TEXT"),
+            ("intent_version", "INTEGER"),
+        ):
+            if name not in columns:
+                self._db.execute(f"ALTER TABLE staged_changes ADD COLUMN {name} {declaration}")
+        self._db.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS one_child_per_parent "
+            "ON staged_changes(parent_change_id) WHERE parent_change_id IS NOT NULL"
+        )
+        self._db.execute(
+            "CREATE TABLE IF NOT EXISTS write_intents "
+            "(scope TEXT PRIMARY KEY, generation INTEGER NOT NULL)"
+        )
+        self._db.execute(
+            "CREATE TABLE IF NOT EXISTS verified_assignees "
+            "(ref TEXT PRIMARY KEY, scope TEXT NOT NULL, user_id TEXT NOT NULL, "
+            "person_json TEXT NOT NULL, UNIQUE(scope, user_id))"
+        )
         self._db.execute(
             """
             CREATE TABLE IF NOT EXISTS approvals (
@@ -211,9 +232,17 @@ class Ledger:
         self._db.commit()
         self._validate_storage()
 
-    def stage(self, body: Mapping[str, Any], action_token_hash: str) -> list[str]:
+    def stage(
+        self, body: Mapping[str, Any], action_token_hash: str,
+        *, intent_version: int | None = None,
+    ) -> list[str]:
         encoded = _json(body)
         with self._immediate():
+            principal = body.get("principal")
+            if intent_version is not None and (
+                not principal or self._intent_version(principal) != intent_version
+            ):
+                raise ValueError("A newer write intent superseded this request.")
             superseded_approvals = [
                 row["approval_id"]
                 for row in self._db.execute(
@@ -260,12 +289,18 @@ class Ledger:
                 """,
                 (body["change_id"], action_token_hash, encoded),
             )
+            self._db.execute(
+                "UPDATE staged_changes SET operation_type = ?, intent_version = ? "
+                "WHERE change_id = ?",
+                (body.get("operation_type", "followup"), intent_version, body["change_id"]),
+            )
         return superseded_approvals
 
     def get(self, change_id: str) -> dict[str, Any] | None:
         row = self._db.execute(
             """
-            SELECT state, body_json, receipt_json, action_token_hash
+            SELECT state, body_json, receipt_json, action_token_hash,
+                   parent_change_id, resolved_customer_record_id, intent_version
               FROM staged_changes WHERE change_id = ?
             """,
             (change_id,),
@@ -276,7 +311,118 @@ class Ledger:
         body["state"] = row["state"]
         body["receipt"] = json.loads(row["receipt_json"]) if row["receipt_json"] else None
         body["action_token_hash"] = row["action_token_hash"]
+        for key in ("parent_change_id", "resolved_customer_record_id", "intent_version"):
+            if row[key] is not None:
+                body[key] = row[key]
         return body
+
+    def note_write_intent(self, principal: Mapping[str, str]) -> int:
+        """Record a new user write request before potentially slow backend reads."""
+        scope = self._principal_scope(principal)
+        with self._immediate():
+            self._db.execute(
+                "INSERT INTO write_intents VALUES (?, 1) "
+                "ON CONFLICT(scope) DO UPDATE SET generation = generation + 1", (scope,),
+            )
+            return self._intent_version(principal)
+
+    @staticmethod
+    def _principal_scope(principal: Mapping[str, str]) -> str:
+        return _hash({key: principal[key] for key in _PRINCIPAL_BINDING_KEYS})
+
+    def _intent_version(self, principal: Mapping[str, str]) -> int:
+        row = self._db.execute(
+            "SELECT generation FROM write_intents WHERE scope = ?",
+            (self._principal_scope(principal),),
+        ).fetchone()
+        return 0 if row is None else row[0]
+
+    def remember_assignee(self, principal: Mapping[str, str], person: Mapping[str, str]) -> str:
+        scope = self._principal_scope(principal)
+        user_id = _required_text(person.get("id"), "assignee.id")
+        name = _required_text(person.get("name"), "assignee.name")
+        with self._immediate():
+            self._db.execute(
+                "INSERT INTO verified_assignees VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(scope, user_id) DO UPDATE SET person_json = excluded.person_json",
+                ("own_" + secrets.token_urlsafe(18), scope, user_id,
+                 _json({"id": user_id, "name": name})),
+            )
+            return self._db.execute(
+                "SELECT ref FROM verified_assignees WHERE scope = ? AND user_id = ?",
+                (scope, user_id),
+            ).fetchone()[0]
+
+    def get_assignee(self, ref: str, principal: Mapping[str, str]) -> dict[str, str] | None:
+        row = self._db.execute(
+            "SELECT person_json FROM verified_assignees WHERE ref = ? AND scope = ?",
+            (ref, self._principal_scope(principal)),
+        ).fetchone()
+        return None if row is None else json.loads(row[0])
+
+    def find_assignees(self, query: str, principal: Mapping[str, str]) -> list[dict[str, str]]:
+        rows = self._db.execute(
+            "SELECT ref, person_json FROM verified_assignees WHERE scope = ? ORDER BY ref",
+            (self._principal_scope(principal),),
+        ).fetchall()
+        result = []
+        for row in rows:
+            person = json.loads(row["person_json"])
+            if _normal(query) == _normal(person["name"]):
+                result.append({"ref": row["ref"], **person})
+        return result
+
+    def set_resolved_customer(self, change_id: str, record_id: str) -> None:
+        record_id = _required_text(record_id, "record_id")
+        with self._immediate():
+            row = self._db.execute(
+                "SELECT resolved_customer_record_id FROM staged_changes WHERE change_id = ?",
+                (change_id,),
+            ).fetchone()
+            if row is None or row[0] not in (None, record_id):
+                raise ValueError("The verified customer binding cannot be replaced.")
+            self._db.execute(
+                "UPDATE staged_changes SET resolved_customer_record_id = ? WHERE change_id = ?",
+                (record_id, change_id),
+            )
+
+    def child_change_id(self, parent_change_id: str) -> str | None:
+        row = self._db.execute(
+            "SELECT change_id FROM staged_changes WHERE parent_change_id = ?", (parent_change_id,),
+        ).fetchone()
+        return None if row is None else row[0]
+
+    def stage_child(
+        self, parent_change_id: str, body: Mapping[str, Any], now: str,
+    ) -> dict[str, Any] | None:
+        """Publish one frozen child; never supersede a later user write intent."""
+        with self._immediate():
+            parent = self.get(parent_change_id)
+            if parent is None or parent["state"] != "verified":
+                raise ValueError("A verified parent is required.")
+            if self.child_change_id(parent_change_id) is not None:
+                return None  # Replays do not publish a second card.
+            principal = parent["principal"]
+            if parent.get("intent_version") != self._intent_version(principal):
+                return None
+            child = {**body, "parent_change_id": parent_change_id,
+                     "principal": principal, "actor": parent["actor"]}
+            approval_id = "apr_" + secrets.token_urlsafe(18)
+            self._db.execute(
+                "INSERT INTO staged_changes "
+                "(change_id,sender_id,chat_id,action_token_hash,state,body_json,"
+                "parent_change_id,intent_version) VALUES (?,?,?,?,'staged',?,?,?)",
+                (child["change_id"], principal["user_id"], principal["chat_id"],
+                 parent["action_token_hash"], _json(child), parent_change_id,
+                 parent["intent_version"]),
+            )
+            self._db.execute(
+                "INSERT INTO approvals (approval_id,change_id,state,principal_json,"
+                "preview_hash,created_at,expires_at) VALUES (?,?,'pending',?,?,?,?)",
+                (approval_id, child["change_id"], _json(principal),
+                 _hash(_approval_material(child)), now, child["expires_at"]),
+            )
+            return self.get_approval(approval_id)
 
     def bind_approval(
         self,
@@ -306,10 +452,12 @@ class Ledger:
             ).fetchone()
             if existing is not None:
                 existing_approval = self._approval_row(existing)
-                if _same_principal(existing_approval["principal"], principal):
-                    self._supersede_other_approvals(change_id, principal)
                 return existing_approval, self._superseded_by(change_id)
             if row["state"] != "staged":
+                return None, self._superseded_by(change_id)
+            if row["intent_version"] is not None and (
+                row["intent_version"] != self._intent_version(principal)
+            ):
                 return None, self._superseded_by(change_id)
 
             self._supersede_other_approvals(change_id, principal)
@@ -373,7 +521,8 @@ class Ledger:
             SELECT staged.change_id
               FROM staged_changes AS staged
               JOIN approvals AS approval ON approval.change_id = staged.change_id
-             WHERE json_extract(staged.body_json, '$.customer_record_id') = ?
+             WHERE COALESCE(staged.resolved_customer_record_id,
+                            json_extract(staged.body_json, '$.customer_record_id')) = ?
                AND json_extract(approval.principal_json, '$.platform') = ?
                AND json_extract(approval.principal_json, '$.user_id') = ?
                AND json_extract(approval.principal_json, '$.chat_id') = ?
@@ -714,9 +863,20 @@ def stage_followup(
     config: Mapping[str, Any],
     action_token: str,
     now: datetime | None = None,
+    *,
+    trusted_principal: Mapping[str, str] | None = None,
+    trusted_record_id: str | None = None,
 ) -> dict[str, Any]:
     """Read and stage one follow-up.  This function never writes to Feishu."""
 
+    intent_version = None
+    if trusted_principal is not None:
+        try:
+            trusted_principal = _principal(trusted_principal)
+            _actor_for_principal(trusted_principal, config)
+            intent_version = ledger.note_write_intent(trusted_principal)
+        except (TypeError, ValueError):
+            return _blocked("invalid_principal", "The transport identity is not configured.")
     try:
         moment = _now(now)
         _only_keys(
@@ -759,7 +919,12 @@ def stage_followup(
 
     try:
         schema = _mapping(backend.read_schema(), "schema")
-        matches, matched_by = _resolve_customer(query, backend)
+        if trusted_record_id is None:
+            matches, matched_by = _resolve_customer(query, backend)
+        else:
+            # Only the host's verified parent can supply this internal argument.
+            selected = backend.get_customer(trusted_record_id)
+            matches, matched_by = ([] if selected is None else [selected]), "verified_parent"
     except Exception:
         return _blocked("backend_read_failed", "CRM could not be read; nothing was staged.")
 
@@ -810,7 +975,9 @@ def stage_followup(
             "created_at": created_at,
             "expires_at": expires_at,
         }
-        ledger.stage(body, action_token_hash)
+        if trusted_principal is not None:
+            body["principal"] = dict(trusted_principal)
+        ledger.stage(body, action_token_hash, intent_version=intent_version)
     except (TypeError, ValueError) as exc:
         return _blocked("invalid_backend_data", str(exc))
     except Exception:
@@ -993,11 +1160,13 @@ def claim_approval_decision(
         return _blocked("binding_changed", "The bound CRM actor is no longer valid.")
     if approval["state"] in {"cancelled", "superseded", "expired"}:
         return {
+            **(approval["receipt"] or {}),
             "status": approval["state"],
             "approval_id": approval_id,
             "change_id": approval["change_id"],
             "replayed": True,
             "message": "This approval is already closed; Feishu was not changed.",
+            **_child_parent_context(staged, ledger),
         }
     card_message_id = approval.get("card_message_id")
     if not isinstance(card_message_id, str) or not card_message_id:
@@ -1052,6 +1221,7 @@ def claim_approval_decision(
             "approval_id": approval_id,
             "change_id": approval["change_id"],
             "message": "The approval expired; Feishu was not changed.",
+            **_child_parent_context(staged, ledger),
         }
     if approval["preview_hash"] != _hash(_approval_material(staged)):
         return _blocked("preview_changed", "The approved preview no longer matches the ledger.")
@@ -1064,6 +1234,7 @@ def claim_approval_decision(
             "change_id": approval["change_id"],
             "message": "Feishu was not changed.",
         }
+        result.update(_child_parent_context(staged, ledger))
         if not ledger.close_approval(
             approval_id, state, decision, _iso(moment), result
         ):
@@ -1086,6 +1257,19 @@ def claim_approval_decision(
         "change_id": approval["change_id"],
         "execute": True,
         "message": "The approval was accepted and the original plan is executing.",
+    }
+
+
+def _child_parent_context(staged, ledger):
+    if not staged.get("parent_change_id"):
+        return {}
+    parent = ledger.get(staged["parent_change_id"])
+    if parent is None:
+        return {"message": "本次跟进审批已关闭；无法读取关联客户操作结果，请人工核对。"}
+    return {
+        "message": "客户操作已成功；本次跟进审批已关闭，不撤销已完成的客户操作。",
+        "parent_operation": {"change_id": parent["change_id"], "status": parent["state"],
+                             "receipt": parent["receipt"]},
     }
 
 
@@ -1204,10 +1388,17 @@ def execute_claimed_approval(
         }
 
     resuming = staged["state"] == "applying"
-    result = _apply_approved_followup(
-        approval["change_id"], approval_id, backend, ledger, moment
-    )
+    customer_operation = staged.get("operation_type") in {"customer_create", "customer_update"}
+    if customer_operation:
+        from .customers import apply_customer
+        result = apply_customer(staged, backend, ledger, moment)
+    else:
+        result = _apply_approved_followup(
+            approval["change_id"], approval_id, backend, ledger, moment
+        )
     if result.get("code") == "apply_in_progress":
+        if customer_operation:
+            return {**result, "approval_id": approval_id, "approval_state": "executing"}
         if resuming:
             result = {
                 "status": "verification_unknown",
@@ -1230,14 +1421,61 @@ def execute_claimed_approval(
         approval_state = "failed"
     if approval_state not in {"verified", "partial", "verification_unknown", "failed"}:
         approval_state = "failed"
+    # Persist the parent outcome before attempting any second-card preparation.
     ledger.finish_approval(
         approval_id, approval_state, "approve", _iso(moment), result
     )
+    next_approval = None
+    if customer_operation and result["status"] == "verified" and staged.get("followup") and not result.get("replayed"):
+        child_moment = _now(now)
+        result, next_approval = _prepare_child_followup(staged, result, backend, ledger, config, child_moment)
+        ledger.finish(approval["change_id"], "verified", result)
+        ledger.finish_approval(approval_id, "verified", "approve", _iso(child_moment), result)
     return {
         **result,
         "approval_id": approval_id,
         "approval_state": approval_state,
+        **({"next_approval": next_approval} if next_approval is not None else {}),
     }
+
+
+def _prepare_child_followup(staged, receipt, backend, ledger, config, moment):
+    """One narrow handoff, with no model call, write retry, or recovery worker."""
+    result = {**receipt, "next_approval_status": "unavailable",
+              "followup_message": "客户操作已成功；跟进尚未提交，请人工重新发起跟进。"}
+    try:
+        parent = ledger.get(staged["change_id"])
+        record_id = parent.get("resolved_customer_record_id") or parent.get("customer_record_id")
+        customer = _mapping(backend.get_customer(record_id), "verified customer")
+        _validate_customer(customer)
+        # Reuse the follow-up planner in temporary memory without superseding
+        # persistent user intents. The final insert+intent check is one transaction.
+        temporary = Ledger()
+        try:
+            preview = stage_followup(
+                {"customer_query": customer["customer_number"], **staged["followup"]},
+                backend, temporary, config, secrets.token_urlsafe(32), moment,
+                trusted_record_id=record_id,
+            )
+            if preview.get("status") != "staged":
+                return result, None
+            body = json.loads(temporary._db.execute(
+                "SELECT body_json FROM staged_changes WHERE change_id = ?", (preview["change_id"],),
+            ).fetchone()[0])
+        finally:
+            temporary.close()
+        approval = ledger.stage_child(staged["change_id"], body, _iso(moment))
+        if approval is None:
+            result["next_approval_status"] = "not_published"
+            result["followup_message"] = "客户操作已成功；已有后续写入意图或子方案，未另发跟进卡。"
+            return result, None
+        result.update(child_change_id=body["change_id"], next_approval_status="pending",
+                      followup_message="客户操作已成功；跟进需要单独批准，尚未写入。")
+        child = ledger.get(body["change_id"])
+        return result, _approval_begin_result(approval, child, backend, [], False)
+    except Exception:
+        # The first write remains verified even if reading/staging the child fails.
+        return result, None
 
 
 def decide_approval(
@@ -1851,7 +2089,7 @@ def _action_token_hash(value: Any) -> str:
 
 
 def _approval_material(staged: Mapping[str, Any]) -> dict[str, Any]:
-    return {
+    material = {
         key: staged.get(key)
         for key in (
             "change_id",
@@ -1871,11 +2109,22 @@ def _approval_material(staged: Mapping[str, Any]) -> dict[str, Any]:
             "actor",
         )
     }
+    if "operation_type" in staged:
+        # Do not add null fields to legacy follow-up fingerprints.
+        for key in ("operation_type", "customer_fields", "customer_patch", "assignee",
+                    "duplicate_snapshot", "duplicate_hash", "request"):
+            material[key] = staged.get(key)
+    if "parent_change_id" in staged:
+        material["parent_change_id"] = staged["parent_change_id"]
+    return material
 
 
 def _approval_preview(
     staged: Mapping[str, Any], backend: Backend
 ) -> dict[str, Any]:
+    if staged.get("operation_type") in {"customer_create", "customer_update"}:
+        from .customers import approval_preview
+        return approval_preview(staged, backend)
     customer = _mapping(staged.get("customer_snapshot"), "customer_snapshot")
     patch = _mapping(staged.get("customer_patch"), "customer_patch")
     repairing = staged.get("state") == "partial"
@@ -1909,6 +2158,9 @@ def _approval_preview(
         "failure_policy": (
             "A verified follow-up is retained if the customer-summary write fails."
         ),
+        **({"parent_change_id": staged["parent_change_id"],
+            "parent_message": "客户建档／资料修改已成功；本卡只批准跟进，取消不会撤销客户操作。"}
+           if staged.get("parent_change_id") else {}),
     }
 
 

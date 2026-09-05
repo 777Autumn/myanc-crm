@@ -19,11 +19,14 @@ sys.path.insert(0, str(ROOT / "tests"))
 
 from myanc_crm import cli, core
 from test_host_tools import CONFIG, HistoryBackend
+from test_customer_journey import CustomerBackend
 
 
 class PersistentFakeFeishu(HistoryBackend):
     def __init__(self, directory):
         super().__init__()
+        self.people = {"ou_member": {"id": "ou_member", "name": "示例同事"}}
+        self.profile_mode = "normal"
         self.path = directory / "fake-feishu.json"
         if self.path.exists():
             data = json.loads(self.path.read_text(encoding="utf-8"))
@@ -33,12 +36,19 @@ class PersistentFakeFeishu(HistoryBackend):
             self.update_mode = data.get("update_mode", "normal")
             self.create_mode = data.get("create_mode", "normal")
             self.hide_followup_readback = data.get("hide_followup_readback", False)
+            self.people = data.get("people", self.people)
+            self.profile_mode = data.get("profile_mode", "normal")
+            self.schema = data.get("schema", self.schema)
         else:
             # Eval-only paired fixtures: do not add these claims to demo/live data.
             seed = os.environ.get("MYANC_SPIKE_SEED", "")
-            if seed not in {"", "term-ambiguous", "term-defined"}:
+            if seed not in {"", "term-ambiguous", "term-defined", "customer-trial"}:
                 raise ValueError("Unknown offline fixture seed")
-            if seed:
+            if seed == "customer-trial":
+                self.schema["customers"].append("operation_id")
+                self.customers["rec-1"].update(stage="新线索", owner=[self.people["ou_member"]])
+                self.save()
+            elif seed:
                 context = "客户提出 Canary 测试需求；客户认可方案，希望安排演示。"
                 if seed == "term-defined":
                     context = ("客户明确说明 Canary 在本次需求中指先向 5% 用户灰度发布新版本、"
@@ -54,6 +64,7 @@ class PersistentFakeFeishu(HistoryBackend):
         data = {name: copy.deepcopy(getattr(self, name)) for name in (
             "customers", "followups", "actions", "update_mode", "create_mode",
             "hide_followup_readback",
+            "people", "profile_mode", "schema",
         )}
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=self.path.parent,
                                          prefix="fake-", suffix=".json", delete=False) as stream:
@@ -70,6 +81,22 @@ class PersistentFakeFeishu(HistoryBackend):
     def update_customer(self, record_id, fields):
         try:
             return super().update_customer(record_id, fields)
+        finally:
+            self.save()
+
+    resolve_assignee = CustomerBackend.resolve_assignee
+    get_assignee = CustomerBackend.get_assignee
+    find_customer_by_change = CustomerBackend.find_customer_by_change
+
+    def create_customer(self, fields):
+        try:
+            return CustomerBackend.create_customer(self, fields)
+        finally:
+            self.save()
+
+    def update_customer_profile(self, record_id, fields):
+        try:
+            return CustomerBackend.update_customer_profile(self, record_id, fields)
         finally:
             self.save()
 

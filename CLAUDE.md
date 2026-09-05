@@ -23,6 +23,34 @@ sender/chat, profile, Base/table/record ID, token, endpoint, or approval flag.
 - `result`: `{"change_id":"the opaque ID returned by stage"}`. Query pending or
   completed outcomes without staging again. Use customer to refresh current facts
   if needed, then continue discussing with the user.
+- `assignee`: `{"query":"exact phone, user email, or previously verified name"}`.
+  Resolve through the configured bot only, confirm the returned name with the user,
+  and reuse its opaque `owner_ref`. Never guess an unknown person or treat customer
+  ownership as permission to operate or approve the assistant. Ambiguous people
+  require an exact phone/user email; do not search the unrestricted directory.
+- `stage-customer-create`: `name`, optional `contact`/`phone`/`email`, `stage`,
+  `owner_ref`, optional `allow_same_name` and optional `followup` (the follow-up
+  fields below without `customer_query`). Company name, one contact detail, stage
+  and verified owner are required. Stages: 新线索、已联系、沟通中、已成交、暂缓.
+- `stage-customer-update`: `customer_query`, `changes` containing only mentioned
+  fields among `name/contact/phone/email/stage/owner_ref`, optional `allow_same_name`
+  and `followup`. Preserve omitted fields; clear only on an explicit user request.
+  Never change customer numbers, system fields or existing follow-up history.
+
+Collect missing requirements for both customer operation and follow-up in one
+question before presenting the first card. For duplicate company names, show the
+candidates and ask whether to use an existing customer or knowingly create a
+distinct same-name customer. Set `allow_same_name=true` only for that explicit
+choice (or an explicitly approved same-name rename); never silently merge.
+
+When `followup` accompanies a customer operation, its draft is frozen with the
+first preview but is NOT approved by that card. After the first operation is
+verified, the host prepares one independently approved follow-up card using the
+verified customer identity. Do not stage the child yourself. Cancellation or
+failure of that child never cancels the successful customer operation. Read
+`related_operations` and both receipts before describing the overall result.
+If the second card cannot be prepared or delivered, report the first operation's
+success and the unsubmitted follow-up; ask before any manual replacement.
 
 ```json
 {
@@ -68,7 +96,8 @@ Run `python -m compileall -q myanc_crm ops tests` and
   immediately; host prepare also closes prior cards for the same trusted
   sender/chat/session/project after token rotation.
 - **Writes:** append one follow-up, then update only the latest-contact summary when
-  the follow-up is not older. Contact details, owner, and stage are read-only.
+  the follow-up is not older. Separate narrow customer-create/update operations
+  maintain company, primary contact, stage and owner with their own approvals.
 - **Approval:** showing a preview marks nothing approved. Only the host can move a
   persisted approval from `pending` to `executing`.
 - **Verification:** apply re-reads schema and customer state before writing, performs
@@ -79,8 +108,10 @@ Run `python -m compileall -q myanc_crm ops tests` and
   by repeating the write. A host may rebind a rotated session token for an existing
   partial only after the original Principal and actor match; repair never recreates
   the follow-up.
-- **Scope:** no customer creation/deletion, bulk update, stage/owner change, general
-  Base CRUD, model memory, router, MCP server, or second model.
+- **Scope:** single Owner; no deletion, bulk updates, multiple contacts, opportunities,
+  general Base CRUD, model memory, router, MCP server, or second model. Real CRM
+  cutover requires separate authorization after review and merge; fictional
+  Sandbox data and real CRM data must stay in separate configuration and ledgers.
 
 The earlier request-file/PermissionRequest path is legacy code only. See the
 gateway integration document for rollback inspection; never mix it into tools

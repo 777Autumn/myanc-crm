@@ -158,6 +158,7 @@ class CliBoundaryTests(unittest.TestCase):
             ledger_type.return_value,
             self.config,
             self.action_token,
+            trusted_principal=principal,
         )
         begin.assert_called_once_with(
             {"change_id": "chg_test", "principal": principal},

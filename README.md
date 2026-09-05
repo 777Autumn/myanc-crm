@@ -8,7 +8,10 @@ One small workflow inside a general Feishu Claude assistant:
 4. let the host execute the original approved proposal once;
 5. read back, show the actual result, and continue discussing it with Claude.
 
-**This branch is not deployed. Automatic merge and production switch are paused.**
+**The new customer-trial changes are not deployed. Real CRM switching is paused.**
+Implementation/review scope and the preserved Owner canary baseline are in
+[the trial release gate](docs/real-crm-trial.md). Merge requires review and green CI;
+real CRM creation/selection still needs a separate confirmation after merge.
 The current Agent contract is in [CLAUDE.md](CLAUDE.md). The older request-file /
 PermissionRequest route remains legacy code, not the selected tools workflow.
 This package does not replace other Feishu skills, implement general Base CRUD,
@@ -23,10 +26,14 @@ The thin `ops/crm_tool.py` client accepts one command and one stdin JSON object:
 | `customer` | `customer_query` | Current facts and bounded recent history; ambiguous matches require selection |
 | `stage` | `customer_query`, `content`, `occurred_at`; optional `channel`, `next_action`, `next_followup_at` | Canonical preview plus host-owned approval card; no Feishu write |
 | `result` | Returned opaque `change_id` | Pending/terminal state and recorded receipt, without restaging |
+| `assignee` | Exact phone/user email or previously verified name in `query` | Verified name and opaque `owner_ref`, no approval authority |
+| `stage-customer-create` | `name`, at least one contact detail, `stage`, `owner_ref`; optional `allow_same_name`, `followup` | Customer-only preview; optional follow-up needs a second independent approval |
+| `stage-customer-update` | `customer_query`, only changed fields in `changes`; optional `allow_same_name`, `followup` | Profile-only preview; no direct customer-number/history changes |
 
 Communication time requires an explicit timezone. Ask instead of guessing it.
 Customer numbers take precedence over normalized exact names. Never choose the
-first of several matches or create a missing customer. An unavailable history
+first of several matches or create a missing customer from a query. Explicit
+customer creation uses its own command and approval. An unavailable history
 read is not an empty history. Omitted next-action fields leave those customer
 fields unchanged.
 
@@ -59,6 +66,12 @@ fields do not supply identity. No callback wakes Claude, restages the proposal,
 or converts chat text into approval. Modification invalidates the old card and
 waits for revised input; cancellation makes no CRM write. Claude remains in the
 same session and uses result/customer when the user asks what happened.
+
+For combined customer+follow-up requests, the host freezes both drafts, executes
+only the first approved customer operation, then offers one separate follow-up
+card against the verified record. A child cancellation or delivery failure does
+not undo the customer operation. Linked results preserve both states. No newer
+write intent may be superseded by the automatic child. No callback wakes Claude.
 
 States: `pending → executing → verified|partial|verification_unknown|failed`,
 or `cancelled|superseded|expired`. A new stage supersedes older pending plans for
@@ -100,6 +113,31 @@ and fixture and checkpoints only into ignored `config.local.json`. A failure
 retains real resources for inspection, not automatic deletion. Fictional owner
 cells are intentionally empty; approved actors still appear in follow-up rows.
 Never put credentials or actual identity/resource values in Git.
+
+### Future empty real CRM (do not run before separate confirmation)
+
+`--mode empty-real` reads `--source-config` without modifying it, re-verifies the
+same bot application and the single Owner, then creates an empty `ANC CRM` only
+with `--confirm-empty-real`. It requires explicit new absolute `--config-output`
+and `--ledger-path`, rejects existing targets/the old ledger, creates no fixtures
+and does not copy or initialize a ledger. Customer numbering uses native `CRM-`
+auto-number rules and a separate internal creation-operation ID field.
+
+First provision private target parent directories and inspect `--dry-run` with
+the existing pinned CLI/profile. It makes no Feishu calls or local writes. The
+real-mode source must have the verified app ID (or supply `--expected-app-id`);
+a matching profile name alone is not proof of the application. Checkpoints stay
+at the new config path after any uncertainty; stop and reconcile them manually,
+never delete them to blindly retry Base creation. This script does not switch
+the running gateway or deploy a policy.
+
+The reviewed `ops/lark-crm-writer-customer-trial.sh` is an **uninstalled template**
+for the existing protected bot wrapper, not an extra public CLI. Personnel reads
+allow only exact `batch_get_id` and `get-user` shapes. Before installation verify
+the real app's visibility and required name/status permissions:
+`is_activated`, `is_frozen` and `is_resigned` must be explicitly readable.
+Unknown status is a blocked lookup, not evidence of an active colleague. No
+live personnel permission or real Base verification is claimed by offline tests.
 
 ## Deployment boundary
 

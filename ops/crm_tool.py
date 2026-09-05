@@ -17,6 +17,10 @@ FIELDS = {
     "customer": {"customer_query"},
     "stage": {"customer_query", "occurred_at", "channel", "content", "next_action", "next_followup_at"},
     "result": {"change_id"},
+    "assignee": {"query"},
+    "stage-customer-create": {"name", "contact", "phone", "email", "stage", "owner_ref",
+                              "allow_same_name", "followup"},
+    "stage-customer-update": {"customer_query", "changes", "allow_same_name", "followup"},
 }
 
 
