@@ -13,7 +13,7 @@ from . import core
 STAGES = frozenset({"新线索", "已联系", "沟通中", "已成交", "暂缓"})
 PROFILE_FIELDS = {"name", "contact", "phone", "email", "stage", "owner"}
 INPUT_FIELDS = PROFILE_FIELDS - {"owner"} | {"owner_ref"}
-_LIMITS = {"name": 256, "contact": 256, "phone": 128, "email": 254, "stage": 64, "owner_ref": 132}
+_LIMITS = {**core.CUSTOMER_TEXT_LIMITS, "stage": 64, "owner_ref": 132}
 
 
 def _needs(fields, code="customer_input_required"):
@@ -47,14 +47,10 @@ def resolve_assignee(request, backend, ledger, config, principal):
                 if person["id"] in seen:
                     continue
                 seen.add(person["id"])
-                current = backend.get_assignee(person["id"])
-                if current is None:
-                    continue
-                current = _person(current)
-                if current["id"] != person["id"]:
-                    raise ValueError("Assignee identity changed during lookup.")
-                ref = ledger.remember_assignee(principal, current)
-                choices.append({"owner_ref": ref, "name": core._fence_value(current["name"])})
+                # The fixed backend resolves and verifies this person's name/status.
+                # Stage and apply each recheck it again before authorizing a write.
+                ref = ledger.remember_assignee(principal, person)
+                choices.append({"owner_ref": ref, "name": core._fence_value(person["name"])})
         if not choices:
             return _needs(["exact_phone_or_user_email"], "assignee_not_found")
         if len(choices) != 1:
@@ -284,6 +280,10 @@ def _observed_profile(staged, actual, backend):
 
 def _observed_result(staged, actual, backend, ledger, moment):
     create = staged["operation_type"] == "customer_create"
+    if create and actual is not None and actual.get("operation_id") == staged["change_id"]:
+        # Observed identity supports later result lookup, not a verified outcome
+        # or permission to prepare a child. Never change the approved proposal.
+        ledger.set_resolved_customer(staged["change_id"], core._record_id(actual))
     if actual is None or not _matches_customer(actual, staged):
         result = {
             "status": "verification_unknown", "code": "customer_write_unconfirmed",
@@ -346,6 +346,7 @@ def apply_customer(staged, backend, ledger, moment):
     try:
         if create:
             identifier = core._created_record_id(backend.create_customer({**staged["customer_fields"], "operation_id": change_id}))
+            ledger.set_resolved_customer(change_id, identifier)
         else:
             identifier = staged["customer_record_id"]
             backend.update_customer_profile(identifier, staged["customer_patch"])

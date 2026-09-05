@@ -160,3 +160,44 @@ class CustomerJourneyTests(unittest.TestCase):
                 _, result = self.call(command, request)
                 self.assertIn(result["status"], {"blocked", "failed"}, result)
                 self.assertEqual([], self.backend.actions)
+
+    def test_unknown_creation_remains_linked_without_creating_child(self):
+        _, parent = self.call("stage-customer-create", self.create_request())
+        create = self.backend.create_customer
+
+        def mismatching_create(fields):
+            identifier = create(fields)
+            self.backend.customers[identifier]["stage"] = "沟通中"
+            return identifier
+
+        with mock.patch.object(self.backend, "create_customer", side_effect=mismatching_create):
+            _, completed = self.execute(parent, "uncertain-customer-card")
+        self.assertEqual("verification_unknown", completed["status"])
+        self.assertNotIn("next_approval", completed)
+        row = next(row for row in self.backend.customers.values() if row.get("operation_id") == parent["change_id"])
+        _, facts = self.call("customer", {"customer_query": row["customer_number"]})
+        self.assertEqual("available", facts["latest_operation_status"])
+        self.assertEqual("verification_unknown", facts["latest_operation"]["status"])
+        self.assertEqual(["create_customer"], self.backend.actions)
+
+    def test_closed_child_repair_keeps_written_followup_and_rejects_wrong_card_replay(self):
+        _, parent = self.call("stage-customer-create", self.create_request())
+        _, completed = self.execute(parent, "parent-card")
+        self.backend.update_mode = "noop"
+        _, partial = self.execute(completed["next_approval"], "child-card")
+        self.assertEqual("partial", partial["status"])
+        _, repair = self.call("", {"change_id": partial["change_id"], "principal": PRINCIPAL}, host_command="host-begin")
+        approval = self.bind_card(repair, "repair-card")
+        _, cancelled = self.call("", {**approval, "decision": "cancel"}, host_command="host-claim")
+        self.assertEqual("cancelled", cancelled["status"])
+        self.assertEqual("repair_closed_partial", cancelled["code"])
+        self.assertEqual("partial", cancelled["durable_change_state"])
+        self.assertEqual("verified", cancelled["parent_operation"]["status"])
+        self.assertEqual(1, len(self.backend.followups))
+        _, result = self.call("result", {"change_id": parent["change_id"]})
+        self.assertEqual("partial", result["related_operations"]["child"]["durable_change_state"])
+        _, wrong_card = self.call("", {**approval, "decision": "approve",
+                                       "principal": {**approval["principal"], "message_id": "wrong-card"}},
+                                  host_command="host-claim")
+        self.assertEqual("card_mismatch", wrong_card["code"])
+        self.assertEqual(1, len(self.backend.followups))

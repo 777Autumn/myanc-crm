@@ -377,3 +377,8 @@ class CustomerTests(unittest.TestCase):
         self.assertEqual("failed", result["status"])
         self.assertEqual("prewrite_read_failed", result["code"])
         self.assertEqual([], self.backend.actions)
+
+    def test_phone_over_writer_limit_is_rejected_before_approval(self):
+        staged = self.stage(self.create_request(phone="1" * 65))
+        self.assertEqual("blocked", staged["status"])
+        self.assertEqual([], self.backend.actions)

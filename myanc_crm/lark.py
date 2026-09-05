@@ -11,6 +11,8 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from .core import CUSTOMER_TEXT_LIMITS
+
 
 READ_TIMEOUT_SECONDS = 30
 WRITE_TIMEOUT_SECONDS = 30
@@ -369,7 +371,6 @@ class LarkCliBackend:
 
     def _profile_cells(self, values: Mapping[str, Any]) -> dict[str, Any]:
         record: dict[str, Any] = {}
-        limits = {"name": 256, "contact": 256, "phone": 64, "email": 254}
         for key, value in values.items():
             if key == "owner":
                 if not isinstance(value, list) or len(value) != 1 or not isinstance(value[0], Mapping):
@@ -383,7 +384,7 @@ class LarkCliBackend:
                     raise LarkBackendError("invalid_input", "validate customer stage")
                 cell = [value]
             else:
-                cell = None if value is None and key != "name" else _text(value, key, limits[key])
+                cell = None if value is None and key != "name" else _text(value, key, CUSTOMER_TEXT_LIMITS[key])
             record[self.customer_fields[key]] = cell
         return record
 

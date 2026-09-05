@@ -21,6 +21,7 @@ from typing import Any, Callable, Iterator, Mapping, Protocol, Sequence
 
 READBACK_TIMEOUT_SECONDS = 30.0
 READBACK_INTERVAL_SECONDS = 1.0
+CUSTOMER_TEXT_LIMITS = {"name": 256, "contact": 256, "phone": 64, "email": 254}
 # After this interval an unfinished execution should be treated as operationally
 # uncertain, but it is never reclaimed automatically. The old worker may still
 # be inside a Feishu request, so starting a replacement cannot safely fence the
@@ -183,7 +184,6 @@ class Ledger:
                 "ALTER TABLE staged_changes ADD COLUMN action_token_hash TEXT"
             )
         for name, declaration in (
-            ("operation_type", "TEXT NOT NULL DEFAULT 'followup'"),
             ("parent_change_id", "TEXT"),
             ("resolved_customer_record_id", "TEXT"),
             ("intent_version", "INTEGER"),
@@ -290,9 +290,9 @@ class Ledger:
                 (body["change_id"], action_token_hash, encoded),
             )
             self._db.execute(
-                "UPDATE staged_changes SET operation_type = ?, intent_version = ? "
+                "UPDATE staged_changes SET intent_version = ? "
                 "WHERE change_id = ?",
-                (body.get("operation_type", "followup"), intent_version, body["change_id"]),
+                (intent_version, body["change_id"]),
             )
         return superseded_approvals
 
@@ -315,6 +315,13 @@ class Ledger:
             if row[key] is not None:
                 body[key] = row[key]
         return body
+
+    def planned_body(self, change_id: str) -> dict[str, Any] | None:
+        """Return the immutable proposal without execution/storage metadata."""
+        row = self._db.execute(
+            "SELECT body_json FROM staged_changes WHERE change_id = ?", (change_id,),
+        ).fetchone()
+        return json.loads(row[0]) if row is not None else None
 
     def note_write_intent(self, principal: Mapping[str, str]) -> int:
         """Record a new user write request before potentially slow backend reads."""
@@ -1158,16 +1165,6 @@ def claim_approval_decision(
     staged = ledger.get(approval["change_id"])
     if staged is None or staged.get("actor") != actor:
         return _blocked("binding_changed", "The bound CRM actor is no longer valid.")
-    if approval["state"] in {"cancelled", "superseded", "expired"}:
-        return {
-            **(approval["receipt"] or {}),
-            "status": approval["state"],
-            "approval_id": approval_id,
-            "change_id": approval["change_id"],
-            "replayed": True,
-            "message": "This approval is already closed; Feishu was not changed.",
-            **_child_parent_context(staged, ledger),
-        }
     card_message_id = approval.get("card_message_id")
     if not isinstance(card_message_id, str) or not card_message_id:
         return _blocked(
@@ -1179,6 +1176,16 @@ def claim_approval_decision(
             "card_mismatch",
             "This decision did not come from the original approval card.",
         )
+    if approval["state"] in {"cancelled", "superseded", "expired"}:
+        return {
+            **(approval["receipt"] or {}),
+            "status": approval["state"],
+            "approval_id": approval_id,
+            "change_id": approval["change_id"],
+            "replayed": True,
+            "message": "This approval is already closed; Feishu was not changed.",
+            **_closed_approval_context(staged, ledger),
+        }
     if approval["receipt"] is not None:
         return {
             **approval["receipt"],
@@ -1221,7 +1228,7 @@ def claim_approval_decision(
             "approval_id": approval_id,
             "change_id": approval["change_id"],
             "message": "The approval expired; Feishu was not changed.",
-            **_child_parent_context(staged, ledger),
+            **_closed_approval_context(staged, ledger),
         }
     if approval["preview_hash"] != _hash(_approval_material(staged)):
         return _blocked("preview_changed", "The approved preview no longer matches the ledger.")
@@ -1234,7 +1241,7 @@ def claim_approval_decision(
             "change_id": approval["change_id"],
             "message": "Feishu was not changed.",
         }
-        result.update(_child_parent_context(staged, ledger))
+        result.update(_closed_approval_context(staged, ledger))
         if not ledger.close_approval(
             approval_id, state, decision, _iso(moment), result
         ):
@@ -1260,17 +1267,25 @@ def claim_approval_decision(
     }
 
 
-def _child_parent_context(staged, ledger):
-    if not staged.get("parent_change_id"):
-        return {}
-    parent = ledger.get(staged["parent_change_id"])
-    if parent is None:
-        return {"message": "本次跟进审批已关闭；无法读取关联客户操作结果，请人工核对。"}
-    return {
-        "message": "客户操作已成功；本次跟进审批已关闭，不撤销已完成的客户操作。",
-        "parent_operation": {"change_id": parent["change_id"], "status": parent["state"],
-                             "receipt": parent["receipt"]},
-    }
+def _closed_approval_context(staged, ledger):
+    context = {}
+    if staged.get("parent_change_id"):
+        parent = ledger.get(staged["parent_change_id"])
+        if parent is None:
+            context["message"] = "本次跟进审批已关闭；无法读取关联客户操作结果，请人工核对。"
+        else:
+            context.update(
+                message="客户操作已成功；本次跟进审批已关闭，不撤销已完成的客户操作。",
+                parent_operation={"change_id": parent["change_id"], "status": parent["state"],
+                                  "receipt": parent["receipt"]},
+            )
+    if staged["state"] == "partial":
+        receipt = staged.get("receipt") or {}
+        context.update({key: receipt[key] for key in ("followup", "customer", "customer_changes") if key in receipt})
+        context.update(code="repair_closed_partial", durable_change_state="partial",
+                       durable_change_receipt=receipt,
+                       message="本次补救审批已关闭；已写入的跟进保留，客户摘要仍待人工处理。")
+    return context
 
 
 def bind_approval_card(
@@ -1459,9 +1474,7 @@ def _prepare_child_followup(staged, receipt, backend, ledger, config, moment):
             )
             if preview.get("status") != "staged":
                 return result, None
-            body = json.loads(temporary._db.execute(
-                "SELECT body_json FROM staged_changes WHERE change_id = ?", (preview["change_id"],),
-            ).fetchone()[0])
+            body = temporary.planned_body(preview["change_id"])
         finally:
             temporary.close()
         approval = ledger.stage_child(staged["change_id"], body, _iso(moment))

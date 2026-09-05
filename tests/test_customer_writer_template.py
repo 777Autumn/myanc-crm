@@ -95,6 +95,7 @@ class CustomerWriterTemplateTests(unittest.TestCase):
             source = source.replace("cli=/usr/local/libexec/lark-cli-1.0.90", "cli=./fake-cli")
             source = source.replace("python3 - ", f'"{Path(sys.executable).as_posix()}" - ')
             wrapper.write_text(source, encoding="utf-8", newline="\n")
+            wrapper.chmod(0o700)
             valid = self.request(emails=["colleague@example.com"], include_resigned=False)
             environment = {**os.environ, "MSYS2_ARG_CONV_EXCL": "*"}
             result = subprocess.run([binary, "-c", shlex.join(["./wrapper.sh", *valid])], cwd=root,

@@ -652,6 +652,7 @@ class FollowupCoreTests(unittest.TestCase):
     def test_new_stage_supersedes_previous_pending_change(self):
         old = self.stage()
         approval = self.begin(old["change_id"])
+        bind_approval_card({"approval_id": approval["approval_id"], "principal": PRINCIPAL}, self.ledger, CONFIG)
         new = self.stage(stage_command(content="修订方案"))
 
         result = self.decide(approval["approval_id"])
@@ -666,6 +667,7 @@ class FollowupCoreTests(unittest.TestCase):
     def test_later_begin_reports_every_stale_card_in_the_same_session(self):
         first = self.stage(stage_command(content="A"))
         stale_card = self.begin(first["change_id"])
+        bind_approval_card({"approval_id": stale_card["approval_id"], "principal": PRINCIPAL}, self.ledger, CONFIG)
         self.stage(stage_command(content="B"))
         latest = self.stage(stage_command(content="C"))
 
@@ -708,6 +710,7 @@ class FollowupCoreTests(unittest.TestCase):
     def test_host_begin_supersedes_same_principal_after_action_token_rotation(self):
         old = self.stage(stage_command(content="before restart"))
         stale_card = self.begin(old["change_id"])
+        bind_approval_card({"approval_id": stale_card["approval_id"], "principal": PRINCIPAL}, self.ledger, CONFIG)
         rotated_token = "rotated-session-token-0000000000001"
         new = stage_followup(
             stage_command(content="after restart"),
@@ -993,6 +996,7 @@ class FollowupCoreTests(unittest.TestCase):
         staged = self.stage()
         self.assertEqual("partial", self.apply(staged["change_id"])["status"])
         repair = self.begin(staged["change_id"], now=NOW + timedelta(minutes=1))
+        bind_approval_card({"approval_id": repair["approval_id"], "principal": PRINCIPAL}, self.ledger, CONFIG)
 
         self.stage(stage_command(content="new request"))
 
