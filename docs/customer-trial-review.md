@@ -1,5 +1,10 @@
 # Customer trial review — 2026-09-06
 
+This is a chronological record; earlier pending/failure statements are retained,
+not the current gate status. See [final evidence matrix](customer-trial-release-gate.md)
+for completed native, Owner UI and fresh read-only checks, actual full PR scope,
+unperformed live fault-injection boundaries and the separate real-cutover gate.
+
 This is a review of the new customer trial, not authorization to select real
 data or deploy. The fixed feature baselines are CRM `972a8b2e` and gateway
 `d72a3466`. Initial reviewed feature commits: CRM `a32346b1`, gateway `4ac91d37`.
