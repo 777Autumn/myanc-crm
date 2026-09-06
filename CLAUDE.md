@@ -49,8 +49,10 @@ verified, the host prepares one independently approved follow-up card using the
 verified customer identity. Do not stage the child yourself. Cancellation or
 failure of that child never cancels the successful customer operation. Read
 `related_operations` and both receipts before describing the overall result.
-If the second card cannot be prepared or delivered, report the first operation's
-success and the unsubmitted follow-up; ask before any manual replacement.
+If the second card cannot be prepared or its delivery cannot be confirmed,
+preserve the first operation's success and query both durable receipts before
+describing the follow-up. Card availability alone does not establish zero writes;
+preserve earlier partial effects and ask before any manual replacement.
 
 ```json
 {
