@@ -136,3 +136,34 @@ blocked real-model gates; earlier green CI applies only to its recorded commits.
 
 Both PRs remain drafts and unmerged while these gates are outstanding. The
 running installation, Sandbox, production configuration and ledger are unchanged.
+
+## Post-login native clarification correction
+
+Official user login restored actual model access. A fresh isolated smoke resolved
+`claude-sonnet-5` with the pinned 2.1.259 binary; the earlier revoked-token failure
+is historical evidence, not the current blocker.
+
+The first post-login run exposed two test-fixture gaps, not an authorization or
+CRM-write failure. Native `AskUserQuestion` legitimately waits for a user's reply,
+but the old waiter accepted only completed assistant turns. Also, replacing every
+opaque ID with one label hid differences between parent and child receipts. That
+run was interrupted and retained as diagnostic evidence, not semantic acceptance.
+
+Gateway `c5b27173876c605b9a8f82a806d0df836368e722` corrects only the existing test
+fixture: record native question UI separately, permit a new awaiting-user boundary
+only in the four rubric-approved first-turn clarification cases, answer the
+distinct-name case through the existing ReceiveMessage path, and distinguish that
+actual request-ID-bound answer from ordinary permissions. Ordinary permission
+responses remain forbidden. Evidence retains visible prefaces/questions and stable,
+distinct per-artifact anonymous IDs. No production policy, code, runner or rubric
+was changed for this correction.
+
+The full CRM adapter/Python IPC suite, core CUJs and native question tests passed.
+Independent Spec/Ponytail review found no P0–P3 issues and repeated five targeted
+tests ten times each successfully. A rebuild from the committed source matched
+the frozen test binary. CRM regression remains 176 tests plus 16 spike tests.
+
+The three affected cases are now being replayed for three trials each before a
+fresh complete 42-case run. Their first replay trial passed code assertions;
+independent semantic review is pending. All uncompleted model/live gates remain
+open. Keep both PRs unmerged and real CRM switching paused.
