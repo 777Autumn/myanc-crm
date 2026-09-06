@@ -370,10 +370,12 @@ class FollowupCoreTests(unittest.TestCase):
             self.ledger,
             CONFIG,
             NOW,
+            backend=self.backend,
         )
 
         self.assertEqual("executing", claimed["status"])
         self.assertTrue(claimed["execute"])
+        self.assertEqual(approval["preview"], claimed.get("preview"))
         self.assertEqual([], self.backend.actions)
         stored = self.ledger.get_approval(approval["approval_id"])
         self.assertEqual("executing", stored["state"])

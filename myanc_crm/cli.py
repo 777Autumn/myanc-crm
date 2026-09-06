@@ -437,7 +437,7 @@ def main(
         elif command == "host-bind-card":
             result = bind_approval_card(request, ledger, config)
         elif command == "host-claim":
-            result = claim_approval_decision(request, ledger, config)
+            result = claim_approval_decision(request, ledger, config, backend=backend)
         elif command == "host-execute":
             result = execute_claimed_approval(request, backend, ledger, config)
         else:
