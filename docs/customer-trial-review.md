@@ -83,17 +83,56 @@ tests and two gateway receipt tests, and reproduced the uncertain-create path.
 Current local checks: 176 Python tests and 16 spike tests pass; the full gateway
 CRM adapter suite (including both real Python IPC journeys), core CUJs, targeted
 approval/Feishu tests and compilation pass. CRM Linux CI passed on `44c4e24`.
-Gateway Linux CI exposed inherited baseline lint issues; fixes are submitted
-without changing lint rules or skipping the full suite. Its final result remains
-a gate, not implied by these local checks.
+Gateway Linux CI initially exposed inherited baseline lint issues. The fixes did
+not change lint rules or skip the full suite. All five Linux CI jobs subsequently
+passed on gateway `d366d2ce`; CRM CI passed on `539fadb7`.
 
 The 14 customer model cases are wired into the existing native harness with
-paired graders and semantic rubrics; their offline grader tests pass. Actual
-model execution remains **NOT RUN**: the previously configured gateway SSH
-entry rejected public-key authentication on 2026-09-06. No alternate account or
-credential was tried and no remote command ran. Restore the existing authorized
-test access before continuing isolated model trials and semantic review. This is
-not permission to switch real CRM data or restart the live service.
+paired graders and semantic rubrics. Complete-input grading now checks both the
+actual tool input and frozen follow-up draft, including invented optional fields;
+ten adversarial grader variants pass. The full CRM adapter suite, including both
+Python IPC journeys, passed again after that change.
+
+Correction to the earlier SSH diagnosis: the bare alias omitted the remote user
+and selected the local Windows username. The existing helper explicitly selects
+the intended account. Using that documented account with the existing key and
+trusted host key succeeds. No SSH, account or key change was necessary. The
+actual service binary is Claude Code 2.1.259; 2.1.236 is only the older user-path
+binary, not the running service's configured command.
+
+On 2026-09-06, the isolated native run passed artifact checksums, four runner
+tests, private supervisor environment validation, exact binary verification and
+local auth-status inspection. The actual model-auth smoke then returned
+`oauth_token_revoked`, and the runner stopped with exit 3 before the first case.
+The selected credential source matches the service's Claude run-as user and has
+an expired access token. Local `loggedIn` status is not proof of model access.
+All 42 customer behavior trials and independent semantic review remain
+**NOT RUN**. Do not merge on authored cases or deterministic tests alone.
+
+The runner reused the proven private mount/PID namespace path, mounted existing
+credentials read-only, and used the alternate fixture listener with synthetic
+CRM data only. No live Feishu call, production restart or credential change was
+performed. Retain this failed preflight as evidence; after the user completes
+official login, use a fresh isolated directory for the next run.
+
+The new `ops/CLAUDE.vps.md` is a candidate policy, not an installed live policy.
+It covers the narrow customer commands, one-question collection, frozen parent
+draft and separate approvals. A review correction explicitly preserves earlier
+partial writes when a repair card is pending, unavailable or cancelled: describe
+effects from durable receipts, not from card availability. Final incremental
+Standards review has zero open hard violations or heuristic findings; Spec has
+zero new findings. Neither static review substitutes for actual model trials.
+
+The subsequent independent senior review found one additional P2: a child-card
+activation may succeed in Feishu while its response times out, so the parent
+delivery-error notice cannot assert that the follow-up was not submitted. The
+gateway's five-language notice and same-path log now report uncertainty and
+direct the user to durable results. A regression retains an activated/bound
+child through activation and fallback timeouts, permits its independent callback,
+and rejects the former zero-write assertion. Hosted/i18n tests, the full CUJs and
+Feishu hosted-card/refresh tests pass. Execution, authorization and retry logic
+were not expanded. These latest local changes still require fresh CI and the
+blocked real-model gates; earlier green CI applies only to its recorded commits.
 
 Both PRs remain drafts and unmerged while these gates are outstanding. The
 running installation, Sandbox, production configuration and ledger are unchanged.

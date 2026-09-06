@@ -52,11 +52,17 @@ activate card publisher handles the child. Claude is not resumed by callbacks.
 The first approval never approves the follow-up. Cancelling the child preserves
 the successful customer operation. `result` exposes both linked operations, and
 `customer` pairs current facts with the latest durable operation rather than
-guessing from old conversation. Pending/unpublished child is not a CRM write.
+guessing from old conversation. Preparing or publishing a child is not itself a
+CRM write. A pending/unpublished repair card may follow earlier partial writes;
+describe actual effects from the durable receipt, not from card state alone.
 
 Unknown writes stop for inspection. A verified parent survives child generation
-or delivery failure; report success of the first operation plus unsubmitted
-follow-up, then use manual recovery. There is no automatic retry worker, general
+or delivery failure. If generation stopped before publishing, report the first
+operation's success and the unsubmitted new follow-up. An activation response
+failure does not prove non-delivery or zero writes: inspect linked durable
+receipts before manual recovery, since the independently approved child could
+already be running. Preserve earlier partial writes when a repair card fails.
+There is no automatic retry worker, general
 workflow framework, MCP migration, SDK switch or second model.
 
 ## Release gates
