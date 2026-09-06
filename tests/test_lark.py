@@ -112,6 +112,47 @@ class LarkCliBackendTests(unittest.TestCase):
         )
 
     @patch("myanc_crm.lark.subprocess.run")
+    def test_customer_history_pushes_link_filter_sort_and_bound_into_fixed_cli(self, run):
+        def fake(argv, **kwargs):
+            if "+field-list" in argv:
+                return completed({"items": FOLLOWUP_FIELDS})
+            self.assertIn("+record-list", argv)
+            self.assertEqual("tblFollowups", argv[argv.index("--table-id") + 1])
+            self.assertEqual("11", argv[argv.index("--limit") + 1])
+            self.assertEqual(
+                {"logic": "and", "conditions": [["关联客户", "intersects", [{"id": "recCustomer1"}]]]},
+                json.loads(argv[argv.index("--filter-json") + 1]),
+            )
+            self.assertEqual([{"field": "沟通时间", "desc": True}],
+                             json.loads(argv[argv.index("--sort-json") + 1]))
+            Path(kwargs["cwd"], "records.ndjson").write_text(json.dumps({
+                "record_id": "recFollowup1", "关联客户": [{"id": "recCustomer1"}],
+                "沟通时间": "2026-09-03T10:00:00+08:00", "沟通内容": "Synthetic history",
+            }, ensure_ascii=False) + "\n", encoding="utf-8")
+            return artifact_completed(1)
+        run.side_effect = fake
+        history = self.backend.read_customer_history("recCustomer1", 11)
+        self.assertEqual(1, len(history))
+        self.assertEqual("Synthetic history", history[0]["content"])
+        self.assertEqual("recCustomer1", history[0]["customer_record_id"])
+        self.assertEqual(2, run.call_count)
+
+    @patch("myanc_crm.lark.subprocess.run")
+    def test_history_rejects_unbounded_input_and_schema_drift_before_record_query(self, run):
+        for limit in (0, 12, True, "11"):
+            with self.subTest(limit=limit), self.assertRaises(LarkBackendError):
+                self.backend.read_customer_history("recCustomer1", limit)
+        run.assert_not_called()
+        drifted = [dict(item) for item in FOLLOWUP_FIELDS]
+        drifted[2]["field_id"] = "fldOtherLink"
+        run.return_value = completed({"items": drifted})
+        with self.assertRaises(LarkBackendError) as raised:
+            self.backend.read_customer_history("recCustomer1", 11)
+        self.assertEqual("schema_mismatch", raised.exception.kind)
+        self.assertEqual(1, run.call_count)
+        self.assertNotIn("+record-list", run.call_args.args[0])
+
+    @patch("myanc_crm.lark.subprocess.run")
     def test_read_schema_validates_both_tables_and_uses_fixed_wrapper(self, run):
         run.side_effect = [
             completed({"items": CUSTOMER_FIELDS}),

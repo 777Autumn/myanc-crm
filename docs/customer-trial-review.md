@@ -1,0 +1,209 @@
+# Customer trial review — 2026-09-06
+
+This is a chronological record; earlier pending/failure statements are retained,
+not the current gate status. See [final evidence matrix](customer-trial-release-gate.md)
+for completed native, Owner UI and fresh read-only checks, actual full PR scope,
+unperformed live fault-injection boundaries and the separate real-cutover gate.
+
+This is a review of the new customer trial, not authorization to select real
+data or deploy. The fixed feature baselines are CRM `972a8b2e` and gateway
+`d72a3466`. Initial reviewed feature commits: CRM `a32346b1`, gateway `4ac91d37`.
+Three independent agents reviewed standards, spec, and senior/complexity concerns.
+
+## Standards
+
+No clear new documented-standard violations. Two labelled heuristic findings:
+
+- P2, possible Duplicated Code: customer staging accepted a 128-character phone
+  while the fixed writer accepted 64. A 65-character value reached approval but
+  could not be written. Resolution: share the domain text limits and reject this
+  input before staging; add a regression test.
+- P3, possible Feature Envy: child preparation queried the temporary Ledger's
+  private SQLite connection and serialization directly. Resolution: canonical
+  proposal retrieval now stays inside `Ledger.planned_body`.
+
+Standards total: 0 hard violations, 2 heuristic findings; highest severity P2.
+
+## Spec
+
+No scope creep was identified. Three P2 findings:
+
+- Child preparation failure was hidden by generic “separate approval” copy in
+  the green parent card. Resolution: `unavailable/not_published` produces explicit
+  no-new-card, unsubmitted-follow-up and manual-recovery instructions while
+  preserving parent success. Test the actual adapter Execute receipt.
+- An observed but not fully verified creation was absent from the customer's
+  latest-operation lookup. Resolution: preserve the returned/observed record ID
+  separately from the frozen proposal. It enables result lookup only; unknown
+  outcomes still cannot prepare a child. Test actual CLI/SQLite lookup.
+- Cancelling repair of a partially successful child falsely said its follow-up
+  was never submitted. Resolution: preserve the durable partial receipt, show
+  retained follow-up and manual summary repair, and keep the parent success.
+  Test partial write → new repair approval → cancel → related result, plus cards.
+
+Spec total: 3 findings; highest severity P2.
+
+## Independent senior and Ponytail review
+
+The senior reviewer agreed with the child-preparation failure finding and the
+existing narrow branch/card-publisher design. No MCP, SDK, extra service or
+general workflow abstraction is needed.
+
+Two complexity reductions were accepted: remove an immediate duplicate assignee
+read (the fixed backend already verifies it; stage/apply still recheck), and
+remove a redundant new SQL operation-type column. The immutable proposal already
+stores and fingerprints operation type. Any existing extra column is left alone;
+there is no destructive database migration. Original review estimate: 7 lines
+removable, not a measured product performance claim.
+
+An inherited issue was also reproduced: terminal approval replay happened before
+original card-ID validation. Validation now precedes terminal replay. Historical
+tests now bind emitted cards before superseding them, matching the real lifecycle.
+
+## Verification and release boundary
+
+Local compilation, Python regression tests, isolated real Python IPC journeys and
+targeted gateway tests are separate evidence from model and live Feishu behavior.
+Linux CI initially exposed a missing execute bit on a temporary wrapper test;
+the test fixture now sets it explicitly. Keep the failed CI history.
+
+The paired customer model cases must run in the existing opt-in isolated native
+Claude harness with semantic review. Authored cases or skipped tests are not a
+pass. Same-app personnel permissions/visibility, actual fictional card delivery,
+other Feishu abilities and one receiver remain live acceptance checks.
+
+Draft PRs: [CRM #5](https://github.com/77AutumN/myanc-crm/pull/5) and
+[gateway #2](https://github.com/77AutumN/cc-connect-anc/pull/2). Review resolutions
+and CI must pass before merge. Real CRM creation/switching still requires separate
+confirmation after merge; no real records, private configuration or ledger are
+included in these changes.
+
+## Re-review and current handoff
+
+The independent Standards re-review of CRM `44c4e24` and gateway `afab16cc`
+closed both heuristic findings with zero outstanding findings. The independent
+Spec re-review closed all three P2 findings, reran the eight customer-journey
+tests and two gateway receipt tests, and reproduced the uncertain-create path.
+
+Current local checks: 176 Python tests and 16 spike tests pass; the full gateway
+CRM adapter suite (including both real Python IPC journeys), core CUJs, targeted
+approval/Feishu tests and compilation pass. CRM Linux CI passed on `44c4e24`.
+Gateway Linux CI initially exposed inherited baseline lint issues. The fixes did
+not change lint rules or skip the full suite. All five Linux CI jobs subsequently
+passed on gateway `d366d2ce`; CRM CI passed on `539fadb7`.
+
+The 14 customer model cases are wired into the existing native harness with
+paired graders and semantic rubrics. Complete-input grading now checks both the
+actual tool input and frozen follow-up draft, including invented optional fields;
+ten adversarial grader variants pass. The full CRM adapter suite, including both
+Python IPC journeys, passed again after that change.
+
+Correction to the earlier SSH diagnosis: the bare alias omitted the remote user
+and selected the local Windows username. The existing helper explicitly selects
+the intended account. Using that documented account with the existing key and
+trusted host key succeeds. No SSH, account or key change was necessary. The
+actual service binary is Claude Code 2.1.259; 2.1.236 is only the older user-path
+binary, not the running service's configured command.
+
+On 2026-09-06, the isolated native run passed artifact checksums, four runner
+tests, private supervisor environment validation, exact binary verification and
+local auth-status inspection. The actual model-auth smoke then returned
+`oauth_token_revoked`, and the runner stopped with exit 3 before the first case.
+The selected credential source matches the service's Claude run-as user and has
+an expired access token. Local `loggedIn` status is not proof of model access.
+All 42 customer behavior trials and independent semantic review remain
+**NOT RUN**. Do not merge on authored cases or deterministic tests alone.
+
+The runner reused the proven private mount/PID namespace path, mounted existing
+credentials read-only, and used the alternate fixture listener with synthetic
+CRM data only. No live Feishu call, production restart or credential change was
+performed. Retain this failed preflight as evidence; after the user completes
+official login, use a fresh isolated directory for the next run.
+
+The new `ops/CLAUDE.vps.md` is a candidate policy, not an installed live policy.
+It covers the narrow customer commands, one-question collection, frozen parent
+draft and separate approvals. A review correction explicitly preserves earlier
+partial writes when a repair card is pending, unavailable or cancelled: describe
+effects from durable receipts, not from card availability. Final incremental
+Standards review has zero open hard violations or heuristic findings; Spec has
+zero new findings. Neither static review substitutes for actual model trials.
+
+The subsequent independent senior review found one additional P2: a child-card
+activation may succeed in Feishu while its response times out, so the parent
+delivery-error notice cannot assert that the follow-up was not submitted. The
+gateway's five-language notice and same-path log now report uncertainty and
+direct the user to durable results. A regression retains an activated/bound
+child through activation and fallback timeouts, permits its independent callback,
+and rejects the former zero-write assertion. Hosted/i18n tests, the full CUJs and
+Feishu hosted-card/refresh tests pass. Execution, authorization and retry logic
+were not expanded. These latest local changes still require fresh CI and the
+blocked real-model gates; earlier green CI applies only to its recorded commits.
+
+Both PRs remain drafts and unmerged while these gates are outstanding. The
+running installation, Sandbox, production configuration and ledger are unchanged.
+
+## Post-login native clarification correction
+
+Official user login restored actual model access. A fresh isolated smoke resolved
+`claude-sonnet-5` with the pinned 2.1.259 binary; the earlier revoked-token failure
+is historical evidence, not the current blocker.
+
+The first post-login run exposed two test-fixture gaps, not an authorization or
+CRM-write failure. Native `AskUserQuestion` legitimately waits for a user's reply,
+but the old waiter accepted only completed assistant turns. Also, replacing every
+opaque ID with one label hid differences between parent and child receipts. That
+run was interrupted and retained as diagnostic evidence, not semantic acceptance.
+
+Gateway `c5b27173876c605b9a8f82a806d0df836368e722` corrects only the existing test
+fixture: record native question UI separately, permit a new awaiting-user boundary
+only in the four rubric-approved first-turn clarification cases, answer the
+distinct-name case through the existing ReceiveMessage path, and distinguish that
+actual request-ID-bound answer from ordinary permissions. Ordinary permission
+responses remain forbidden. Evidence retains visible prefaces/questions and stable,
+distinct per-artifact anonymous IDs. No production policy, code, runner or rubric
+was changed for this correction.
+
+The full CRM adapter/Python IPC suite, core CUJs and native question tests passed.
+Independent Spec/Ponytail review found no P0–P3 issues and repeated five targeted
+tests ten times each successfully. A rebuild from the committed source matched
+the frozen test binary. CRM regression remains 176 tests plus 16 spike tests.
+
+The three affected cases are now being replayed for three trials each before a
+fresh complete 42-case run. Their first replay trial passed code assertions;
+independent semantic review is pending. All uncompleted model/live gates remain
+open. Keep both PRs unmerged and real CRM switching paused.
+
+## Completed post-login native gates and remaining live scope gate
+
+The diagnostic replay completed 9/9 code and independent agent semantic passes.
+A separate fresh run then completed all 14 cases for three trials, 42/42 code
+passes, with native Claude Code 2.1.259 and actual model `claude-sonnet-5`.
+Sources were CRM `9066dfdc5b8adcf486cc4e1865025ca107caa4ad` and gateway
+`c5b27173876c605b9a8f82a806d0df836368e722`; candidate policy SHA-256 remained
+`cc8d112f583752dff9bf327ccecdfa61abe1df668f56c71dd78edc6a3dec5152`.
+The isolated unit exited naturally with status 0; it did not replace the gateway.
+
+Two independent Codex reviewers checked the original frozen rubrics against
+actual tools, native question UI, replies, cards and state: 18/18 and 24/24 PASS.
+These are independent agent judgments, not human sign-off; original evidence and
+rubrics are preserved separately from the verdict reports. Ordinary permission
+responses remained zero. Result fixtures' successful parent write was seeded
+before the model; the model made no additional business writes.
+
+The reviews also retain non-gating UX deviations: excess/English staging text,
+internal references exposed in some replies, occasionally excessive contact
+requirements and imprecise unbound-card wording. Frozen rubric passes do not
+claim all candidate-policy wording or the live user journey is satisfactory.
+
+An authorized exact-identifier lookup through the fixed CRM bot stopped at missing
+app scope `contact:user.id:readonly` (authorization 99991672). No person data was
+returned. The identifier and app link are not stored in the repository. Ask the
+app administrator to make that minimum scope effective, then verify the exact
+person, name/status and visibility; do not introduce user OAuth or reuse the
+transport app's person IDs.
+
+Real fictional customer/card/callback acceptance and non-CRM regression still
+remain open. CI must pass on the actual final commits; earlier greens are not
+substitutes. Both PRs remain draft and unmerged with auto-merge off. No live policy,
+service, profile, ledger or CRM data was changed. Real CRM creation and switching
+still require separate confirmation after the remaining gates and merge.

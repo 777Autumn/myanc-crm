@@ -4,19 +4,25 @@
 from __future__ import annotations
 
 import argparse
+import copy
+import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath, PureWindowsPath
 import subprocess
 import sys
+import re
+import tempfile
 from typing import Any, Iterable
 
 
 BASE_NAME = "ANC CRM Sandbox"
+REAL_BASE_NAME = "ANC CRM"
 CUSTOMER_TABLE = "客户"
 FOLLOWUP_TABLE = "跟进记录"
 TIMEZONE = "Asia/Shanghai"
 CONFIG_PATH = Path(__file__).resolve().parents[1] / "config.local.json"
+LEDGER_PATH = (Path.home() / ".myanc-crm" / "ledger.sqlite3").resolve()
 
 CUSTOMER_FIELDS = [
     {"name": "客户名称", "type": "text"},
@@ -226,6 +232,7 @@ def _run(
     json_output: bool = True,
     format_flag: bool = True,
     identity: str | None = "bot",
+    cwd: Path | None = None,
 ) -> Any:
     argv = [str(cli), *command]
     if json_output and format_flag:
@@ -243,6 +250,7 @@ def _run(
             errors="replace",
             shell=False,
             timeout=120,
+            cwd=cwd,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise BootstrapError(f"{label} failed before a verified response") from exc
@@ -381,10 +389,12 @@ def _canonical_field_ids(
     return result
 
 
-def _write_config(config: dict[str, Any]) -> None:
-    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-    descriptor = os.open(CONFIG_PATH, flags, 0o600)
+def _write_config(config: dict[str, Any], path: Path | None = None, *, exclusive: bool = False) -> None:
+    path = CONFIG_PATH if path is None else path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    flags = os.O_WRONLY | os.O_CREAT | (os.O_EXCL if exclusive else os.O_TRUNC)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags, 0o600)
     with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
         json.dump(config, handle, ensure_ascii=False, indent=2)
         handle.write("\n")
@@ -433,12 +443,20 @@ def _checkpoint(
         },
         "allowed_actors": {owner_sender_id: owner},
         "ttl_seconds": 600,
-        "ledger_path": ".crm-state/ledger.sqlite3",
+        "ledger_path": str(LEDGER_PATH),
+        "host_secret_sha256": _host_secret_hash(),
         "identity_summary": identity_summary,
     }
     if status != "verified":
         config["_bootstrap_status"] = status
     _write_config(config)
+
+
+def _host_secret_hash() -> str:
+    secret = os.environ.get("MYANC_CRM_HOST_SECRET", "")
+    if len(secret) < 32 or len(secret) > 4096:
+        raise BootstrapError("MYANC_CRM_HOST_SECRET must contain 32-4096 characters")
+    return hashlib.sha256(secret.encode("utf-8")).hexdigest()
 
 
 def _followup_fields(customer_table_id: str) -> list[dict[str, Any]]:
@@ -640,9 +658,15 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--lark-cli", required=True, help="absolute administrator CLI path")
     parser.add_argument("--profile", required=True, help="fixed enterprise bot profile")
+    parser.add_argument("--mode", choices=("sandbox", "empty-real"), default="sandbox")
+    parser.add_argument("--source-config", help="existing protected, verified CRM config; read-only")
+    parser.add_argument("--config-output", help="new absolute config path (empty-real only)")
+    parser.add_argument("--ledger-path", help="new absolute ledger path (empty-real only; never copied)")
+    parser.add_argument("--expected-app-id", help="expected CRM app when absent from source config")
+    parser.add_argument("--confirm-empty-real", action="store_true", help="explicitly confirm creating an empty real Base")
     parser.add_argument(
         "--wrapper-path",
-        required=True,
+        required=False,
         help="absolute runtime lark-enterprise wrapper path written to config.local.json",
     )
     parser.add_argument(
@@ -657,12 +681,194 @@ def _is_absolute_any(value: str) -> bool:
     return PurePosixPath(value).is_absolute() or PureWindowsPath(value).is_absolute()
 
 
+def _real_customer_fields() -> list[dict[str, Any]]:
+    fields = copy.deepcopy(CUSTOMER_FIELDS)
+    number = next(field for field in fields if field["name"] == "客户编号")
+    number["style"]["rules"][0]["text"] = "CRM-"
+    fields.append({"name": "建档操作ID", "type": "text"})
+    return fields
+
+
+def _real_context(args: argparse.Namespace) -> tuple[dict[str, Any], Path, str]:
+    """Read only a supplied deployment context; no default credential discovery."""
+    paths: dict[str, Path] = {}
+    for name in ("source_config", "config_output", "ledger_path"):
+        value = getattr(args, name)
+        if not value or not Path(value).is_absolute():
+            raise BootstrapError(f"--{name.replace('_', '-')} must be an explicit absolute path")
+        paths[name] = Path(value).resolve()
+    source_path, output, ledger = (paths[key] for key in ("source_config", "config_output", "ledger_path"))
+    if len({source_path, output, ledger}) != 3 or output == CONFIG_PATH.resolve():
+        raise BootstrapError("real targets must be independent of the source and old default config")
+    if output.exists() or ledger.exists() or Path(str(ledger) + "-wal").exists() or Path(str(ledger) + "-shm").exists():
+        raise BootstrapError("real config and ledger targets must not already exist")
+    if not output.parent.is_dir() or not ledger.parent.is_dir():
+        raise BootstrapError("provision the separate config and ledger parent directories first")
+    try:
+        source = json.loads(source_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        raise BootstrapError("source config is unreadable") from None
+    if not isinstance(source, dict) or source.get("_bootstrap_status") is not None:
+        raise BootstrapError("source config is not a verified CRM configuration")
+    source_ledger = source.get("ledger_path")
+    if not isinstance(source_ledger, str) or not _is_absolute_any(source_ledger):
+        raise BootstrapError("source config omitted its protected ledger path")
+    if ledger == Path(source_ledger).resolve():
+        raise BootstrapError("the old ledger cannot be reused")
+    wrapper = source.get("wrapper_path")
+    if not isinstance(wrapper, str) or not _is_absolute_any(wrapper):
+        raise BootstrapError("source config omitted the fixed writer wrapper")
+    if args.wrapper_path is not None and args.wrapper_path != wrapper:
+        raise BootstrapError("the real bootstrap cannot change the writer identity wrapper")
+    actors = source.get("allowed_actors")
+    if not isinstance(actors, dict) or len(actors) != 1:
+        raise BootstrapError("empty-real requires the existing single Owner mapping")
+    actor = next(iter(actors.values()))
+    if not isinstance(actor, dict) or not isinstance(actor.get("display_name"), str) or not re.fullmatch(
+        r"ou_[A-Za-z0-9]+", str(actor.get("feishu_user_id", ""))
+    ):
+        raise BootstrapError("source Owner mapping is invalid")
+    if not re.fullmatch(r"[0-9a-f]{64}", str(source.get("host_secret_sha256", ""))):
+        raise BootstrapError("source config omitted its host authentication digest")
+    summary = source.get("identity_summary", {})
+    configured_app = source.get("expected_app_id") or (
+        summary.get("application_id") if isinstance(summary, dict) else None)
+    if configured_app and args.expected_app_id and configured_app != args.expected_app_id:
+        raise BootstrapError("explicit app identity conflicts with the verified source")
+    expected_app = configured_app or args.expected_app_id
+    if not isinstance(expected_app, str) or not expected_app:
+        raise BootstrapError("an expected CRM app ID is required; a profile name is insufficient")
+    if source.get("profile") is not None and source["profile"] != args.profile:
+        raise BootstrapError("profile conflicts with the verified source")
+    config = copy.deepcopy(source)
+    config.update(base_token="", base_url="", customer_table_id="", followup_table_id="",
+                  fields={"customers": {}, "followups": {}}, ledger_path=str(ledger),
+                  _bootstrap_status="prepared")
+    return config, output, expected_app
+
+
+def _verify_real_identity(cli: Path, profile: str, config: dict[str, Any], expected_app: str) -> None:
+    version = _run(cli, profile, ["--version"], "fixed CLI version check",
+                   json_output=False, format_flag=False, identity=None)
+    if version.strip() != "lark-cli version 1.0.90":
+        raise BootstrapError("real bootstrap requires the reviewed CLI 1.0.90")
+    bot = _run(cli, profile, ["whoami"], "CRM bot identity check", format_flag=False)
+    if not isinstance(bot, dict) or bot.get("identity") != "bot" or bot.get("available") is not True or bot.get("appId") != expected_app:
+        raise BootstrapError("the selected bot is not the verified CRM application")
+    owner = next(iter(config["allowed_actors"].values()))
+    result = _run(cli, profile, ["contact", "+get-user", "--user-id", owner["feishu_user_id"],
+                                "--user-id-type", "open_id"], "same-app Owner verification")
+    if not isinstance(result, dict) or result.get("ok") is not True or result.get("identity") != "bot":
+        raise BootstrapError("Owner verification did not prove bot identity")
+    data = result.get("data", {})
+    person = data.get("user", data) if isinstance(data, dict) else {}
+    status = person.get("status", {}) if isinstance(person, dict) else {}
+    if (not isinstance(person, dict) or person.get("open_id") != owner["feishu_user_id"]
+            or not person.get("name") or not isinstance(status, dict)
+            or status.get("is_activated") is not True or status.get("is_frozen") is not False
+            or status.get("is_resigned") is not False):
+        raise BootstrapError("Owner identity/status is not verifiable with the current CRM app permissions")
+
+
+def _verify_empty_table(cli: Path, profile: str, token: str, table: str, field_id: str) -> None:
+    # CLI 1.0.90 +record-list help and the official Base Record SOP define this
+    # manifest contract. No view/filter: this probes the whole table, not a subset.
+    with tempfile.TemporaryDirectory(prefix="crm-empty-check-") as directory:
+        artifact = Path(directory) / "empty.ndjson"
+        result = _run(cli, profile, ["base", "+record-list", "--base-token", token,
+            "--table-id", table, "--field-id", field_id, "--limit", "1", "--format", "ndjson",
+            "--output", "./empty.ndjson"], "verify real table is empty", format_flag=False,
+            cwd=Path(directory))
+        manifests = [item for item in _walk(result) if "records_count" in item]
+        if (len(manifests) != 1 or type(manifests[0]["records_count"]) is not int
+                or manifests[0]["records_count"] != 0 or manifests[0].get("has_more") is not False
+                or not artifact.is_file() or artifact.stat().st_size != 0):
+            raise BootstrapError("empty table state is unverified; retain checkpoint for manual review")
+
+
+def _create_empty_real(args: argparse.Namespace, cli: Path) -> int:
+    config, output, expected_app = _real_context(args)
+    if args.dry_run:
+        print("DRY RUN: reuse the verified source bot and single Owner; never log in as user")
+        print("DRY RUN: verify fixed CLI/app and same-app Owner ID/status before any create")
+        print("DRY RUN: create 'ANC CRM': empty customers + follow-ups; native CRM- numbering + 建档操作ID")
+        print("DRY RUN: use a new config and new ledger; retain old Base/config/ledger unchanged")
+        print("DRY RUN: no customer seeds, Feishu calls, files, or ledger copies")
+        return 0
+    if not args.confirm_empty_real:
+        raise BootstrapError("empty-real creation requires --confirm-empty-real after reviewing its dry run")
+    if not cli.is_file():
+        raise BootstrapError("--lark-cli does not name an existing file")
+    _verify_real_identity(cli, args.profile, config, expected_app)
+    # Reserve only the new checkpoint. On uncertainty keep it and every resource;
+    # an operator reconciles manually rather than retrying Base creation.
+    try:
+        _write_config(config, output, exclusive=True)
+        fields = _real_customer_fields()
+        created = _run(cli, args.profile, ["base", "+base-create", "--name", REAL_BASE_NAME,
+            "--time-zone", TIMEZONE, "--table-name", CUSTOMER_TABLE, "--fields",
+            json.dumps(fields, ensure_ascii=False)], "empty real Base creation")
+        token = _find_string(created, ("base_token", "app_token"))
+        if not token:
+            raise BootstrapError("Base creation result is uncertain; retain checkpoint and reconcile manually")
+        config.update(base_token=token, base_url=_find_string(created, ("base_url", "url")) or "",
+                      _bootstrap_status="base_created")
+        _write_config(config, output)
+        base = _run(cli, args.profile, ["base", "+base-get", "--base-token", token], "real Base verification")
+        if not _has_named_item(base, REAL_BASE_NAME):
+            raise BootstrapError("real Base name verification failed")
+        config["base_url"] = config["base_url"] or _find_string(base, ("base_url", "url")) or ""
+        tables = _run(cli, args.profile, ["base", "+table-list", "--base-token", token], "real customer table lookup")
+        customer_table = _named_id(tables, CUSTOMER_TABLE, ("table_id", "id"))
+        if not customer_table or not config["base_url"]:
+            raise BootstrapError("real customer table/URL verification failed")
+        config["customer_table_id"] = customer_table
+        canonical = {**CUSTOMER_CANONICAL, "operation_id": "建档操作ID"}
+        schema = _run(cli, args.profile, ["base", "+field-list", "--base-token", token,
+            "--table-id", customer_table, "--limit", "100"], "real customer schema verification")
+        _verify_fields(schema, fields, "real customer")
+        config["fields"]["customers"] = _canonical_field_ids(schema, canonical, "real customer")
+        config["_bootstrap_status"] = "customer_verified"
+        _write_config(config, output)
+        followup_fields = _followup_fields(customer_table)
+        created = _run(cli, args.profile, ["base", "+table-create", "--base-token", token,
+            "--name", FOLLOWUP_TABLE, "--fields", json.dumps(followup_fields, ensure_ascii=False)],
+            "real follow-up table creation")
+        followup_table = _find_string(created, ("table_id",))
+        if not followup_table:
+            raise BootstrapError("follow-up table creation is uncertain; reconcile the retained Base")
+        config.update(followup_table_id=followup_table, _bootstrap_status="followup_created")
+        _write_config(config, output)
+        schema = _run(cli, args.profile, ["base", "+field-list", "--base-token", token,
+            "--table-id", followup_table, "--limit", "100"], "real follow-up schema verification")
+        _verify_fields(schema, followup_fields, "real follow-up")
+        config["fields"]["followups"] = _canonical_field_ids(schema, FOLLOWUP_CANONICAL, "real follow-up")
+        config["_bootstrap_status"] = "tables_verified_empty_pending"
+        _write_config(config, output)
+        for table, field in ((customer_table, config["fields"]["customers"]["name"]),
+                             (followup_table, config["fields"]["followups"]["title"])):
+            _verify_empty_table(cli, args.profile, token, table, field)
+        config.pop("_bootstrap_status")
+        _write_config(config, output)
+    except OSError:
+        raise BootstrapError("real checkpoint could not be persisted; retain any created resources") from None
+    print("Created and verified an empty ANC CRM. Old configuration and ledger are unchanged.")
+    print("Only the new config contains identifiers; no ledger was created or copied.")
+    return 0
+
+
 def main() -> int:
     args = _parse_args()
     cli = Path(args.lark_cli)
     if not cli.is_absolute():
         raise BootstrapError("--lark-cli must be an absolute path")
-    if not _is_absolute_any(args.wrapper_path):
+    if args.mode == "empty-real":
+        if not args.profile.strip():
+            raise BootstrapError("--profile must not be empty")
+        return _create_empty_real(args, cli)
+    if any((args.source_config, args.config_output, args.ledger_path, args.expected_app_id, args.confirm_empty_real)):
+        raise BootstrapError("real deployment options require --mode empty-real")
+    if not args.wrapper_path or not _is_absolute_any(args.wrapper_path):
         raise BootstrapError("--wrapper-path must be absolute")
     if not args.profile.strip():
         raise BootstrapError("--profile must not be empty")
@@ -906,9 +1112,6 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except BootstrapError as error:
         print(f"Bootstrap stopped: {error}", file=sys.stderr)
-        if CONFIG_PATH.exists():
-            print(
-                "Any created Base resources were retained; captured identifiers remain in config.local.json.",
-                file=sys.stderr,
-            )
+        print("Any created resources and checkpoints were retained; reconcile them before retrying.",
+              file=sys.stderr)
         raise SystemExit(1)

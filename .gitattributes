@@ -1,0 +1,2 @@
+# Administrative shell assets are executed on Linux, including Windows-authored checkouts.
+*.sh text eol=lf

@@ -1,146 +1,181 @@
 # myanc-crm
 
-One deliberately small CRM workflow for the existing Claude Code → cc-connect →
-Feishu gateway:
+One small workflow inside a general Feishu Claude assistant:
 
-1. resolve exactly one customer;
-2. stage a read-only follow-up preview;
-3. let the existing Feishu conversation collect approval;
-4. apply that exact preview once; and
-5. read the Base again and return a verified receipt.
+1. read customer facts/history and clarify missing details;
+2. stage a factual preview through a controlled host tool;
+3. bind the real sender/session and emitted card to that preview;
+4. let the host execute the original approved proposal once;
+5. read back, show the actual result, and continue discussing it with Claude.
 
-This repository is not a general CRM, a generic Base wrapper, or a production
-deployment system. The sandbox contains only `客户` and `跟进记录`. No credential or
-real identifier belongs in Git.
+**The new customer-trial changes are not deployed. Real CRM switching is paused.**
+Implementation/review scope and the preserved Owner canary baseline are in
+[the trial release gate](docs/real-crm-trial.md). Merge requires review and green CI;
+real CRM creation/selection still needs a separate confirmation after merge.
+The current Agent contract is in [CLAUDE.md](CLAUDE.md). The older request-file /
+PermissionRequest route remains legacy code, not the selected tools workflow.
+This package does not replace other Feishu skills, implement general Base CRUD,
+or add a Python service, MCP server, SDK, second model, or workflow framework.
 
-## Bootstrap the sandbox
+## Controlled model tools
 
-An administrator runs `ops/bootstrap_base.py` once. It creates `ANC CRM Sandbox`,
-the two fixed tables, and three fictional customers (one unique name and two rows
-with the same name).
+The thin `ops/crm_tool.py` client accepts one command and one stdin JSON object:
 
-The script requires one absolute `lark-cli` executable, one enterprise profile,
-and the absolute production wrapper path. It verifies that the profile has both a
-user and bot identity for the same application. The user identity is used only to
-search Drive for an existing Base with the same title; every create and write uses
-the bot identity. It never starts an interactive login.
+| Command | Fields | Result |
+|---|---|---|
+| `customer` | `customer_query` | Current facts and bounded recent history; ambiguous matches require selection |
+| `stage` | `customer_query`, `content`, `occurred_at`; optional `channel`, `next_action`, `next_followup_at` | Canonical preview plus host-owned approval card; no Feishu write |
+| `result` | Returned opaque `change_id` | Pending/terminal state and recorded receipt, without restaging |
+| `assignee` | Exact phone/user email or previously verified name in `query` | Verified name and opaque `owner_ref`, no approval authority |
+| `stage-customer-create` | `name`, at least one contact detail, `stage`, `owner_ref`; optional `allow_same_name`, `followup` | Customer-only preview; optional follow-up needs a second independent approval |
+| `stage-customer-update` | `customer_query`, only changed fields in `changes`; optional `allow_same_name`, `followup` | Profile-only preview; no direct customer-number/history changes |
 
-Set the cc-connect sender ID for the owner without putting it on the command line:
+Communication time requires an explicit timezone. Ask instead of guessing it.
+Customer numbers take precedence over normalized exact names. Never choose the
+first of several matches or create a missing customer from a query. Explicit
+customer creation uses its own command and approval. An unavailable history
+read is not an empty history. Omitted next-action fields leave those customer
+fields unchanged.
+
+The host resolves the client bearer to a live transport-derived Principal and
+calls privileged `crm-followup host-tool` with `command`, `request`, and that
+Principal. The model cannot supply identity, profile, Base/table/record IDs,
+endpoint overrides or approval flags. Public `crm-followup stage/apply` remain
+blocked; the thin client's stage is a different, host-authenticated entry point.
+
+The client uses the native sandbox proxy to reach one fixed loopback endpoint,
+`http://127.0.0.1:18743/tool`. It clears localhost proxy bypass only in its own
+short-lived process, rejects remote proxies and redirects, and never falls back
+to a direct connection or retries. The fixed Claude 2.1.259 transport probe passed
+all 16 checks, including rejection of other ports, Unix connects and outside
+workspace writes. This is isolated acceptance, not a production switch.
+The bearer is a session binding, not a Feishu credential or write approval.
+There is one client/listener transport, not a Unix/HTTP runtime selection. No
+`allowAllUnixSockets` or unsandboxed-command exception is required by this route.
+
+## Approval and result contract
+
+The gateway sends a non-actionable placeholder, binds the real card message ID
+with `host-bind-card`, then activates its approve/modify/cancel buttons. A publish,
+bind or activation failure does not expose approval buttons. Canonical facts
+returned to Claude and rendered in the card come from the same staged result.
+
+The real callback sender/chat and bound message ID are checked by `host-claim`.
+Only the approved CAS produces a continuation for `host-execute`. Card routing
+fields do not supply identity. No callback wakes Claude, restages the proposal,
+or converts chat text into approval. Modification invalidates the old card and
+waits for revised input; cancellation makes no CRM write. Claude remains in the
+same session and uses result/customer when the user asks what happened.
+
+For combined customer+follow-up requests, the host freezes both drafts, executes
+only the first approved customer operation, then offers one separate follow-up
+card against the verified record. A child cancellation or delivery failure does
+not undo the customer operation. Linked results preserve both states. No newer
+write intent may be superseded by the automatic child. No callback wakes Claude.
+
+States: `pending → executing → verified|partial|verification_unknown|failed`,
+or `cancelled|superseded|expired`. A new stage supersedes older pending plans for
+the same trusted sender/chat/session/project, including after token rotation.
+Read-only customer/result calls do not supersede anything. Repeated decisions
+return the existing state/receipt rather than repeating the write.
+
+Apply re-reads schema and preview fields before writing. A changed snapshot
+requires a new preview and approval. It appends one follow-up, reads it back, then
+updates and reads back only the customer's latest-contact summary. Older events
+can enter history without moving that summary backwards. Verification polling
+is read-only and bounded to 30 seconds per effect. The execution lease is fifteen
+minutes, longer than the bounded worker call budget.
+
+A successful first effect is retained if the second fails: report partial, not
+all-failed or verified. Unknown outcomes stop for human inspection. Existing
+explicit repair helpers can reconcile by operation ID and propose only an
+unfinished summary update; they are administrative compatibility code, not
+automatic recovery or a model-visible API. Never restore an old ledger to undo
+already verified Feishu writes.
+
+## Sandbox bootstrap — separately authorized administration only
+
+`ops/bootstrap_base.py` creates and retains `ANC CRM Sandbox`, the two tables
+`客户` / `跟进记录`, and three fictional customers (including duplicate names).
+It requires absolute pinned CLI/wrapper paths and an enterprise profile; it
+verifies bot/user belong to the same application. User identity searches Drive
+for an existing Base; all creates/writes use bot. It never starts a login.
+
+Supply the owner sender ID and a random host secret through the protected
+environment, not command arguments. First inspect the offline dry run:
 
 ```powershell
-$env:MYANC_CRM_OWNER_SENDER_ID = '<owner-sender-id>'
+python ops/bootstrap_base.py --lark-cli 'C:\absolute\lark-cli.exe' --profile '<enterprise-profile>' --wrapper-path 'C:\absolute\lark-enterprise.ps1' --dry-run
 ```
 
-Inspect the plan first; a dry run makes no Feishu request and writes no file:
+Removing dry-run requires current authorization. The script verifies each schema
+and fixture and checkpoints only into ignored `config.local.json`. A failure
+retains real resources for inspection, not automatic deletion. Fictional owner
+cells are intentionally empty; approved actors still appear in follow-up rows.
+Never put credentials or actual identity/resource values in Git.
 
-```powershell
-python ops/bootstrap_base.py `
-  --lark-cli 'C:\absolute\path\to\lark-cli.exe' `
-  --profile '<enterprise-profile>' `
-  --wrapper-path 'C:\absolute\path\to\lark-enterprise.ps1' `
-  --dry-run
-```
+### Future empty real CRM (do not run before separate confirmation)
 
-Then run the same command without `--dry-run`. The script verifies every created
-schema and fixture before continuing. It writes tokens, table IDs, immutable field
-IDs, the owner mapping, and a bot/user identity summary only to the gitignored
-`config.local.json`; none of those values are printed. Do not share that file.
+`--mode empty-real` reads `--source-config` without modifying it, re-verifies the
+same bot application and the single Owner, then creates an empty `ANC CRM` only
+with `--confirm-empty-real`. It requires explicit new absolute `--config-output`
+and `--ledger-path`, rejects existing targets/the old ledger, creates no fixtures
+and does not copy or initialize a ledger. Customer numbering uses native `CRM-`
+auto-number rules and a separate internal creation-operation ID field.
 
-If a step fails, the script stops and does not automatically delete the Base.
-`config.local.json` records the latest successful checkpoint after Base creation.
-Inspect the retained resources before deciding whether to resume manually or
-delete them. Fixtures intentionally leave `负责人` empty because user-cell writes
-vary across supported CLI builds; normal follow-ups still record the approved
-actor as `跟进人`.
+First provision private target parent directories and inspect `--dry-run` with
+the existing pinned CLI/profile. It makes no Feishu calls or local writes. The
+real-mode source must have the verified app ID (or supply `--expected-app-id`);
+a matching profile name alone is not proof of the application. Checkpoints stay
+at the new config path after any uncertainty; stop and reconcile them manually,
+never delete them to blindly retry Base creation. This script does not switch
+the running gateway or deploy a policy.
 
-## Stage
-
-The command boundary is one JSON object on stdin and one JSON object on stdout.
-Neither command accepts profile, identity, Base, table, or field overrides.
-
-```powershell
-@'
-{
-  "actor": {
-    "sender_id": "<cc-connect-sender-id>",
-    "chat_id": "<cc-connect-chat-id>"
-  },
-  "customer_query": "演示客户·青岚科技（唯一）",
-  "followup": {
-    "occurred_at": "2026-09-03T14:30:00+08:00",
-    "channel": "电话",
-    "content": "确认了测试需求。",
-    "next_action": "发送虚构方案。",
-    "next_followup_at": "2026-09-05T10:00:00+08:00"
-  }
-}
-'@ | python -m myanc_crm stage
-```
-
-`stage` reads Feishu and the local ledger but never writes Feishu. A successful
-response has `status: "staged"`, a short-lived `change_id`, the selected customer,
-the proposed follow-up, the exact customer-field changes, and the untouched
-fields. Other expected results are `needs_time`, `not_found`, `needs_selection`,
-or `blocked`. If `next_action` or `next_followup_at` is omitted, that customer
-field is deliberately left unchanged rather than guessed or cleared.
-
-## Approve, then apply
-
-Present the full staged effects to the sender. Use the gateway's existing private
-`AskUserQuestion` flow or its same-sender group approval flow. Only an explicit
-approval should pass the returned `change_id` to `apply`:
-
-```powershell
-@'
-{
-  "actor": {
-    "sender_id": "<same-cc-connect-sender-id>",
-    "chat_id": "<same-cc-connect-chat-id>"
-  },
-  "change_id": "<staged-change-id>"
-}
-'@ | python -m myanc_crm apply
-```
-
-This approval is a cooperative soft gate, not a tamper-proof host authorization
-boundary. `apply` still requires the same configured sender and chat, rechecks the
-schema and customer snapshot, writes once, and polls read-only verification for up
-to 30 seconds after each write. It never repeats a write inside that apply attempt.
-If the preview expired or data drifted, stage a new plan instead of reusing it.
-
-Only `status: "verified"` is success. `replan_required`, `partial`,
-`verification_unknown`, and `failed` require inspection or a new plan. Replaying a
-finished `change_id` returns its saved receipt and does not create a second
-follow-up.
+The reviewed `ops/lark-crm-writer-customer-trial.sh` is an **uninstalled template**
+for the existing protected bot wrapper, not an extra public CLI. Personnel reads
+allow only exact `batch_get_id` and `get-user` shapes. Before installation verify
+the real app's visibility and required name/status permissions:
+`is_activated`, `is_frozen` and `is_resigned` must be explicitly readable.
+Unknown status is a blocked lookup, not evidence of an active colleague. No
+live personnel permission or real Base verification is claimed by offline tests.
 
 ## Deployment boundary
 
-Deploy only the five files in `myanc_crm/`; no package installation or extra
-service is required. Production selects `/etc/myanc-crm/config.json` directly and
-does not accept an environment-variable override. The code, launcher, and
-configuration must be owned by `root` and read-only to the service account. Grant
-that account only the configuration read access it needs. Its writable state
-directory must have mode `0700`, and the SQLite ledger must have mode `0600`.
+No deployment occurs from these instructions alone. Code/configuration must be
+root-managed and read-only to Claude. Production selects
+`/etc/myanc-crm/config.json` without an environment override. The authenticated
+gateway/helper, not Claude, owns the enterprise profile, host secret and ledger.
+The absolute ledger path is outside the model workspace: parent 0700, file 0600.
+The secret is passed only to short-lived helpers; configuration stores its digest.
 
-The deployment runbook must also schedule receipt cleanup. Retain terminal
-receipts (`verified`, `replan_required`, `verification_unknown`, and `failed`) for
-30 days so retries remain idempotent and incidents can be inspected; retain
-`expired` and `superseded` changes for 7 days. Never automatically delete
-`partial` or `applying` changes: resolve them first. Run cleanup under the service
-identity in a single SQLite transaction after a protected backup, and record the
-deleted counts without logging CRM payloads.
+Tools mode is explicitly enabled with host setting `MYANC_CRM_TOOLS=1`; unset
+preserves the legacy path. An invalid value or a missing host configuration fails
+startup. The main process owns the independent loopback listener and shuts it
+down with the gateway. It never exposes the privileged management API; an occupied
+port fails startup rather than selecting a different port/interface.
+
+Tools mode and legacy marker mode are mutually exclusive. Runtime-user
+permissions, real card delivery/callbacks, protected
+CRM resource isolation and unrelated Feishu capabilities need production
+acceptance. Existing Linux fake-Feishu canaries are not proof of those boundaries.
+
+Migration is additive (token binding and approvals). Old unbound staged rows must
+be staged again. Back up protected settings and SQLite before migration. Preserve
+actual receipts on rollback and disable the new entry point instead of guessing
+which external writes to reverse.
+
+Do not add automatic cleanup/recovery in this phase. Future manual retention may
+keep terminal receipts 30 days and expired/superseded changes 7 days. Never prune
+partial/applying operations before inspection. Any cleanup requires its own
+protected backup and authorization; report counts without CRM payloads.
 
 ## Develop and test
-
-Copy `config.example.json` only when you need to understand the local shape; never
-replace its placeholders with real values in a tracked file.
 
 ```powershell
 python -m compileall -q myanc_crm ops tests
 python -m unittest discover -s tests -v
 ```
 
-CI validates the template, compiles the standard-library-only code, exercises the
-offline bootstrap plan, runs the tests, and rejects common credential-shaped
-values. It does not deploy, mutate Feishu, or clean up the sandbox. The test Base
-is retained until an administrator explicitly deletes it after inspection.
+CI validates the placeholder configuration, standard-library-only code, offline
+tests and common credential patterns. No live Feishu, deployment, automatic
+merge or sandbox deletion occurs. Real-model tests are explicitly opt-in.
