@@ -1139,6 +1139,8 @@ def claim_approval_decision(
     ledger: Ledger,
     config: Mapping[str, Any],
     now: datetime | None = None,
+    *,
+    backend: Backend | None = None,
 ) -> dict[str, Any]:
     """Authorize one card decision and atomically claim an approved write."""
 
@@ -1219,7 +1221,7 @@ def claim_approval_decision(
         }
     if not resuming and moment > _parse_time(approval["expires_at"], "expires_at"):
         if not ledger.expire_approval(approval_id, _iso(moment)):
-            return claim_approval_decision(command, ledger, config, moment)
+            return claim_approval_decision(command, ledger, config, moment, backend=backend)
         if staged["state"] != "partial":
             ledger.finish(
                 approval["change_id"],
@@ -1248,15 +1250,18 @@ def claim_approval_decision(
         if not ledger.close_approval(
             approval_id, state, decision, _iso(moment), result
         ):
-            return claim_approval_decision(command, ledger, config, moment)
+            return claim_approval_decision(command, ledger, config, moment, backend=backend)
         if staged["state"] != "partial":
             ledger.finish(approval["change_id"], state, result)
         return result
 
+    # Pure presentation from fingerprint-checked ledger fields. Backend is
+    # used only for local record-link formatting, never for a fresh read.
+    preview = _approval_preview(staged, backend)
     if approval["state"] == "pending" and not ledger.claim_approval(
         approval_id, _iso(moment)
     ):
-        return claim_approval_decision(command, ledger, config, moment)
+        return claim_approval_decision(command, ledger, config, moment, backend=backend)
     if approval["state"] not in {"pending", "executing"}:
         return _blocked("approval_not_pending", "This approval cannot be executed.")
 
@@ -1266,6 +1271,7 @@ def claim_approval_decision(
         "approval_state": "executing",
         "change_id": approval["change_id"],
         "execute": True,
+        "preview": preview,
         "message": "The approval was accepted and the original plan is executing.",
     }
 
@@ -1503,7 +1509,7 @@ def decide_approval(
 ) -> dict[str, Any]:
     """Compatibility one-shot used by tests; production uses claim then execute."""
 
-    claimed = claim_approval_decision(command, ledger, config, now)
+    claimed = claim_approval_decision(command, ledger, config, now, backend=backend)
     should_execute = claimed.pop("execute", False)
     if not should_execute:
         if claimed.get("status") == "executing":
@@ -2039,7 +2045,7 @@ def _field_changes(
 def _display_customer(customer: Mapping[str, Any], backend: Backend) -> dict[str, Any]:
     view = _fence_value(_snapshot(customer))
     record_id = _record_id(customer)
-    url = _safe_url(backend.customer_url, record_id)
+    url = _safe_url(getattr(backend, "customer_url", None), record_id)
     if url:
         view["url"] = url
     return view
@@ -2055,7 +2061,7 @@ def _display_followup(followup: Mapping[str, Any], backend: Backend) -> dict[str
     view = _fence_value(fields)
     record_id = followup.get("record_id")
     if isinstance(record_id, str) and record_id:
-        url = _safe_url(backend.followup_url, record_id)
+        url = _safe_url(getattr(backend, "followup_url", None), record_id)
         if url:
             view["url"] = url
     return view
