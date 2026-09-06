@@ -132,6 +132,25 @@ class CustomerTests(unittest.TestCase):
         self.assertEqual("needs_input", unknown["status"])
         self.assertEqual(["member@example.com"], self.backend.lookups)
 
+    def test_unicode_customer_creation_preview_and_raw_write_keep_original_spelling(self):
+        name, contact = "示例公司（新建）①", "联系人Ａ"
+        staged = self.stage(self.create_request(name=name, contact=contact))
+        self.assertEqual(f"<CRM_DATA>{name}</CRM_DATA>", staged["preview"]["customer"]["name"])
+        self.assertEqual(f"<CRM_DATA>{contact}</CRM_DATA>", staged["preview"]["customer"]["contact"])
+        result = self.apply(staged)
+        self.assertEqual("verified", result["status"])
+        self.assertEqual(name, self.backend.find_customer_by_change(staged["change_id"])["name"])
+        self.assertEqual(f"<CRM_DATA>{name}</CRM_DATA>", result["customer"]["name"])
+
+    def test_matching_equivalent_unicode_drift_still_blocks_write(self):
+        self.backend.customers["rec-1"]["name"] = "示例公司（Ａ）"
+        staged = self.update({"stage": "已联系"})
+        self.backend.customers["rec-1"]["name"] = "示例公司(A)"
+        result = self.apply(staged)
+        self.assertEqual("replan_required", result["status"])
+        self.assertEqual("customer_changed", result["code"])
+        self.assertEqual([], self.backend.actions)
+
     def test_assignee_candidates_expose_opaque_refs_not_directory_ids(self):
         self.backend.people["ou_second"] = {"id": "ou_second", "name": "示例同事"}
         self.backend.lookup_people.append("ou_second")

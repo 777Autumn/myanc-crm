@@ -846,6 +846,9 @@ _FORGED_TAG = re.compile(
     r"</?(?:crm_data|system|assistant|user|tool|tool_result|tool_use)(?:\s[^>]*)?>",
     re.IGNORECASE,
 )
+# The ASCII, small and fullwidth forms are the NFKC equivalents of < and >.
+# Consume an unterminated suffix too, avoiding repeated scans of nested openers.
+_TAG_LIKE = re.compile(r"[<﹤＜][^>﹥＞]*(?:[>﹥＞]|$)")
 _PRINCIPAL_KEYS = {
     "platform",
     "user_id",
@@ -2253,6 +2256,17 @@ def _normal(value: Any) -> str:
     return " ".join(unicodedata.normalize("NFKC", str(value)).split()).casefold()
 
 
+def _filter_forged_tags(value: str) -> str:
+    # Normalize only candidate markup for detection, including combining marks.
+    # Preserve other spelling: the preview must not silently rename a business.
+    return _TAG_LIKE.sub(
+        lambda match: "[filtered-tag]"
+        if _FORGED_TAG.search(unicodedata.normalize("NFKC", match.group()))
+        else match.group(),
+        value,
+    )
+
+
 def _fence_value(value: Any) -> Any:
     if isinstance(value, Mapping):
         return {str(key): _fence_value(item) for key, item in value.items()}
@@ -2260,8 +2274,7 @@ def _fence_value(value: Any) -> Any:
         return [_fence_value(item) for item in value]
     if not isinstance(value, str):
         return value
-    text = unicodedata.normalize("NFKC", value)
-    text = _FORGED_TAG.sub("[filtered-tag]", text)
+    text = _filter_forged_tags(value)
     text = "".join(
         character if not unicodedata.category(character).startswith("C") else " "
         for character in text
