@@ -4,6 +4,7 @@ import copy
 import io
 import json
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -92,6 +93,29 @@ class RealBootstrapTests(unittest.TestCase):
             bootstrap._create_empty_real(self.args, Path(self.args.lark_cli))
         run.assert_not_called()
         self.assertFalse(self.output.exists())
+
+    def test_cli_version_check_places_global_profile_before_command(self):
+        cli = Path(self.args.lark_cli)
+        cli.touch()
+
+        def invoke(argv, **kwargs):
+            if "--version" in argv:
+                self.assertEqual([str(cli), "--profile", "crm-writer", "--version"], argv)
+                return subprocess.CompletedProcess(argv, 0, "lark-cli version 1.0.90\n", "")
+            self.assertEqual([str(cli), "--profile", "crm-writer", "whoami", "--as", "bot"], argv)
+            return subprocess.CompletedProcess(argv, 0, json.dumps({
+                "identity": "bot", "available": True, "appId": "wrong_app"}), "")
+
+        argv = ["bootstrap", "--mode", "empty-real", "--lark-cli", str(cli),
+                "--profile", "crm-writer", "--source-config", str(self.source),
+                "--config-output", str(self.output), "--ledger-path", self.args.ledger_path,
+                "--confirm-empty-real"]
+        with patch.object(sys, "argv", argv), patch.object(bootstrap.subprocess, "run", side_effect=invoke) as run:
+            with self.assertRaisesRegex(bootstrap.BootstrapError, "not the verified CRM application"):
+                bootstrap.main()
+        self.assertEqual(2, run.call_count)
+        self.assertFalse(self.output.exists())
+        self.assertFalse(Path(self.args.ledger_path).exists())
 
     def fake_run(self, cli, profile, command, label, **kwargs):
         self.calls.append((command, kwargs))

@@ -234,10 +234,9 @@ def _run(
     identity: str | None = "bot",
     cwd: Path | None = None,
 ) -> Any:
-    argv = [str(cli), *command]
+    argv = [str(cli), "--profile", profile, *command]
     if json_output and format_flag:
         argv += ["--format", "json"]
-    argv += ["--profile", profile]
     if identity is not None:
         argv += ["--as", identity]
     try:
