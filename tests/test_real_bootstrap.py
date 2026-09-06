@@ -171,6 +171,75 @@ class RealBootstrapTests(unittest.TestCase):
         self.assertFalse(Path(self.args.ledger_path).exists())
         self.assertFalse(any("+record-batch-create" in cmd for cmd, _ in self.calls))
 
+    def run_empty_real_with_table_response(self, response):
+        cli = Path(self.args.lark_cli)
+        cli.touch()
+        self.calls = []
+
+        def invoke(argv, **kwargs):
+            self.assertEqual([str(cli), "--profile", "crm-writer"], argv[:3])
+            command = argv[3:]
+            if command != ["--version"]:
+                self.assertEqual(["--as", "bot"], command[-2:])
+                command = command[:-2]
+                if command[-2:] == ["--format", "json"]:
+                    command = command[:-2]
+            result = self.fake_run(cli, "crm-writer", command, "CLI fixture", cwd=kwargs.get("cwd"))
+            if command[:2] == ["base", "+table-create"]:
+                result = response
+            output = result if isinstance(result, str) else json.dumps(result)
+            return subprocess.CompletedProcess(argv, 0, output, "")
+
+        argv = ["bootstrap", "--mode", "empty-real", "--lark-cli", str(cli),
+                "--profile", "crm-writer", "--source-config", str(self.source),
+                "--config-output", str(self.output), "--ledger-path", self.args.ledger_path,
+                "--confirm-empty-real"]
+        with patch.object(sys, "argv", argv), patch.object(bootstrap.subprocess, "run", side_effect=invoke), \
+                contextlib.redirect_stdout(io.StringIO()):
+            return bootstrap.main()
+
+    def test_empty_real_accepts_named_table_from_cli_create_response(self):
+        response = {"ok": True, "identity": "bot", "data": {
+            "fields": [{"id": "fldOther"}],
+            "table": {"id": "tblFollowups", "name": "跟进记录",
+                      "fields": [{"id": "fldNested"}], "views": [{"id": "vewOther"}]},
+        }}
+        old_source = self.source.read_bytes()
+        self.assertEqual(0, self.run_empty_real_with_table_response(response))
+        config = json.loads(self.output.read_text(encoding="utf-8"))
+        self.assertEqual("tblFollowups", config["followup_table_id"])
+        self.assertNotIn("_bootstrap_status", config)
+        self.assertEqual(old_source, self.source.read_bytes())
+        self.assertEqual(b"old ledger must remain unchanged", self.old_ledger.read_bytes())
+        self.assertFalse(Path(self.args.ledger_path).exists())
+
+    def test_empty_real_rejects_wrong_or_ambiguous_created_table_without_retry(self):
+        cases = (
+            {"table": {"id": "tblFollowups", "name": "其他表"}},
+            {"table_id": "tblFollowups", "table": {"id": "tblFollowups", "name": "其他表"}},
+            {"table_id": "tblOther", "table": {"id": "tblFollowups", "name": "跟进记录"}},
+            {"fields": [{"table_id": "tblOther", "name": "跟进记录"}]},
+            {"table_id": "tblFollowups", "table": None},
+            {"table_id": "tblFollowups", "table": {"id": "tblFollowups"}},
+            *({"table": {"id": invalid, "name": "跟进记录"}}
+              for invalid in (None, "", 123, "fldOther", "tblFollowups\n")),
+        )
+        old_source = self.source.read_bytes()
+        for index, data in enumerate(cases):
+            with self.subTest(data=data):
+                self.output = self.root / f"invalid-table-{index}.json"
+                response = {"ok": True, "identity": "bot", "data": data}
+                with self.assertRaisesRegex(bootstrap.BootstrapError, "follow-up table creation is uncertain"):
+                    self.run_empty_real_with_table_response(response)
+                checkpoint = json.loads(self.output.read_text(encoding="utf-8"))
+                self.assertEqual("customer_verified", checkpoint["_bootstrap_status"])
+                self.assertEqual("", checkpoint["followup_table_id"])
+                self.assertEqual(["base", "+table-create"], self.calls[-1][0][:2])
+                self.assertEqual(1, sum(cmd[:2] == ["base", "+table-create"] for cmd, _ in self.calls))
+                self.assertEqual(old_source, self.source.read_bytes())
+                self.assertEqual(b"old ledger must remain unchanged", self.old_ledger.read_bytes())
+                self.assertFalse(Path(self.args.ledger_path).exists())
+
     def test_identity_failure_is_before_new_checkpoint_and_creation(self):
         self.args.dry_run = False
         self.args.confirm_empty_real = True
