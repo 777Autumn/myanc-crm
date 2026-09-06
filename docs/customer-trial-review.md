@@ -167,3 +167,38 @@ The three affected cases are now being replayed for three trials each before a
 fresh complete 42-case run. Their first replay trial passed code assertions;
 independent semantic review is pending. All uncompleted model/live gates remain
 open. Keep both PRs unmerged and real CRM switching paused.
+
+## Completed post-login native gates and remaining live scope gate
+
+The diagnostic replay completed 9/9 code and independent agent semantic passes.
+A separate fresh run then completed all 14 cases for three trials, 42/42 code
+passes, with native Claude Code 2.1.259 and actual model `claude-sonnet-5`.
+Sources were CRM `9066dfdc5b8adcf486cc4e1865025ca107caa4ad` and gateway
+`c5b27173876c605b9a8f82a806d0df836368e722`; candidate policy SHA-256 remained
+`cc8d112f583752dff9bf327ccecdfa61abe1df668f56c71dd78edc6a3dec5152`.
+The isolated unit exited naturally with status 0; it did not replace the gateway.
+
+Two independent Codex reviewers checked the original frozen rubrics against
+actual tools, native question UI, replies, cards and state: 18/18 and 24/24 PASS.
+These are independent agent judgments, not human sign-off; original evidence and
+rubrics are preserved separately from the verdict reports. Ordinary permission
+responses remained zero. Result fixtures' successful parent write was seeded
+before the model; the model made no additional business writes.
+
+The reviews also retain non-gating UX deviations: excess/English staging text,
+internal references exposed in some replies, occasionally excessive contact
+requirements and imprecise unbound-card wording. Frozen rubric passes do not
+claim all candidate-policy wording or the live user journey is satisfactory.
+
+An authorized exact-identifier lookup through the fixed CRM bot stopped at missing
+app scope `contact:user.id:readonly` (authorization 99991672). No person data was
+returned. The identifier and app link are not stored in the repository. Ask the
+app administrator to make that minimum scope effective, then verify the exact
+person, name/status and visibility; do not introduce user OAuth or reuse the
+transport app's person IDs.
+
+Real fictional customer/card/callback acceptance and non-CRM regression still
+remain open. CI must pass on the actual final commits; earlier greens are not
+substitutes. Both PRs remain draft and unmerged with auto-merge off. No live policy,
+service, profile, ledger or CRM data was changed. Real CRM creation and switching
+still require separate confirmation after the remaining gates and merge.
