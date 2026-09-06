@@ -833,8 +833,16 @@ def _create_empty_real(args: argparse.Namespace, cli: Path) -> int:
         created = _run(cli, args.profile, ["base", "+table-create", "--base-token", token,
             "--name", FOLLOWUP_TABLE, "--fields", json.dumps(followup_fields, ensure_ascii=False)],
             "real follow-up table creation")
-        followup_table = _find_string(created, ("table_id",))
-        if not followup_table:
+        data = created.get("data") if isinstance(created, dict) else None
+        followup_table = data.get("table_id") if isinstance(data, dict) else None
+        table = data.get("table") if isinstance(data, dict) else None
+        if isinstance(data, dict) and "table" in data:
+            if (not isinstance(table, dict) or table.get("name") != FOLLOWUP_TABLE
+                    or ("table_id" in data and followup_table != table.get("id"))):
+                followup_table = None
+            else:
+                followup_table = table.get("id")
+        if not isinstance(followup_table, str) or not re.fullmatch(r"tbl[A-Za-z0-9]+", followup_table):
             raise BootstrapError("follow-up table creation is uncertain; reconcile the retained Base")
         config.update(followup_table_id=followup_table, _bootstrap_status="followup_created")
         _write_config(config, output)
