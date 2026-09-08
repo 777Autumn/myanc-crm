@@ -320,6 +320,12 @@ def apply_customer(staged, backend, ledger, moment):
         return core._finish(ledger, change_id, "expired", core._replan(change_id, "expired", "The preview expired."))
     if not ledger.claim(change_id):
         return {"status": "verification_unknown", "code": "apply_in_progress", "change_id": change_id}
+    return core._run_customer_write(staged, ledger, moment,
+                                    lambda effective: _apply_claimed_customer(staged, backend, ledger, effective))
+
+
+def _apply_claimed_customer(staged, backend, ledger, moment):
+    change_id = staged["change_id"]
     create = staged["operation_type"] == "customer_create"
     try:
         if create:

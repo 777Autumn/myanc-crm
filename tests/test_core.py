@@ -924,14 +924,14 @@ class FollowupCoreTests(unittest.TestCase):
         repaired = self.decide(
             repair_approval["approval_id"], now=NOW + timedelta(minutes=1)
         )
-        self.assertEqual("verified", repaired["status"])
+        self.assertEqual(("partial", "crm_write_unresolved"), (repaired["status"], repaired["code"]))
         self.assertEqual(1, len(self.backend.followups))
         self.assertEqual(
-            ["create_followup", "update_customer", "update_customer"],
+            ["create_followup", "update_customer"],
             self.backend.actions,
         )
 
-    def test_cancelled_partial_repair_can_be_approved_later_without_duplicate_followup(self):
+    def test_cancelled_partial_repair_still_requires_operator_verification(self):
         self.backend.update_mode = "noop"
         staged = self.stage()
         first_result = self.apply(staged["change_id"])
@@ -950,8 +950,9 @@ class FollowupCoreTests(unittest.TestCase):
         completed = self.decide(
             retried["approval_id"], now=NOW + timedelta(minutes=2)
         )
-        self.assertEqual("verified", completed["status"])
+        self.assertEqual(("partial", "crm_write_unresolved"), (completed["status"], completed["code"]))
         self.assertEqual(1, len(self.backend.followups))
+        self.assertEqual(["create_followup", "update_customer"], self.backend.actions)
 
     def test_partial_repair_rebinds_after_restart_token_rotation(self):
         self.backend.update_mode = "noop"
@@ -986,10 +987,10 @@ class FollowupCoreTests(unittest.TestCase):
             repair["approval_id"], now=NOW + timedelta(minutes=1)
         )
 
-        self.assertEqual("verified", completed["status"])
+        self.assertEqual(("partial", "crm_write_unresolved"), (completed["status"], completed["code"]))
         self.assertEqual(1, len(self.backend.followups))
         self.assertEqual(
-            ["create_followup", "update_customer", "update_customer"],
+            ["create_followup", "update_customer"],
             self.backend.actions,
         )
 
