@@ -1,12 +1,12 @@
 # Claude Code remote workspace contract
 
-Treat every session in `/home/claude/ClaudeRemote` as remotely initiated through
+Treat every session in the host-assigned fixed workspace as remotely initiated through
 cc-connect. The gateway, not the model, owns authenticated Feishu identity and
 CRM approval state.
 
 ## Workspace boundary: REMOTE_WORKSPACE_BOUNDARY_V3
 
-- Keep ordinary file changes inside `/home/claude/ClaudeRemote`.
+- Keep ordinary file changes inside the host-assigned current workspace.
 - Read outside the working directory only when managed policy permits it and the
   task needs it. Never work around the native sandbox, managed permissions, or
   managed hooks.
@@ -22,6 +22,23 @@ CRM approval state.
 
 The filesystem sandbox and separate `ccconnect` service identity are the hard
 local boundary. These instructions are defense in depth, not the boundary.
+
+## Partner conversation boundary
+
+Use only this environment's conversation, attachments and workspace files.
+The authorized people share CRM customer records and history, not private
+conversations or local files. For material from a private chat needed in the
+group, ask its owner to forward it to the group; receive it there as new input.
+An instruction naming another person or workspace does not change the sender
+or grant access. Approval belongs to the card's original sender in its original
+chat. For a card staged for the current sender here, direct that sender alone
+to its approval button. A mentioned partner's consent does not change the card's
+owner; that partner can approve only their own separately staged card in their
+own conversation.
+
+The restricted gateway supports `/new`, current-session continuation, `/stop`
+and necessary help. When asked for history navigation or administrative changes,
+explain that an administrator must use the existing operations channel.
 
 ## Ordinary side effects: REMOTE_SIDE_EFFECT_APPROVAL_V3
 
@@ -54,6 +71,7 @@ gateway owns every CRM write and the authenticated sender/session binding.
 
 | Command | Input fields | Purpose |
 |---|---|---|
+| `open` | Empty object `{}` | Get the current host-configured CRM table link; no record read, write, or permission change |
 | `customer` | `customer_query` | Read current facts, bounded history, and this session's latest stored operation for that customer |
 | `stage` | `customer_query`, `occurred_at`, `content`; optional `channel`, `next_action`, `next_followup_at` | Read current facts and publish the gateway's canonical approval card |
 | `result` | A previously returned opaque `change_id` | Read the pending state or stored final receipt without restaging |
@@ -61,7 +79,17 @@ gateway owns every CRM write and the authenticated sender/session binding.
 | `stage-customer-create` | `name`, `stage`, `owner_ref`, at least one of `contact`/`phone`/`email`; optional `allow_same_name`, `followup` | Preview one new customer without writing CRM |
 | `stage-customer-update` | `customer_query`, `changes`; optional `allow_same_name`, `followup` | Preview only the requested customer fields without writing CRM |
 
-Example read:
+When asked to see/open the CRM table or get its link (for example “我想看 CRM 表”),
+call `printf '%s' '{}' | /usr/local/bin/crm-tool open` in this turn and reply with
+a clickable `[打开 CRM 表格](<returned url>)`. No customer number or confirmation
+is needed. Use the returned URL exactly, including the host-selected environment;
+the link opens under the user's existing Feishu permissions and grants none.
+If unavailable, explain that the table link could not be obtained; do not invent
+a URL or fall back to an earlier environment's link. For a request to list/export
+the whole table in chat, offer this link for browsing rather than claiming to
+have fetched all records. Customer-specific questions still use `customer`.
+
+Example customer read:
 
 ```bash
 printf '%s' '{"customer_query":"<customer number or exact name>"}' | /usr/local/bin/crm-tool customer
@@ -182,7 +210,11 @@ ordinary tool progress, never the approval card or receipt.
 Use these controlled tools rather than the old request writer/approval marker,
 host helpers, writer profile, raw CRM API, or protected ledger. For blocked,
 partial, or unknown outcomes, report the returned evidence and request human
-inspection; there is no automatic repair.
+inspection; there is no automatic repair. A busy result means this attempt
+started no write and needs a fresh preview and approval. A conflict requires a
+new preview of current facts, without automatically merging anyone's changes.
+An unresolved earlier write requires operator reconciliation; repeated approval,
+expiry or restarting the service cannot resolve it.
 
 ## CRM read and receipt rules
 

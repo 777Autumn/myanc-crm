@@ -94,6 +94,45 @@ class CliBoundaryTests(unittest.TestCase):
 
         self.assertNotEqual(attacker_path.resolve(), selected)
 
+    def test_open_returns_current_configured_link_without_backend_or_ledger(self):
+        principal = dict(platform="feishu", user_id="sender-test", chat_id="chat-test",
+                         session_key="session-test", project="project-test", message_id="message-test")
+        payload = {"command": "open", "request": {}, "principal": principal}
+        with mock.patch.object(cli, "_runtime") as runtime:
+            for base in ("sandbox_fixture", "real_fixture"):
+                url = f"https://example.invalid/base/{base}"
+                self.config["base_url"] = url
+                self.config_path.write_text(json.dumps(self.config), encoding="utf-8")
+                code, result = self.run_cli(["host-tool"], json.dumps(payload), host=True)
+                self.assertEqual((0, {"status": "available", "url": url}), (code, result))
+            runtime.assert_not_called()
+        self.assertFalse(self.ledger_path.exists())
+
+    def test_open_rejects_overrides_and_unauthorized_callers_before_runtime(self):
+        principal = dict(platform="feishu", user_id="sender-test", chat_id="chat-test",
+                         session_key="session-test", project="project-test", message_id="message-test")
+        with mock.patch.object(cli, "_runtime") as runtime:
+            for field in ("url", "base_url", "base_token", "project", "actor", "customer_query"):
+                payload = {"command": "open", "request": {field: "other"}, "principal": principal}
+                code, result = self.run_cli(["host-tool"], json.dumps(payload), host=True)
+                self.assertEqual((2, "invalid_local_input"), (code, result["code"]))
+            for actor, host in (("sender-test", False), ("unknown", True)):
+                payload = {"command": "open", "request": {}, "principal": {**principal, "user_id": actor}}
+                code, result = self.run_cli(["host-tool"], json.dumps(payload), host=host)
+                self.assertEqual((2, "invalid_local_input"), (code, result["code"]))
+            runtime.assert_not_called()
+
+    def test_open_invalid_config_does_not_return_a_link(self):
+        principal = dict(platform="feishu", user_id="sender-test", chat_id="chat-test",
+                         session_key="session-test", project="project-test", message_id="message-test")
+        for url in ("", "javascript:alert(1)", "http://example.invalid/base/test"):
+            self.config["base_url"] = url
+            self.config_path.write_text(json.dumps(self.config), encoding="utf-8")
+            code, result = self.run_cli(["host-tool"], json.dumps(
+                {"command": "open", "request": {}, "principal": principal}), host=True)
+            self.assertEqual((2, "invalid_local_input"), (code, result["code"]))
+            self.assertNotIn("url", result)
+
     def test_only_fixed_commands_are_accepted_and_no_overrides_exist(self):
         for argv in ([], ["stage", "--profile", "other"], ["--as", "user"]):
             with self.subTest(argv=argv):

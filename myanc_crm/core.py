@@ -18,6 +18,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterator, Mapping, Protocol, Sequence
 
+from . import write_locks
+
 
 READBACK_TIMEOUT_SECONDS = 30.0
 READBACK_INTERVAL_SECONDS = 1.0
@@ -86,7 +88,7 @@ def _prepare_ledger_parent(parent: Path) -> None:
         raise ValueError("CRM ledger parent hierarchy must already exist.")
     _validate_parent_chain(parent.parent, require_private_leaf=False)
     with _private_umask():
-        parent.mkdir(mode=_PRIVATE_DIR_MODE)
+        parent.mkdir(mode=_PRIVATE_DIR_MODE, exist_ok=True)
     _validate_parent_chain(parent)
 
 
@@ -142,6 +144,7 @@ class Ledger:
     def __init__(self, path: str | os.PathLike[str] = ":memory:") -> None:
         value = os.fspath(path)
         self._storage_path: Path | None = None
+        self._owned_write_fences: set[str] = set()
         if value != ":memory:":
             storage_path = Path(value)
             if not storage_path.is_absolute():
@@ -229,6 +232,11 @@ class Ledger:
             self._db.execute(
                 "ALTER TABLE approvals ADD COLUMN card_message_id TEXT"
             )
+        self._db.execute(
+            "CREATE TABLE IF NOT EXISTS write_fences "
+            "(scope_key TEXT PRIMARY KEY, change_id TEXT NOT NULL, "
+            "FOREIGN KEY(change_id) REFERENCES staged_changes(change_id))"
+        )
         self._db.commit()
         self._validate_storage()
 
@@ -772,19 +780,6 @@ class Ledger:
             )
         return cursor.rowcount == 1
 
-    def reclaim_partial(self, change_id: str) -> bool:
-        """Claim only the unfinished customer half of an already recorded follow-up."""
-
-        with self._db:
-            cursor = self._db.execute(
-                """
-                UPDATE staged_changes SET state = 'applying'
-                 WHERE change_id = ? AND state = 'partial'
-                """,
-                (change_id,),
-            )
-        return cursor.rowcount == 1
-
     def finish(self, change_id: str, state: str, receipt: Mapping[str, Any]) -> None:
         with self._db:
             self._db.execute(
@@ -794,6 +789,44 @@ class Ledger:
                 """,
                 (state, _json(receipt), change_id),
             )
+            approval_state = _approval_terminal_state(state)
+            self._db.execute(
+                "UPDATE approvals SET state = ?, receipt_json = ? "
+                "WHERE change_id = ? AND state = 'executing' AND decision = 'approve'",
+                (approval_state, _json(receipt), change_id),
+            )
+            if change_id in self._owned_write_fences and state in {
+                "verified", "failed", "replan_required", "expired",
+            }:
+                self._db.execute("DELETE FROM write_fences WHERE change_id = ?", (change_id,))
+
+    @contextmanager
+    def customer_write(self, staged: Mapping[str, Any]) -> Iterator[None]:
+        """A process owns a fence only if it created it while holding all OS locks."""
+        scopes = _write_scopes(staged)
+        directory = None
+        try:
+            if self._storage_path is not None:
+                directory = self._storage_path.with_name(self._storage_path.name + ".locks")
+                _prepare_ledger_parent(directory)
+            locks = write_locks.acquire(directory, scopes)
+            locks.__enter__()
+        except write_locks.WriteBlocked:
+            raise
+        except (OSError, ValueError) as exc:
+            raise write_locks.WriteBlocked("crm_write_lock_unavailable", "CRM write protection is unavailable; no write was started.") from exc
+        try:
+            with self._immediate():
+                slots = ",".join("?" for _ in scopes)
+                if self._db.execute(f"SELECT 1 FROM write_fences WHERE scope_key IN ({slots}) LIMIT 1", scopes).fetchone():
+                    raise write_locks.WriteBlocked("crm_write_unresolved", "A previous operation needs operator verification; this operation has not written anything.")
+                self._db.executemany("INSERT INTO write_fences(scope_key, change_id) VALUES (?, ?)",
+                                     [(scope, staged["change_id"]) for scope in scopes])
+            self._owned_write_fences.add(staged["change_id"])
+            yield
+        finally:
+            self._owned_write_fences.discard(staged["change_id"])
+            locks.__exit__(None, None, None)
 
     def close(self) -> None:
         self._db.close()
@@ -1411,7 +1444,6 @@ def execute_claimed_approval(
             "approval_state": "failed",
         }
 
-    resuming = staged["state"] == "applying"
     customer_operation = staged.get("operation_type") in {"customer_create", "customer_update"}
     if customer_operation:
         from .customers import apply_customer
@@ -1421,30 +1453,8 @@ def execute_claimed_approval(
             approval["change_id"], approval_id, backend, ledger, moment
         )
     if result.get("code") == "apply_in_progress":
-        if customer_operation:
-            return {**result, "approval_id": approval_id, "approval_state": "executing"}
-        if resuming:
-            result = {
-                "status": "verification_unknown",
-                "code": "followup_presence_unknown",
-                "change_id": approval["change_id"],
-                "message": (
-                    "The execution lease expired before the first write could be "
-                    "verified. Reconcile the CRM before any retry."
-                ),
-            }
-            ledger.finish(approval["change_id"], "verification_unknown", result)
-        else:
-            return {
-                **result,
-                "approval_id": approval_id,
-                "approval_state": "executing",
-            }
-    approval_state = result["status"]
-    if approval_state == "replan_required":
-        approval_state = "failed"
-    if approval_state not in {"verified", "partial", "verification_unknown", "failed"}:
-        approval_state = "failed"
+        return {**result, "approval_id": approval_id, "approval_state": "executing"}
+    approval_state = _approval_terminal_state(result["status"])
     # Persist the parent outcome before attempting any second-card preparation.
     ledger.finish_approval(
         approval_id, approval_state, "approve", _iso(moment), result
@@ -1549,29 +1559,15 @@ def _apply_approved_followup(
 
     state = staged["state"]
     if state == "partial":
-        try:
-            claimed = ledger.reclaim_partial(change_id)
-        except Exception:
-            return _failed("ledger_unavailable", "The partial change could not be claimed.")
-        if not claimed:
-            return {
-                "status": "verification_unknown",
-                "code": "apply_in_progress",
-                "change_id": change_id,
-                "message": "Another repair attempt owns this change; no second write was started.",
-            }
-        return _resume_partial(backend, ledger, staged, moment)
+        # Reapproval, restart, and expiry cannot resolve a prior business effect.
+        # This also protects legacy partial rows created before write fences.
+        return {**staged["receipt"], "code": "crm_write_unresolved",
+                "message": "Previous effects require operator verification; no new write was started."}
     if staged.get("receipt") and state not in {"staged", "applying"}:
         return {**staged["receipt"], "replayed": True}
     if state == "superseded":
         return _replan(change_id, "superseded", "A newer plan replaced this change.")
     if state == "applying":
-        try:
-            existing = backend.find_followup_by_change(change_id)
-        except Exception:
-            existing = None
-        if existing is not None:
-            return _resume_partial(backend, ledger, staged, moment)
         return {
             "status": "verification_unknown",
             "code": "apply_in_progress",
@@ -1596,6 +1592,12 @@ def _apply_approved_followup(
             "message": "The change was claimed concurrently; no second write was started.",
         }
 
+    return _run_customer_write(staged, ledger, moment,
+                               lambda effective: _apply_claimed_followup(staged, backend, ledger, effective))
+
+
+def _apply_claimed_followup(staged, backend, ledger, moment):
+    change_id = staged["change_id"]
     try:
         schema = _mapping(backend.read_schema(), "schema")
         if _hash(schema) != staged["schema_hash"]:
@@ -1764,88 +1766,6 @@ def _finish_existing(
             followup,
             moment,
             "Follow-up exists, but customer data changed; stage a repair plan.",
-        )
-        return _finish(ledger, change_id, "partial", result)
-
-    return _update_and_verify_customer(backend, ledger, staged, followup, moment)
-
-
-def _resume_partial(
-    backend: Backend,
-    ledger: Ledger,
-    staged: Mapping[str, Any],
-    moment: datetime,
-) -> dict[str, Any]:
-    """Retry only the customer summary after the truthful follow-up is verified."""
-
-    change_id = staged["change_id"]
-    try:
-        schema = _mapping(backend.read_schema(), "schema")
-        followup = backend.find_followup_by_change(change_id)
-        followup = _mapping(followup, "followup") if followup is not None else None
-        customer = backend.get_customer(staged["customer_record_id"])
-        customer = _mapping(customer, "customer") if customer is not None else None
-    except Exception:
-        result = _receipt(
-            "partial",
-            "partial_recheck_failed",
-            staged,
-            backend,
-            None,
-            None,
-            moment,
-            "The follow-up was previously recorded, but repair checks failed; no write was made.",
-        )
-        return _finish(ledger, change_id, "partial", result)
-
-    if _hash(schema) != staged["schema_hash"]:
-        result = _receipt(
-            "partial",
-            "schema_changed_after_partial",
-            staged,
-            backend,
-            customer,
-            followup,
-            moment,
-            "The follow-up remains recorded, but the schema changed; stage a repair plan.",
-        )
-        return _finish(ledger, change_id, "partial", result)
-    if followup is None or not _fields_match(
-        followup, _followup_verification_payload(staged)
-    ):
-        result = _receipt(
-            "verification_unknown",
-            "partial_followup_unverified",
-            staged,
-            backend,
-            customer,
-            followup,
-            moment,
-            "The prior follow-up can no longer be verified; no customer write was made.",
-        )
-        return _finish(ledger, change_id, "verification_unknown", result)
-    if customer is not None and _fields_match(customer, staged["customer_patch"]):
-        result = _receipt(
-            "verified",
-            "partial_already_completed",
-            staged,
-            backend,
-            customer,
-            followup,
-            moment,
-            "Both records now match the staged change; no duplicate write was made.",
-        )
-        return _finish(ledger, change_id, "verified", result)
-    if customer is None or _hash(_snapshot(customer)) != staged["snapshot_hash"]:
-        result = _receipt(
-            "partial",
-            "customer_changed_after_partial",
-            staged,
-            backend,
-            customer,
-            followup,
-            moment,
-            "The follow-up remains recorded, but customer data changed; stage a repair plan.",
         )
         return _finish(ledger, change_id, "partial", result)
 
@@ -2403,3 +2323,33 @@ def _finish(
     output = dict(result)
     ledger.finish(change_id, state, output)
     return output
+
+
+def _approval_terminal_state(state: str) -> str:
+    return state if state in {"verified", "partial", "verification_unknown"} else "failed"
+
+
+def _write_scopes(staged: Mapping[str, Any]) -> tuple[str, ...]:
+    snapshot = staged["customer_snapshot"]
+    names = [snapshot.get("name"), staged.get("customer_fields", {}).get("name")]
+    scopes = {_hash(["name", _normal(name)]) for name in names if isinstance(name, str) and name.strip()}
+    identifier = staged.get("customer_record_id")
+    if identifier:
+        scopes.add(_hash(["record", identifier]))
+    if not scopes:
+        raise ValueError("No frozen CRM write target")
+    return tuple(sorted(scopes))
+
+
+def _run_customer_write(staged, ledger, moment, execute):
+    started = time.monotonic()
+    try:
+        with ledger.customer_write(staged):
+            effective = moment + timedelta(seconds=time.monotonic() - started)
+            if effective > _parse_time(staged["expires_at"], "expires_at"):
+                return _finish(ledger, staged["change_id"], "expired",
+                               _replan(staged["change_id"], "expired", "The preview expired while waiting; preview again."))
+            return execute(effective)
+    except write_locks.WriteBlocked as exc:
+        return _finish(ledger, staged["change_id"], "replan_required",
+                       _replan(staged["change_id"], exc.code, str(exc)))
