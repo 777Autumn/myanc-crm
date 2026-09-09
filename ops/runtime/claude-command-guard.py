@@ -25,6 +25,8 @@ if not isinstance(command, str) or not command.strip():
     block("missing command")
 
 blocked_literals = (
+    "MYANC_REMINDER_DB",
+    "/var/lib/myanc-reminders",
     "MYANC_CRM_HOST_SECRET",
     "MYANC_CRM_HOST_SECRET_FILE",
     "MYANC_CRM_ACTION_TOKEN",
