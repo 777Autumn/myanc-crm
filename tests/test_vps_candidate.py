@@ -1,5 +1,6 @@
 import importlib.util
 import io
+import json
 import sys
 import tarfile
 import tempfile
@@ -15,6 +16,12 @@ SPEC.loader.exec_module(builder)
 
 
 class CandidateTests(unittest.TestCase):
+    def test_skipped_or_missing_cross_repo_tests_reject_success_exit(self):
+        for output in ("", json.dumps({"Action": "skip", "Test": "TestCUJ_CRMIPC1_CustomerApprovalAndContinuedDiscussion"})):
+            with patch.object(builder.subprocess, "check_output", return_value=output):
+                with self.assertRaises(ValueError):
+                    builder.paired_tests(Path("gateway"), {})
+
     def test_persistent_go_flags_and_external_overlay_are_disabled(self):
         with patch.dict(builder.os.environ, {"GOFLAGS": "-overlay=external.json -tags=no_web",
                                              "GOENV": "external-config", "GOWORK": "external.work"}):

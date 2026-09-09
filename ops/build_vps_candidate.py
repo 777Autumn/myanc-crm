@@ -23,8 +23,25 @@ def build_environment(crm):
     env = os.environ.copy()
     for name in ("GOOS", "GOARCH", "CGO_ENABLED", "GOFLAGS", "GOWORK", "GOENV"):
         env.pop(name, None)
-    env.update(GOENV="off", GOWORK="off", GOFLAGS="", MYANC_SPIKE_CRM_ROOT=str(crm))
+    env.update(GOENV="off", GOWORK="off", GOFLAGS="", GOTOOLCHAIN="local",
+               GOEXPERIMENT="", GOAMD64="v1", MYANC_SPIKE_CRM_ROOT=str(crm))
     return env
+
+
+def paired_tests(gateway, env):
+    output = subprocess.check_output(
+        ["go", "test", "./actionhost/crmfollowup", "./core", "-run",
+         "TestCUJ|Test.*Journey", "-count=1", "-json"], cwd=gateway, env=env,
+        text=True, encoding="utf-8")
+    events = [json.loads(line) for line in output.splitlines() if line.strip()]
+    required = {"TestCUJ_CRMIPC1_CustomerApprovalAndContinuedDiscussion",
+                "TestCUJ_CRMIPC2_ProfileThenIndependentFollowup"}
+    passed = {item.get("Test") for item in events if item.get("Action") == "pass"}
+    gate.require(required <= passed, "required cross-repo journeys did not execute successfully")
+    gate.require(any(item.get("Action") == "pass" and item.get("Test", "").startswith("TestCUJ")
+                     and item.get("Package", "").endswith("/core") for item in events),
+                 "core CUJ tests did not execute successfully")
+    return sorted(required)
 
 
 def export(repo, commit, destination):
@@ -70,8 +87,7 @@ def build(crm_sha, gateway_sha, output):
         run(["go", "mod", "verify"], gateway, env)
         run(["python", "-m", "unittest", "discover", "-s", "tests"], crm, env)
         run(["python", "-m", "unittest", "discover", "-s", "spikes"], crm, env)
-        run(["go", "test", "./actionhost/crmfollowup", "./core", "-run",
-             "TestCUJ|Test.*Journey", "-count=1", "-v"], gateway, env)
+        journeys = paired_tests(gateway, env)
         env.update(GOOS="linux", GOARCH="amd64", CGO_ENABLED="0")
         binary = root / "cc-connect-anc"
         build_args = ["go", "build", "-trimpath", "-buildvcs=false", "-o", str(binary),
@@ -83,7 +99,7 @@ def build(crm_sha, gateway_sha, output):
                     "target": "linux/amd64 CGO_ENABLED=0 GOENV=off GOWORK=off GOFLAGS=",
                     "vcs": "exported source; buildvcs=false",
                     "paired_tests": {"crm_sha": crm_sha, "gateway_sha": gateway_sha,
-                                     "MYANC_SPIKE_CRM_ROOT": "fresh CRM export", "passed": True},
+                                     "MYANC_SPIKE_CRM_ROOT": "fresh CRM export", "passed": journeys},
                     "files": {}}
         bundle = root / "bundle"
         bundle.mkdir()
