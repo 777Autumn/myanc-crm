@@ -44,6 +44,13 @@ def paired_tests(gateway, env):
     return sorted(required)
 
 
+def archive_commit(scratch, commit, archive):
+    # git archive applies working-tree conversions, including system autocrlf.
+    # Linux shebang scripts must retain their committed LF representation.
+    run(["git", "-c", "core.autocrlf=false", "-c", "core.eol=lf", "archive",
+         "--format=tar", f"--output={archive}", commit], scratch)
+
+
 def export(repo, commit, destination):
     gate.sha(commit)
     gate.require(repo in gate.REPOS, "unsupported source repository")
@@ -55,7 +62,7 @@ def export(repo, commit, destination):
         actual = gate.command("git", "-C", scratch, "rev-parse", "FETCH_HEAD")
         gate.require(actual == commit, "fetched source SHA mismatch")
         archive = Path(scratch) / "source.tar"
-        run(["git", "archive", "--format=tar", f"--output={archive}", commit], scratch)
+        archive_commit(scratch, commit, archive)
         with tarfile.open(archive) as source:
             for member in source.getmembers():
                 target = (destination / member.name).resolve()

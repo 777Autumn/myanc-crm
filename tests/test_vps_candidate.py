@@ -1,6 +1,7 @@
 import importlib.util
 import io
 import json
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -31,13 +32,35 @@ class CandidateTests(unittest.TestCase):
         self.assertEqual("", env["GOFLAGS"])
 
     def fake_run(self, args, cwd):
-        if args[1] == "archive":
+        if "archive" in args:
             archive_path = next(arg.split("=", 1)[1] for arg in args if arg.startswith("--output="))
             with tarfile.open(archive_path, "w") as archive:
                 member = tarfile.TarInfo(self.member)
                 content = b"committed content\n"
                 member.size = len(content)
                 archive.addfile(member, io.BytesIO(content))
+
+    def test_archive_overrides_autocrlf_for_linux_scripts(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            def git(*args):
+                return subprocess.check_output(["git", "-C", str(root), *args])
+            git("config", "core.autocrlf", "false")
+            script = b"#!/usr/bin/env python3\nprint('fixture')\n"
+            (root / "script.py").write_bytes(script)
+            git("add", "script.py")
+            git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+                "commit", "-qm", "fixture")
+            commit = git("rev-parse", "HEAD").decode().strip()
+            git("config", "core.autocrlf", "true")
+            # Prove the old command exhibits the actual CRLF corruption.
+            git("archive", "--format=tar", f"--output={root / 'old.tar'}", commit)
+            with tarfile.open(root / "old.tar") as archive:
+                self.assertIn(b"\r\n", archive.extractfile("script.py").read())
+            builder.archive_commit(root, commit, root / "fixed.tar")
+            with tarfile.open(root / "fixed.tar") as archive:
+                self.assertEqual(script, archive.extractfile("script.py").read())
 
     def test_export_uses_only_fetched_sha_not_worktree_or_old_assets(self):
         self.member = "source.py"
