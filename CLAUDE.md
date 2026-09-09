@@ -1,9 +1,13 @@
 # Agent contract
 
+For implementation handoff, PR review/merge, candidate builds or emergency
+release, first read [ops/RELEASE.md](ops/RELEASE.md), the shared delivery contract.
+
 This branch develops controlled tools for a general Feishu Claude assistant;
 CRM follow-ups are one workflow, not a replacement for its other capabilities.
-Production rollout is paused. The contract below is for explicitly enabled tools
-mode, not a statement that the live gateway has been switched.
+The contract below describes explicitly enabled tools mode. Consult the sanitized
+records in ops/releases/ for historical rollout evidence; source edits do not
+authorize a live deployment.
 
 Use the installed `crm_tool.py` client with exactly one command and one stdin JSON
 object. The gateway supplies identity and routing; never invent or pass an actor,
@@ -110,7 +114,8 @@ Run `python -m compileall -q myanc_crm ops tests` and
   by repeating the write. A host may rebind a rotated session token for an existing
   partial only after the original Principal and actor match; repair never recreates
   the follow-up.
-- **Scope:** single Owner; no deletion, bulk updates, multiple contacts, opportunities,
+- **Scope:** host-verified authorized operators with isolated conversations and
+  independently bound approvals; no deletion, bulk updates, multiple contacts, opportunities,
   general Base CRUD, model memory, router, MCP server, or second model. Real CRM
   cutover requires separate authorization after review and merge; fictional
   Sandbox data and real CRM data must stay in separate configuration and ledgers.

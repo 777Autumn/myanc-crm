@@ -1,0 +1,5 @@
+# Candidate replacement for the existing two-rule file, not an additional wildcard.
+Defaults:ccconnect env_keep += "MYANC_CRM_ACTION_TOKEN"
+# Retain PAM auth/account/limits, but do not move service children into logind scopes.
+Defaults:ccconnect pam_login_service=sudo
+ccconnect ALL=(claude,claude-owner-group,claude-partner-private,claude-partner-group,claude-test-private,claude-test-group) NOPASSWD: ALL
