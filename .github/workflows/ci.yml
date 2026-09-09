@@ -27,6 +27,9 @@ jobs:
         run: |
           python -m unittest discover -s tests -v
           python -m unittest discover -s spikes -v
+          python -m unittest discover -s ops/runtime -v
+      - name: Verify isolated numeric UID fixtures
+        run: sudo $(which python) ops/runtime/test_partner_boundary.py
       - name: Scan tracked files for credential-shaped values
         shell: bash
         run: |

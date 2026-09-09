@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "defaultMode": "auto",
+    "disableBypassPermissionsMode": "disable",
+    "blockReadsOutsideWorkingDirectories": true,
+    "allow": [
+      "Cd(//home/claude/ClaudeRemote/**)",
+      "Cd(//home/claude-owner-group/ClaudeRemote/**)",
+      "Cd(//home/claude-partner-private/ClaudeRemote/**)",
+      "Cd(//home/claude-partner-group/ClaudeRemote/**)",
+      "Cd(//home/claude-test-private/ClaudeRemote/**)",
+      "Cd(//home/claude-test-group/ClaudeRemote/**)"
+    ],
+    "deny": [
+      "Read(//root/**)",
+      "Read(//home/claude/.ssh/**)",
+      "Read(//home/claude/.claude/**)",
+      "Read(//home/claude/.cc-connect/**)",
+      "Read(//home/claude/.lark-cli/**)",
+      "Read(//home/claude/.local/share/lark-cli/**)",
+      "Read(//etc/cc-connect/**)",
+      "Read(//etc/myanc-crm/**)",
+      "Read(//var/lib/cc-connect/**)",
+      "Read(//var/lib/cc-connect-state/**)",
+      "Read(//var/lib/myanc-crm/**)",
+      "Read(//var/lib/cc-action-inbox/**)",
+      "Edit(//root/**)",
+      "Edit(//etc/**)",
+      "Edit(//usr/**)",
+      "Edit(//var/**)",
+      "Edit(//run/**)",
+      "Edit(//bin/**)",
+      "Edit(//sbin/**)",
+      "Edit(//lib/**)",
+      "Edit(//lib64/**)",
+      "Edit(//boot/**)",
+      "Edit(//home/claude/.ssh/**)",
+      "Edit(//home/claude/.claude/**)",
+      "Edit(//home/claude/.cc-connect/**)",
+      "Edit(//home/claude/.lark-cli/**)",
+      "Edit(//home/claude/.local/**)",
+      "Edit(//home/claude/.config/**)",
+      "Edit(//home/claude/.bashrc)",
+      "Edit(//home/claude/.profile)",
+      "Edit(//home/claude/ClaudeRemote/CLAUDE.md)",
+      "Edit(//home/claude/ClaudeRemote/.mcp.json)",
+      "Edit(//home/claude/ClaudeRemote/.claude/**)"
+    ]
+  },
+  "allowManagedPermissionRulesOnly": true,
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/local/libexec/claude-workspace-guard"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/local/libexec/claude-command-guard"
+          }
+        ]
+      }
+    ]
+  },
+  "allowManagedHooksOnly": true,
+  "allowedMcpServers": [],
+  "allowManagedMcpServersOnly": true,
+  "env": {
+    "ENABLE_CLAUDEAI_MCP_SERVERS": "false",
+    "DISABLE_UPDATES": "1"
+  },
+  "requiredMinimumVersion": "2.1.259",
+  "requiredMaximumVersion": "2.1.259",
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "allowUnsandboxedCommands": false,
+    "failIfUnavailable": true,
+    "network": {
+      "allowAllUnixSockets": false,
+      "allowedDomains": [
+        "127.0.0.1:18743",
+        "open.feishu.cn",
+        "*.feishu.cn"
+      ]
+    },
+    "credentials": {
+      "envVars": [
+        {
+          "name": "CLAUDE_CODE_OAUTH_TOKEN",
+          "mode": "deny"
+        },
+        {
+          "name": "MYANC_CRM_HOST_SECRET",
+          "mode": "deny"
+        },
+        {
+          "name": "MYANC_CRM_HOST_SECRET_FILE",
+          "mode": "deny"
+        }
+      ]
+    },
+    "filesystem": {
+      "allowRead": [
+        "~/.lark-cli",
+        "~/.local/share/lark-cli"
+      ],
+      "allowWrite": [
+        "/tmp"
+      ],
+      "denyRead": [
+        "/root",
+        "/etc/cc-connect",
+        "/etc/myanc-crm",
+        "/var/lib/cc-connect",
+        "/var/lib/cc-connect-state",
+        "/var/lib/myanc-crm",
+        "/var/lib/cc-action-inbox",
+        "~/.ssh",
+        "~/.claude",
+        "~/.cc-connect"
+      ],
+      "denyWrite": [
+        "/root",
+        "/etc",
+        "/usr",
+        "/var/lib/cc-connect",
+        "/var/lib/cc-connect-state",
+        "/var/lib/myanc-crm",
+        "/var/log",
+        "/run",
+        "/bin",
+        "/sbin",
+        "/lib",
+        "/lib64",
+        "/boot",
+        "~/.ssh",
+        "~/.claude",
+        "~/.cc-connect",
+        "~/.lark-cli",
+        "~/.local",
+        "~/.config",
+        "~/.bashrc",
+        "~/.profile",
+        "/home/claude/ClaudeRemote/CLAUDE.md",
+        "/home/claude/ClaudeRemote/.mcp.json",
+        "/home/claude/ClaudeRemote/.claude",
+        "/home/claude-owner-group/ClaudeRemote/CLAUDE.md",
+        "/home/claude-owner-group/ClaudeRemote/.mcp.json",
+        "/home/claude-owner-group/ClaudeRemote/.claude",
+        "/home/claude-partner-private/ClaudeRemote/CLAUDE.md",
+        "/home/claude-partner-private/ClaudeRemote/.mcp.json",
+        "/home/claude-partner-private/ClaudeRemote/.claude",
+        "/home/claude-partner-group/ClaudeRemote/CLAUDE.md",
+        "/home/claude-partner-group/ClaudeRemote/.mcp.json",
+        "/home/claude-partner-group/ClaudeRemote/.claude",
+        "/home/claude-test-private/ClaudeRemote/CLAUDE.md",
+        "/home/claude-test-private/ClaudeRemote/.mcp.json",
+        "/home/claude-test-private/ClaudeRemote/.claude",
+        "/home/claude-test-group/ClaudeRemote/CLAUDE.md",
+        "/home/claude-test-group/ClaudeRemote/.mcp.json",
+        "/home/claude-test-group/ClaudeRemote/.claude"
+      ]
+    }
+  }
+}

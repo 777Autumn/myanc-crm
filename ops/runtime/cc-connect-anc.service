@@ -1,0 +1,31 @@
+[Unit]
+Description=cc-connect ANC Feishu gateway
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=ccconnect
+Group=ccconnect
+SupplementaryGroups=cc-action
+WorkingDirectory=/var/lib/cc-connect
+Environment=HOME=/var/lib/cc-connect
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=MYANC_CRM_PROJECT=claude-local
+Environment=MYANC_CRM_TOOLS=1
+Environment=MYANC_CRM_HOST_COMMAND=/usr/local/bin/crm-followup
+Environment=MYANC_CRM_HOST_SECRET_FILE=/etc/myanc-crm/action-host.secret
+ExecStart=/usr/local/bin/cc-connect-anc --config /etc/cc-connect/config.toml
+Restart=on-failure
+RestartSec=10s
+TimeoutStopSec=45s
+KillMode=control-group
+PrivateTmp=true
+ProtectProc=invisible
+# Bubblewrap reads /proc/sys/kernel/overflow{u,g}id before creating its sandbox.
+# Keep kernel proc files available while hiding other users' processes.
+ProcSubset=all
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
