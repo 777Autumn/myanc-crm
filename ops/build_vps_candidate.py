@@ -19,6 +19,14 @@ def run(args, cwd, env=None):
     subprocess.run(args, cwd=cwd, env=env, check=True)
 
 
+def build_environment(crm):
+    env = os.environ.copy()
+    for name in ("GOOS", "GOARCH", "CGO_ENABLED", "GOFLAGS", "GOWORK", "GOENV"):
+        env.pop(name, None)
+    env.update(GOENV="off", GOWORK="off", GOFLAGS="", MYANC_SPIKE_CRM_ROOT=str(crm))
+    return env
+
+
 def export(repo, commit, destination):
     gate.sha(commit)
     gate.require(repo in gate.REPOS, "unsupported source repository")
@@ -58,11 +66,8 @@ def build(crm_sha, gateway_sha, output):
         # No worktree or pre-existing ignored web assets are consulted.
         run(["pnpm", "install", "--frozen-lockfile"], gateway / "web")
         run(["pnpm", "build"], gateway / "web")
-        run(["go", "mod", "verify"], gateway)
-        env = os.environ.copy()
-        for name in ("GOOS", "GOARCH", "CGO_ENABLED", "GOFLAGS"):
-            env.pop(name, None)
-        env["MYANC_SPIKE_CRM_ROOT"] = str(crm)
+        env = build_environment(crm)
+        run(["go", "mod", "verify"], gateway, env)
         run(["python", "-m", "unittest", "discover", "-s", "tests"], crm, env)
         run(["python", "-m", "unittest", "discover", "-s", "spikes"], crm, env)
         run(["go", "test", "./actionhost/crmfollowup", "./core", "-run",
@@ -75,7 +80,8 @@ def build(crm_sha, gateway_sha, output):
         manifest = {"created_at": datetime.now(timezone.utc).isoformat(),
                     "sources": dict(zip(gate.REPOS, (crm_sha, gateway_sha))),
                     "github": evidence, "toolchain": versions, "build": build_args[:-3] + build_args[-1:],
-                    "target": "linux/amd64 CGO_ENABLED=0", "vcs": "exported source; buildvcs=false",
+                    "target": "linux/amd64 CGO_ENABLED=0 GOENV=off GOWORK=off GOFLAGS=",
+                    "vcs": "exported source; buildvcs=false",
                     "paired_tests": {"crm_sha": crm_sha, "gateway_sha": gateway_sha,
                                      "MYANC_SPIKE_CRM_ROOT": "fresh CRM export", "passed": True},
                     "files": {}}
@@ -90,14 +96,15 @@ def build(crm_sha, gateway_sha, output):
             if path.is_file():
                 manifest["files"][path.relative_to(bundle).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
         # Recheck after the potentially long build, before publishing the candidate.
-        gate.ordinary_allowed()
-        for repo, commit in manifest["sources"].items():
-            gate.released(repo, commit)
-        (bundle / "candidate.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-        output.parent.mkdir(parents=True, exist_ok=True)
-        with output.open("xb") as target:
-            with tarfile.open(fileobj=target, mode="w:gz") as archive:
-                archive.add(bundle, arcname="candidate")
+        with gate.state_lock():
+            gate.check_debt()
+            for repo, commit in manifest["sources"].items():
+                gate.released(repo, commit)
+            (bundle / "candidate.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+            output.parent.mkdir(parents=True, exist_ok=True)
+            with output.open("xb") as target:
+                with tarfile.open(fileobj=target, mode="w:gz") as archive:
+                    archive.add(bundle, arcname="candidate")
     return manifest
 
 

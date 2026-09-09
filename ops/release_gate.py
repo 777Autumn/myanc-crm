@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 from datetime import datetime, timezone
+from contextlib import contextmanager
 from pathlib import Path
 
 REPOS = {
@@ -148,10 +149,26 @@ def read_state():
     return record
 
 
-def ordinary_allowed():
+def check_debt():
     record = read_state()
     require(not any(item["status"] != "closed" for item in record["incidents"]),
             "unresolved emergency release blocks ordinary release")
+
+
+@contextmanager
+def state_lock():
+    lock = STATE.with_suffix(".lock")
+    descriptor = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    try:
+        yield
+    finally:
+        os.close(descriptor)
+        lock.unlink()
+
+
+def ordinary_allowed():
+    with state_lock():
+        check_debt()
 
 
 def state_change(action, evidence_file):
@@ -160,9 +177,7 @@ def state_change(action, evidence_file):
     require(evidence.get("owner_approval") and evidence.get("audit_reference"),
             "explicit Owner approval and audit reference required")
     STATE.parent.mkdir(parents=True, exist_ok=True)
-    lock = STATE.with_suffix(".lock")
-    descriptor = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-    try:
+    with state_lock():
         if action == "initialize":
             require(not STATE.exists(), "state already exists")
             require(evidence.get("reconciliation"), "completed reconciliation required")
@@ -200,9 +215,6 @@ def state_change(action, evidence_file):
             os.fsync(stream.fileno())
         os.replace(temporary, STATE)
         return record
-    finally:
-        os.close(descriptor)
-        lock.unlink()
 
 
 def main():

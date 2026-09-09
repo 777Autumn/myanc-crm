@@ -81,6 +81,18 @@ class ReleaseGateTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 gate.ci(self.repo, self.sha, "push")
 
+    def test_existing_lock_blocks_even_with_clear_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / "state.json"
+            state.write_text(json.dumps(dict(version=1, reconciliation="audit", incidents=[])), encoding="utf-8")
+            with patch.object(gate, "STATE", state):
+                with gate.state_lock():
+                    with self.assertRaises(FileExistsError):
+                        gate.ordinary_allowed()
+                state.with_suffix(".lock").write_text("crashed writer", encoding="utf-8")
+                with self.assertRaises(FileExistsError):
+                    gate.ordinary_allowed()
+
 
 if __name__ == "__main__":
     unittest.main()

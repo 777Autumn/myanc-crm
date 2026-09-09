@@ -15,6 +15,14 @@ SPEC.loader.exec_module(builder)
 
 
 class CandidateTests(unittest.TestCase):
+    def test_persistent_go_flags_and_external_overlay_are_disabled(self):
+        with patch.dict(builder.os.environ, {"GOFLAGS": "-overlay=external.json -tags=no_web",
+                                             "GOENV": "external-config", "GOWORK": "external.work"}):
+            env = builder.build_environment("fixed-crm")
+        self.assertEqual("off", env["GOENV"])
+        self.assertEqual("off", env["GOWORK"])
+        self.assertEqual("", env["GOFLAGS"])
+
     def fake_run(self, args, cwd):
         if args[1] == "archive":
             archive_path = next(arg.split("=", 1)[1] for arg in args if arg.startswith("--output="))
