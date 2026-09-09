@@ -22,6 +22,7 @@ PRINCIPAL = {
     "session_key": "mock:group-1:sender-1", "project": "test", "message_id": "message-1",
 }
 CONFIG = {
+    "base_url": "https://example.invalid/base/fixture",
     "host_secret_sha256": hashlib.sha256(SECRET.encode()).hexdigest(),
     "allowed_actors": {
         sender: {"display_name": f"Fixture {sender}", "feishu_user_id": f"ou_fixture_{sender}"}

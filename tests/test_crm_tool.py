@@ -72,6 +72,8 @@ class CrmToolClientTests(unittest.TestCase):
 
     def test_only_business_commands_and_fields_reach_the_host(self):
         cases = [
+            (["open"], b'{"url":"https://other.invalid"}', "invalid_input"),
+            (["open"], b'{"actor":"other"}', "invalid_input"),
             ([], b'{}', "invalid_command"),
             (["apply"], b'{"change_id":"chg_test"}', "invalid_command"),
             (["approve"], b'{}', "invalid_command"),
@@ -110,6 +112,7 @@ class CrmToolClientTests(unittest.TestCase):
 
     def test_stage_clarification_and_result_partial_are_not_reinterpreted(self):
         for command, request, expected in (
+            ("open", {}, {"status": "available", "url": "https://example.invalid/base/fixture"}),
             ("stage", {"customer_query": "演示客户", "content": "确认了需求"}, {"status": "needs_time", "question": "When?"}),
             ("result", {"change_id": "chg_test"}, {"status": "partial", "followup": "verified", "customer_update": "failed"}),
             ("assignee", {"query": "member@example.com"}, {"status": "resolved", "owner_ref": "own_fixture", "name": "示例同事"}),

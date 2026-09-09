@@ -20,7 +20,7 @@ from .core import (
     execute_claimed_approval,
     stage_followup,
 )
-from .lark import LarkCliBackend
+from .lark import LarkBackendError, LarkCliBackend, _base_url
 from . import core
 
 
@@ -184,7 +184,7 @@ def _host_prepare_payload(
 def _host_tool_payload(value, config):
     if set(value) != {"command", "request", "principal"}:
         raise ValueError("host-tool requires exactly command, request and principal.")
-    fields = {"customer": frozenset({"customer_query"}),
+    fields = {"open": frozenset(), "customer": frozenset({"customer_query"}),
               "stage": BUSINESS_FIELDS, "result": frozenset({"change_id"}),
               "assignee": frozenset({"query"}),
               "stage-customer-create": CREATE_FIELDS,
@@ -374,8 +374,12 @@ def main(
             prepare_request, prepare_principal = _host_prepare_payload(request, config)
         elif command == "host-tool":
             tool_command, prepare_request, prepare_principal = _host_tool_payload(request, config)
+        if tool_command == "open":
+            # A host-configured navigation link needs neither CRM IO nor a ledger.
+            _write(target, {"status": "available", "url": _base_url(config.get("base_url"))})
+            return 0
         backend, ledger = _runtime(config, path)
-    except (CliConfigurationError, OSError, TypeError, ValueError):
+    except (CliConfigurationError, LarkBackendError, OSError, TypeError, ValueError):
         result = _safe_failure(
             command,
             "invalid_local_input",
