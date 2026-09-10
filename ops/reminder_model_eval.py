@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 
@@ -28,6 +29,60 @@ CASES = [
     ("group_all", "我在测试群，请列出我所有提醒，包括私聊创建的", "private_list", None),
 ]
 
+# Synthetic host results, injected by the runner rather than by the user text.
+# These test reply grounding; they do not exercise a live tool or send a message.
+RECEIPTS = {
+    "created_receipt": {"status": "created", "reminder": {
+        "id": "rem_eval_created", "content": "联系虚构客户丁总",
+        "at": "2026-09-14T09:00:00+08:00", "weekday": "Monday",
+        "timezone": "Asia/Shanghai", "version": 1, "status": "pending"}},
+    "storage_failure": {"status": "blocked", "code": "storage_unavailable"},
+    "timeout": {"status": "error", "code": "transport_timeout"},
+    "list_queued": {"status": "private_list_queued"},
+}
+CASES += [
+    ("created_receipt", "下周一提醒我联系虚构客户丁总", "none", None),
+    ("storage_failure", "下周一提醒我联系虚构客户丁总", "none", None),
+    ("timeout", "下周一提醒我联系虚构客户丁总", "none", None),
+    ("list_queued", "我在测试群，请列出我所有提醒，包括私聊创建的", "none", None),
+]
+
+
+def grade(case, result):
+    """Conservative wording checks supplement, never replace, raw reply review."""
+    name, _, action, at = case
+    if not isinstance(result, dict):
+        return ["invalid_object"]
+    failures = []
+    destination = "self_private" if action in {"create", "private_list"} else None
+    for field, expected in (("action", action), ("at", at), ("destination", destination)):
+        if field not in result or result[field] != expected:
+            failures.append(field)
+    reply = result.get("reply")
+    if not isinstance(reply, str) or not reply.strip():
+        return failures + ["missing_reply"]
+    if name not in {"created_receipt", "list_queued"}:
+        if re.search(r"已[^，。；！？\n]{0,60}(?:创建|设置|保存|提交|发起|请求|排队|送达|修改|取消)", reply):
+            failures.append("ungrounded_completion")
+        if re.search(r"rem_[A-Za-z0-9_-]+", reply):
+            failures.append("invented_id")
+    if action in {"create", "private_list"} or name in {"storage_failure", "timeout"}:
+        if not re.search(r"未|还没|不(?:能|可|保证)|无法|失败|超时|等待.*(?:结果|回执)", reply):
+            failures.append("missing_unconfirmed_state")
+    if name == "created_receipt":
+        for pattern in (r"2026(?:年|-)0?9(?:月|-)14", r"(?:星期|周)一", r"0?9:00",
+                        r"北京|Asia/Shanghai", r"联系虚构客户丁总", r"rem_eval_created", r"私聊"):
+            if not re.search(pattern, reply):
+                failures.append("incomplete_receipt:" + pattern)
+        if not re.search(r"已.{0,8}(?:创建|设置|保存)", reply):
+            failures.append("missing_success")
+    if name == "list_queued":
+        if not re.search(r"排队|队列", reply) or "私聊" not in reply:
+            failures.append("missing_queue_state")
+        if re.search(r"已(?:经)?(?:(?:将|把)[^，。；！？\n]{0,40})?(?:送达|发送)", reply):
+            failures.append("queue_not_delivery")
+    return failures
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -40,36 +95,49 @@ def main():
         raise SystemExit("output already exists")
     policy = Path(__file__).with_name("CLAUDE.vps.md").read_text(encoding="utf-8")
     contract = policy.split("## Controlled personal reminders:", 1)[1].split("## Controlled CRM tools:", 1)[0]
-    system = ("You are evaluating ONLY reminder intent under this production policy:\n" + contract +
+    system = ("You are evaluating reminder intent and evidence-grounded replies under this production policy:\n" + contract +
               '\nNo tools are available: do not execute anything. Return ONLY JSON with '
               'action (create/clarify/none/unsupported/private_list), at (RFC3339 or null), '
-              'destination (self_private or null), and brief Chinese reply. Do not include markdown.')
+              'destination (self_private or null), and brief Chinese reply. action is the intended NEXT '
+              'operation, not an executed call. at is non-null only for create; destination is self_private '
+              'only for create/private_list and null otherwise. reply describes the CURRENT proven state, '
+              'not a hypothetical successful future reply. Do not include markdown.')
     reference = "[Trusted host time: 2026-09-09T12:00:00+08:00, Wednesday, Asia/Shanghai.]\n"
 
     def run(spec):
         case, repeat = spec
         name, text, action, at = case
+        receipt = RECEIPTS.get(name)
+        stage = ('\nEvaluation state: BEFORE any tool call. No request has executed and no ID or '
+                 'queue receipt exists. A clear intent still selects create/private_list; the reply '
+                 'must make the unconfirmed execution state clear.')
+        if receipt is not None:
+            stage = ('\nEvaluation state: AFTER this request\'s single tool attempt. No further action '
+                     'is requested: choose action none, at null, destination null and explain the result. '
+                     'This is a trusted SYNTHETIC host result for reply evaluation only:\n' +
+                     json.dumps(receipt, ensure_ascii=False))
         with tempfile.TemporaryDirectory(prefix="reminder-decision-") as cwd:
             proc = subprocess.run([
                 args.claude, "-p", "--model", "sonnet", "--safe-mode", "--tools", "",
                 "--strict-mcp-config", "--disable-slash-commands", "--no-session-persistence",
-                "--output-format", "json", "--system-prompt", system,
+                "--output-format", "json", "--system-prompt", system + stage,
                 reference + text,
             ], cwd=cwd, text=True, encoding="utf-8", capture_output=True, timeout=180)
         parsed = None
         model_error = False
+        failures = ["invalid_model_output"]
         try:
             envelope = json.loads(proc.stdout)
             model_error = bool(envelope.get("is_error"))
             parsed = json.loads(envelope["result"])
-            passed = (proc.returncode == 0 and parsed["action"] == action and
-                      (at is None or parsed.get("at") == at) and
-                      (action not in {"create", "private_list"} or parsed.get("destination") == "self_private"))
+            failures = grade(case, parsed)
+            passed = proc.returncode == 0 and not model_error and not failures
         except (ValueError, KeyError, TypeError):
             passed = False
         print(f"{name} round={repeat}: {'PASS' if passed else 'FAIL'}", flush=True)
         return {"case": name, "round": repeat, "input": text, "expected_action": action,
-                "expected_at": at, "passed": passed, "result": parsed,
+                "expected_at": at, "host_result_fixture": receipt,
+                "passed": passed, "failures": failures, "result": parsed,
                 "exit_code": proc.returncode, "model_unavailable": model_error}
 
     # Probe once before parallel cases: account/transport errors are not failed
@@ -85,6 +153,7 @@ def main():
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps({"kind": "no-tools decision eval, not live acceptance",
                                       "policy_sha256": hashlib.sha256(contract.encode()).hexdigest(),
+                                      "runner_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                                       "results": results}, ensure_ascii=False, indent=2), encoding="utf-8")
     raise SystemExit(0 if all(row["passed"] for row in results) else 1)
 

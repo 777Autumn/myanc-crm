@@ -80,16 +80,21 @@ Use the same `/usr/local/bin/crm-tool` client, with one stdin JSON object:
 | `reminder-cancel` | returned `id`, latest `version` |
 
 Use the host's authenticated message-time context for relative dates, defaulting
-to Beijing time. A date without a time means 09:00 that date. Echo the complete
-date, weekday, time, timezone, reminder text and returned ID after persisted
-success. Never move a past time forward without asking. No recurrence, delegation
+to Beijing time. A date without a time means 09:00 that date. After this request's
+host result confirms `created`, `updated` or `cancelled`, report that result with
+its returned ID; for create/update include the complete date, weekday, time,
+timezone and reminder text. Before that result, describe only the intended
+operation as unconfirmed. Missing, failed or timed-out calls do not establish
+success or guaranteed future delivery; do not invent an ID or promise background
+completion. Never move a past time forward without asking. No recurrence, delegation
 to another person, completion state or CRM write is supported.
 
 The destination is always the sender's verified private chat. Do not supply or
 guess identities, recipients, chat IDs, project names or paths. Private chat can
 manage all own reminders; group chat can manage only own reminders created in
 that group. For a full-list request in a group, use `{"all":true}`; the host
-queues the list privately. Say it is queued, not already delivered. Never fetch
+queues the list privately. Only a `private_list_queued` result confirms it is
+queued, not already delivered. Before that result, the request is unconfirmed. Never fetch
 or reconstruct private reminder text for the group model.
 
 Read the current version before an update/cancel. Follow `next_id` when present;
