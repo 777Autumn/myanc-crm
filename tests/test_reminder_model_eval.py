@@ -32,7 +32,8 @@ class ReminderEvalTests(unittest.TestCase):
 
     def test_negated_and_conditional_claims_are_not_false_positives(self):
         for reply in ("无法确定提醒是否已创建。", "还不能确认已排队或已送达。",
-                      "只有收到回执后，才代表已排队。"):
+                      "只有收到回执后，才代表已排队。", "只有收到回执后才能确认已排队。",
+                      "可能已创建、也可能未创建。", "不能保证已创建。"):
             self.assertFalse(completion_claimed(reply))
         self.assertTrue(completion_claimed("无法确认，但提醒已创建。"))
         self.assertIn("ungrounded_progress", grade(self.case("next_monday"),
@@ -45,6 +46,12 @@ class ReminderEvalTests(unittest.TestCase):
             self.assertTrue(grade(self.case("timeout"), self.result("timeout", reply)))
         reply = "无法确定提醒是否已创建；需要先查询清单核对，有疑问请运维检查，暂不再次创建。"
         self.assertEqual([], grade(self.case("timeout"), self.result("timeout", reply)))
+        reply = "写入未知，可能已创建、也可能未创建；请先查看列表核对。"
+        self.assertEqual([], grade(self.case("storage_failure"), self.result("storage_failure", reply)))
+        reply = "结果未知，提醒可能仍会到达；先查询列表核对。"
+        self.assertEqual([], grade(self.case("timeout"), self.result("timeout", reply)))
+        reply = "结果未知，更不会有后台补发；先查询列表核对。"
+        self.assertIn("unknown_not_no_future_delivery", grade(self.case("timeout"), self.result("timeout", reply)))
 
     def test_schema_enforces_format_without_supplying_case_answer(self):
         self.assertEqual("object", output_schema()["type"])
@@ -85,6 +92,9 @@ class ReminderEvalTests(unittest.TestCase):
     def test_persisted_receipt_is_complete_and_queue_is_not_delivery(self):
         reply = "已设置：2026年9月14日（周一）09:00，北京时间，私聊提醒你联系虚构客户丁总。编号 rem_eval_created。"
         self.assertEqual([], grade(self.case("created_receipt"), self.result("created_receipt", reply)))
+        # Destination is host-pinned and tested on create decisions/transport;
+        # the spec's mandatory receipt fields do not include this exact wording.
+        self.assertEqual([], grade(self.case("created_receipt"), self.result("created_receipt", reply.replace("私聊", ""))))
         self.assertTrue(grade(self.case("created_receipt"), self.result("created_receipt", reply.replace("rem_eval_created", "rem_invented"))))
         self.assertEqual([], grade(self.case("list_queued"), self.result("list_queued", "完整清单已排队，将私聊发送，尚未确认送达。")))
         self.assertTrue(grade(self.case("list_queued"), self.result("list_queued", "完整清单已排队并已发送到私聊。")))

@@ -86,7 +86,9 @@ its returned ID; for create/update include the complete date, weekday, time,
 timezone and reminder text. Before starting the call, describe only what you
 intend to do; progress claims require a started call. Missing, failed or timed-out
 calls leave the outcome unknown: neither success nor zero writes is established.
-Report that uncertainty without inventing an ID or promising background delivery.
+Explain that the reminder may already be saved and may still arrive. Neither
+future delivery nor non-delivery is guaranteed; keep that uncertainty and use
+only returned IDs.
 Before a new create attempt after an unavailable/timeout result, read the sender's
 reminder list to reconcile the earlier attempt; if still uncertain, request an
 operator check instead of asking the user to repeat the create request. A new
