@@ -83,15 +83,86 @@ all four business DB logical snapshots matched after cutover.
 - Before deployment, 48/48 no-tools model decision cases passed on the existing
   VPS Claude and were independently reviewed. Those are model behavior evidence,
   not proof of the new live message/tool/delivery chain.
-- At this checkpoint the reminder database contains no reminders or send batches.
-  The authorized desktop send was not performed: Feishu required human login.
+- At the initial deployment checkpoint the reminder database contained no
+  reminders or send batches and Feishu required human login. The Owner later
+  completed login. The following live evidence supersedes that initial blocker.
 
-**Incomplete:** Owner/test live group creation to own private delivery, list,
-update, cancel and controlled restart/overdue catch-up; post-upgrade live CRM and
-knowledge interaction regression, image, `/new` and `/stop`. Existing CI/CUJ and
-historical live tests do not replace these checks. Wang remains authorized;
-his live acceptance is explicitly unexecuted. User login or a phone-originated
-fictional test message is the next step; no screenshot's real reminder was made.
+## Live acceptance checkpoint — 2026-09-10
+
+All times below are Beijing time. Only fictional acceptance messages were used;
+the screenshot's real customer-contact reminder was not created. Owner desktop
+messages had action-time user confirmation. Protected state was read back without
+exporting identity values, private chat IDs, credentials or delivery receipts.
+
+| Case | Observed result | Evidence boundary |
+|---|---|---|
+| Owner group create, private delivery | `OWNER-0910`, due 15:34:48; sent with one attempt and saved item/batch receipts; visible in Owner private chat | Actor/source/destination matched pinned configuration; not sent to group |
+| Owner private create and list | `OWNER-MANAGE-0910`, created 15:42, due 15:52:29, pending v1 | List showed the new item and distinguished the earlier sent group-created item |
+| Owner update time/content | Same item updated at 15:46 to 16:30, revised fictional text, pending v2 | Protected state and visible updated list agreed |
+| Owner cancel and list | At 15:54, same item cancelled v3, no batch or in-flight receipt; pending list empty | Cancellation preserved the historical item; it did not delete data |
+| test group create, private delivery | `TEST-0910`, due 16:01:29; sent with one attempt and saved item/batch receipts | User phone screenshots matched the stored reminder; destination was test private chat, not Owner, partner or group |
+
+A separate earlier Owner reminder also used the `TEST-0910` text and was sent to
+Owner at 15:58:35. These are distinct actors and items, not duplicate delivery of
+test's reminder. Identical marker text alone is not an identity or deduplication
+key. Client visibility establishes delivery to the client, not human reading.
+
+After these cases all 56 tracked runtime hashes, four CRM/knowledge DB logical
+snapshots and the single receiver/listener checks remained unchanged. Reminder
+integrity and six model-user EACCES checks passed. Before the next recovery test,
+state held three sent reminders and one cancelled reminder, with no uncertain
+or outstanding send batches.
+
+### Controlled overdue recovery
+
+The Owner separately confirmed one private five-minute fictional reminder plus
+approximately four minutes of shared-gateway maintenance. `OWNER-RESTART-0910`
+was created through the actual bot at 16:20, with due time 16:25:54. It was the
+only outstanding reminder and the current turn had completed with at least
+120 seconds of quiet before stopping.
+
+Five fresh, integrity-checked SQLite backups (reminders plus four business DBs)
+were kept under the root-private
+`/root/reminder-restart-acceptance-20260910/backup`. Private phase records bind
+the item, backup hashes and service transitions; raw files are not in GitHub.
+The one-off operator script's SHA256 was
+`38c4461720d411616de8d234fdce68ca0764d4fe4e6f0035de9ab45420ee1e9a`.
+It is historical evidence, not a reusable deployment or restart command.
+
+At 16:24:02 the service was stopped, receiver and listener absent, reminder still
+pending and all business snapshots unchanged. A one-shot transient systemd timer
+was armed beforehand to start the same `cc-connect.service` at due+90 seconds.
+The intended manual resume target was due+65 seconds; the actual service start
+was 16:27:24, when the recovery timer also ran successfully. The operator's start
+call converged on that same active unit and PID. Do not claim the earlier manual
+target was achieved or attribute the service start exclusively to that call.
+The timer completed and was unloaded; no recurring recovery job remains.
+
+The saved first send attempt was 16:27:26, 92 seconds late, with a single attempt,
+fixed UUID, sent item/batch and saved receipts. The same reminder ID and fictional
+content appeared in Owner private chat with `延迟补发；原定时间` and the original
+date/time. No model turn was received or run after startup to cause that send.
+The recorded stop-to-start-confirmation interval was approximately 203 seconds.
+
+Post-recovery checks passed: all five backup hashes, unchanged prior reminders
+and batches (including cancelled v3), all 56 tracked runtime hashes and reminder
+override, four unchanged business DB logical snapshots, six ready engines, one
+receiver, five shared WebSocket reusers, one tool listener, no ERROR logs or
+automatic restarts, intact reminder DB and six model-user EACCES results.
+No code/configuration, credential, permission or business-data change occurred.
+Backups preserve evidence only; no database restore or reinitialization happened.
+
+**Incomplete:** test list/update/cancel and cross-user management-refusal live
+cases; post-upgrade live CRM/knowledge
+interaction regression, image, `/new` and `/stop`. Earlier session-transition text
+in a screenshot does not establish a fresh command regression test. Existing
+CI/CUJ and historical tests do not replace these checks. Wang remains authorized;
+his live reminder acceptance is explicitly unexecuted, as requested by the user.
+
+UX observation: creation replies show date/weekday/time/content/ID but do not
+consistently say delivery is private, and some include a generic delivery caveat.
+Successful private delivery does not erase that wording follow-up. This evidence
+update changes no runtime code, permissions, credentials or business data.
 
 ## Recovery
 
