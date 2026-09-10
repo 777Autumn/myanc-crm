@@ -12,3 +12,7 @@ or services and must never be repurposed as a production fault injector.
 Historical one-time deployment/recovery scripts remain outside this repository.
 Their fixed PID assumptions and maintenance context make them **non-reusable**.
 The supported future candidate entrance is described in [../RELEASE.md](../RELEASE.md).
+
+The unpublished business-display and operations-alert templates are described in
+[../OPS-ALERTS.md](../OPS-ALERTS.md). They require separate approved maintenance;
+adding a template to git does not enable it on any of the six live environments.

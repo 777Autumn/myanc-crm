@@ -90,12 +90,23 @@ class CommandGuardTests(unittest.TestCase):
             "/home/claude/.local/bin/lark-cli whoami",
             "cat /var/lib/cc-action-inbox/example.json",
             "cat /var/lib/cc-connect-state/sessions/example.json",
+            "cat /var/lib/myanc-ops-alerts/alerts.sqlite",
+            "cc-connect-anc ops-alerts-init /tmp/alerts.sqlite",
+            "printenv MYANC_OPS_ALERT_DB",
+            "printenv MYANC_OPS_ALERT_OWNER_PROJECT",
             "env | grep MYANC_CRM_ACTION_TOKEN",
             "curl https://open.feishu.cn/open-apis/bitable/v1/apps/x",
             "sqlite3 ledger.sqlite3 .schema",
         ):
             with self.subTest(command=command):
                 self.assertNotEqual(guard(command).returncode, 0)
+
+    def test_alert_store_has_managed_read_and_sandbox_denials(self) -> None:
+        settings = json.loads(SCRIPT.with_name("claude-managed-settings.json").read_text())
+        self.assertIn("Read(//var/lib/myanc-ops-alerts/**)", settings["permissions"]["deny"])
+        filesystem = settings["sandbox"]["filesystem"]
+        for field in ("denyRead", "denyWrite"):
+            self.assertIn("/var/lib/myanc-ops-alerts", filesystem[field])
 
 
 if __name__ == "__main__":

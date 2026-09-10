@@ -1,7 +1,9 @@
 # Reminder delivery runbook
 
 Status: implementation merged; the authorized VPS deployment was enabled on
-2026-09-10. **Live acceptance is incomplete**; see the
+2026-09-10. The agreed Owner/test live reminder acceptance is recorded; Wang's
+own live acceptance was explicitly waived, not executed. Delivery wording and
+active operations alerts remain a separate, unpublished optimization; see the
 [deployment record](releases/2026-09-10-reminders.md).
 Follow [the shared release contract](RELEASE.md). Code and templates alone do
 not establish live acceptance. Default: no `MYANC_REMINDER_DB`, no scheduler.
@@ -40,8 +42,8 @@ one receiving connection and one tool listener after restart.
 Owner/test: group create → private receipt; list/update/cancel; restart overdue
 catch-up. Test only fictitious content. Record partner's unexecuted acceptance
 as unexecuted, not inferred. Recheck CRM cards, knowledge tools/cards, image,
-`/new`, `/stop`, and six isolated environments. No actual reminder has been
-created by this implementation task.
+`/new`, `/stop`, and six isolated environments. Historical live tests created
+only the authorized fictional reminders documented in the deployment record.
 
 The host logs only error categories: `storage_unavailable`,
 `identity_route_changed`, `permission_or_route`, `acceptance_unconfirmed`.
