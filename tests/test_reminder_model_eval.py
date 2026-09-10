@@ -1,6 +1,6 @@
 import unittest
 
-from ops.reminder_model_eval import CASES, grade
+from ops.reminder_model_eval import CASES, RECEIPTS, completion_claimed, grade, output_schema
 
 
 class ReminderEvalTests(unittest.TestCase):
@@ -25,8 +25,32 @@ class ReminderEvalTests(unittest.TestCase):
     def test_pre_call_and_unavailable_are_explicit(self):
         for name in ("next_monday", "group_all", "storage_failure", "timeout"):
             with self.subTest(name=name):
-                self.assertEqual([], grade(self.case(name), self.result(name, "目前尚未确认执行结果。")))
+                self.assertEqual([], grade(self.case(name), self.result(name, "目前尚未确认执行结果，需要先查询清单核对。")))
                 self.assertTrue(grade(self.case(name), self.result(name, "好的。")))
+
+    def test_negated_and_conditional_claims_are_not_false_positives(self):
+        for reply in ("无法确定提醒是否已创建。", "还不能确认已排队或已送达。",
+                      "只有收到回执后，才代表已排队。"):
+            self.assertFalse(completion_claimed(reply))
+        self.assertTrue(completion_claimed("无法确认，但提醒已创建。"))
+        self.assertIn("ungrounded_progress", grade(self.case("next_monday"),
+                      self.result("next_monday", "正在发送创建请求，目前尚未确认。")))
+
+    def test_unavailable_is_unknown_and_needs_reconciliation(self):
+        self.assertEqual({"status": "unavailable", "code": "tool_or_delivery_failed"}, RECEIPTS["storage_failure"])
+        self.assertEqual({"status": "unavailable", "code": "transport_unavailable"}, RECEIPTS["timeout"])
+        for reply in ("目前没有生成提醒，稍后重新发起。", "无法确定是否已创建，请稍后重试。"):
+            self.assertTrue(grade(self.case("timeout"), self.result("timeout", reply)))
+        reply = "无法确定提醒是否已创建；需要先查询清单核对，有疑问请运维检查，暂不再次创建。"
+        self.assertEqual([], grade(self.case("timeout"), self.result("timeout", reply)))
+
+    def test_schema_enforces_format_without_supplying_case_answer(self):
+        branches = output_schema()["oneOf"]
+        self.assertEqual({"create", "private_list", "clarify", "none", "unsupported"},
+                         {action for branch in branches for action in branch["properties"]["action"]["enum"]})
+        for branch in branches:
+            self.assertEqual(["action", "at", "destination", "reply"], branch["required"])
+            self.assertFalse(branch["additionalProperties"])
 
     def test_null_fields_and_reply_are_required(self):
         result = self.result("quote", "仅总结，没有设置提醒。")
