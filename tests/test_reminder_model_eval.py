@@ -1,6 +1,8 @@
 import unittest
 
-from ops.reminder_model_eval import CASES, RECEIPTS, completion_claimed, grade, output_schema
+from ops.reminder_model_eval import (
+    CASES, RECEIPTS, completion_claimed, diagnostic_excerpt, grade, output_schema, parse_model_output,
+)
 
 
 class ReminderEvalTests(unittest.TestCase):
@@ -45,12 +47,27 @@ class ReminderEvalTests(unittest.TestCase):
         self.assertEqual([], grade(self.case("timeout"), self.result("timeout", reply)))
 
     def test_schema_enforces_format_without_supplying_case_answer(self):
+        self.assertEqual("object", output_schema()["type"])
         branches = output_schema()["oneOf"]
         self.assertEqual({"create", "private_list", "clarify", "none", "unsupported"},
                          {action for branch in branches for action in branch["properties"]["action"]["enum"]})
         for branch in branches:
             self.assertEqual(["action", "at", "destination", "reply"], branch["required"])
             self.assertFalse(branch["additionalProperties"])
+
+    def test_format_failure_keeps_stage_and_safe_diagnostic(self):
+        for raw, expected in (("not JSON", "envelope"), ("[]", "envelope"),
+                              ('{"result":"not JSON"}', "result"), ('{"is_error":true}', "model")):
+            parsed, phase, _ = parse_model_output(raw)
+            self.assertIsNone(parsed)
+            self.assertEqual(expected, phase)
+            self.assertTrue(diagnostic_excerpt(raw))
+        raw = '{"structured_output":{"action":"none","at":null,"destination":null,"reply":"测试"}}'
+        self.assertIsNone(parse_model_output(raw)[1])
+        diagnostic = diagnostic_excerpt("startup email@example.invalid Bearer fake-secret sk-fixture access_token=fake-secret")
+        for secret in ("email@example.invalid", "fake-secret", "sk-fixture"):
+            self.assertNotIn(secret, diagnostic)
+        self.assertEqual(4000, len(diagnostic_excerpt("x" * 5000)))
 
     def test_null_fields_and_reply_are_required(self):
         result = self.result("quote", "仅总结，没有设置提醒。")

@@ -115,7 +115,32 @@ def output_schema():
             "action": {"enum": actions}, "at": at, "destination": destination,
             "reply": {"type": "string"}}, "required": ["action", "at", "destination", "reply"],
             "additionalProperties": False})
-    return {"oneOf": branches}
+    return {"type": "object", "oneOf": branches}
+
+
+def diagnostic_excerpt(text):
+    text = re.sub(r"(?i)Bearer\s+\S+|sk-[\w-]+|[\w.+-]+@[\w.-]+", "[redacted]", text)
+    text = re.sub(r'''(?i)(?:access_token|refresh_token|app_secret|client_secret)["'\s:=]+[^\s,"'}]+''',
+                  "[redacted]", text)
+    return text[-4000:]
+
+
+def parse_model_output(stdout):
+    phase, envelope = "envelope", {}
+    try:
+        decoded = json.loads(stdout)
+        if not isinstance(decoded, dict):
+            raise ValueError("not an envelope")
+        envelope = decoded
+        if envelope.get("is_error"):
+            return None, "model", envelope
+        phase = "result"
+        parsed = envelope.get("structured_output")
+        if parsed is None:
+            parsed = json.loads(envelope.get("result"))
+        return parsed, None, envelope
+    except (ValueError, TypeError):
+        return None, phase, envelope
 
 
 def main():
@@ -158,27 +183,20 @@ def main():
                 "--output-format", "json", "--system-prompt", system + stage,
                 reference + text,
             ], cwd=cwd, text=True, encoding="utf-8", capture_output=True, timeout=180)
-        parsed = None
-        model_error = False
-        model_text = None
-        failures = ["invalid_model_output"]
-        try:
-            envelope = json.loads(proc.stdout)
-            model_error = bool(envelope.get("is_error"))
-            if not model_error:
-                model_text = envelope.get("result")
-                parsed = envelope.get("structured_output")
-                if parsed is None:
-                    parsed = json.loads(model_text)
-            failures = grade(case, parsed)
-            passed = proc.returncode == 0 and not model_error and not failures
-        except (ValueError, KeyError, TypeError):
-            passed = False
+        parsed, parse_failure, envelope = parse_model_output(proc.stdout)
+        model_error = bool(envelope.get("is_error"))
+        failures = ["invalid_model_output"] if parse_failure else grade(case, parsed)
+        passed = proc.returncode == 0 and not model_error and not failures
         print(f"{name} round={repeat}: {'PASS' if passed else 'FAIL'}", flush=True)
         return {"case": name, "round": repeat, "input": text, "expected_action": action,
                 "expected_at": at, "host_result_fixture": receipt,
                 "passed": passed, "failures": failures, "result": parsed,
-                "model_text": model_text,
+                "model_text": None if model_error else envelope.get("result"),
+                "parse_failure": parse_failure,
+                "diagnostic": {"stdout": diagnostic_excerpt(proc.stdout),
+                               "stderr": diagnostic_excerpt(proc.stderr),
+                               "truncated": len(proc.stdout) > 4000 or len(proc.stderr) > 4000}
+                              if parse_failure or proc.returncode != 0 else None,
                 "exit_code": proc.returncode, "model_unavailable": model_error}
 
     # Probe once before parallel cases: account/transport errors are not failed
@@ -187,7 +205,7 @@ def main():
     if first["model_unavailable"] or first["exit_code"] != 0:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps({"status": "blocked", "code": "model_environment_unavailable",
-                                          "executed_behavior_cases": 0}), encoding="utf-8")
+                                          "executed_behavior_cases": 0, "probe": first}), encoding="utf-8")
         raise SystemExit(2)
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         results = [first] + list(pool.map(run, [(case, repeat) for case in CASES for repeat in range(1, 4)][1:]))
