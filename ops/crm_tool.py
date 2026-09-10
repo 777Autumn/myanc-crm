@@ -14,6 +14,10 @@ TIMEOUT_SECONDS = 35
 MAX_INPUT_BYTES = 64 * 1024
 MAX_RESPONSE_BYTES = 1024 * 1024
 FIELDS = {
+    "reminder-create": {"content", "at"},
+    "reminder-list": {"all", "id"},
+    "reminder-update": {"id", "version", "content", "at"},
+    "reminder-cancel": {"id", "version"},
     "open": set(),
     "customer": {"customer_query"},
     "stage": {"customer_query", "occurred_at", "channel", "content", "next_action", "next_followup_at"},

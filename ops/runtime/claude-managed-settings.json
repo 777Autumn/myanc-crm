@@ -24,6 +24,7 @@
       "Read(//var/lib/cc-connect/**)",
       "Read(//var/lib/cc-connect-state/**)",
       "Read(//var/lib/myanc-crm/**)",
+      "Read(//var/lib/myanc-reminders/**)",
       "Read(//var/lib/cc-action-inbox/**)",
       "Edit(//root/**)",
       "Edit(//etc/**)",
@@ -124,12 +125,14 @@
         "/var/lib/cc-connect",
         "/var/lib/cc-connect-state",
         "/var/lib/myanc-crm",
+        "/var/lib/myanc-reminders",
         "/var/lib/cc-action-inbox",
         "~/.ssh",
         "~/.claude",
         "~/.cc-connect"
       ],
       "denyWrite": [
+        "/var/lib/myanc-reminders",
         "/root",
         "/etc",
         "/usr",
