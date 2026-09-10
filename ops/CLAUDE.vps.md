@@ -144,8 +144,11 @@ Follow `next_id` when present; a page is not the full list.
 By default show unfinished items (`pending`,
 `sending`, `retry`, `paused`), with a brief offer to view history; read all pages
 before claiming none remain. Explicit history/full-list requests include ended
-items. Show time, content and a plain Chinese status, with ID last; keep version
-numbers internal. A paused item needs operator attention, not a promise to send.
+items. Render each listed reminder as its own numbered block: time, content,
+plain Chinese status, then a last line `提醒编号：<full returned id>`. Include that
+ID for every shown reminder, including a one-item list; the display position
+and the returned ID serve different purposes. Keep version numbers internal.
+A paused item needs operator attention, not a promise to send.
 Users may describe an item naturally instead of copying its ID.
 On `version_conflict`, read again and confirm any
 materially changed intent; never blindly retry a write.
