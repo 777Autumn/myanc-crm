@@ -152,8 +152,51 @@ automatic restarts, intact reminder DB and six model-user EACCES results.
 No code/configuration, credential, permission or business-data change occurred.
 Backups preserve evidence only; no database restore or reinitialization happened.
 
-**Incomplete:** test list/update/cancel and cross-user management-refusal live
-cases; post-upgrade live CRM/knowledge
+### Additional test management and privacy acceptance
+
+Recorded on 2026-09-10 after the preceding recovery checkpoint. These cases use
+only the user's fictional acceptance requests. No additional deployment, restart,
+identity change or business-data operation was performed for these checks.
+
+| Case | Observed result | Evidence boundary |
+|---|---|---|
+| test private management, 16:47–16:50 | One `TEST-MANAGE-0910` item: create v1 for September 11 09:00; list; update v2 to 10:00 with revised text; list; cancel v3 without batch/receipt | Bounded actual test-private turn has exactly five successful tool calls and two matching list results; persisted results agree. No third list or new phone-rendering claim |
+| test cross-user refusal, 16:53 | Request to cancel Owner's fictional management item was refused; only test's two items were listed, Owner's ID excluded | Actual turn made only reminder-list, not reminder-cancel. This proves live model refusal and scoped listing, not a live host not_found rejection |
+| Group full list to private, 17:00 | Group returned private_list_queued without reminder bodies; complete two-item list appeared in test private chat | User phone screenshots, actual group tool result and persisted one-attempt sent list batch with receipt agree; fixed recipient is test private, not the group |
+
+For the group full-list case, the actual group tool result contained no reminders
+array and no private `TEST-MANAGE-0910` content or identifier. The group assistant
+reply also excluded that private canary. The group-created `TEST-0910` item was
+already present in group history; it is not used as a private-content canary.
+This evidence concerns the inspected turn, not every historical model context.
+
+The list batch contains exactly the two known test items: sent v1 and cancelled
+v3. It has no associated reminder items, so sending the list did not schedule a
+reminder again. The cancelled management item still has no send batch or receipt.
+Earlier items and batches remain unchanged, allowing the separately documented
+restart delivery and test management transitions. At 17:07, all 56 tracked runtime
+hashes and four business DB logical snapshots matched; the same healthy service
+had six engines, one receiver/listener, zero restarts/errors, reminder integrity
+ok and six model-user EACCES results.
+
+Operator-local redacted evidence: `test-manage-live-20260910.md`,
+`test-cross-user-live-20260910.md`, `test-private-list-live-20260910.md`, with
+read-only reconciliation helpers. Raw screenshots, transcripts, private identity
+values, delivery receipts and databases are not uploaded to this repository.
+
+### Focused automated regression recheck
+
+At 17:10 Beijing the unchanged gateway feature worktree was checked tree-identical
+to the installed source `fe9e12a4cea9f818a380ea6a839d39a030cb48ca`.
+Using Go 1.25.6 on Windows, ten selected tests passed without skips:
+CUSTOMER1, KNOWLEDGE1, REMINDER1, both A3 image CUJs, B1 new-session, C5 stop,
+PARTNER1 restricted commands, single-image dispatch and fixed-group private-image
+quote denial. Packages: `core` and `platform/feishu`, `-count=1`.
+These use fixture model/platform boundaries; they do not query or write live
+CRM/knowledge data, call live Feishu, or replace the remaining live checks.
+The earlier full Linux CI and paired candidate tests remain separate evidence.
+
+**Incomplete:** post-upgrade live CRM/knowledge
 interaction regression, image, `/new` and `/stop`. Earlier session-transition text
 in a screenshot does not establish a fresh command regression test. Existing
 CI/CUJ and historical tests do not replace these checks. Wang remains authorized;
