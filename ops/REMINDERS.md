@@ -1,7 +1,9 @@
 # Reminder delivery runbook
 
-Status: implementation under validation; **not deployed or enabled**.
-Follow [the shared release contract](RELEASE.md). Current code and templates do
+Status: implementation merged; the authorized VPS deployment was enabled on
+2026-09-10. **Live acceptance is incomplete**; see the
+[deployment record](releases/2026-09-10-reminders.md).
+Follow [the shared release contract](RELEASE.md). Code and templates alone do
 not establish live acceptance. Default: no `MYANC_REMINDER_DB`, no scheduler.
 
 ## Candidate and maintenance
