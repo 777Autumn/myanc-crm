@@ -132,6 +132,40 @@ class CustomerTests(unittest.TestCase):
         self.assertEqual("needs_input", unknown["status"])
         self.assertEqual(["member@example.com"], self.backend.lookups)
 
+    def test_roster_name_is_reverified_and_reference_is_principal_scoped(self):
+        config = copy.deepcopy(CONFIG)
+        config["allowed_actors"]["member-sender"] = {
+            "display_name": "示例同事", "feishu_user_id": "ou_member"}
+        request = {"query": "示例同事"}
+        first = resolve_assignee(request, self.backend, self.ledger, config, PRINCIPAL)
+        self.assertEqual("resolved", first["status"])
+        other = {**PRINCIPAL, "session_key": "another-session"}
+        second = resolve_assignee(request, self.backend, self.ledger, config, other)
+        self.assertEqual("resolved", second["status"])
+        self.assertNotEqual(first["owner_ref"], second["owner_ref"])
+        self.assertIsNone(self.ledger.get_assignee(first["owner_ref"], other))
+        self.assertEqual([], self.backend.lookups)
+        self.backend.people["ou_member"]["name"] = "新姓名"
+        changed = resolve_assignee(request, self.backend, self.ledger, config, PRINCIPAL)
+        self.assertEqual("assignee_changed", changed["code"])
+        del self.backend.people["ou_member"]
+        self.assertNotEqual("resolved", resolve_assignee(
+            request, self.backend, self.ledger, config, PRINCIPAL)["status"])
+
+    def test_roster_ambiguity_and_spoofed_cache_never_choose_first(self):
+        config = copy.deepcopy(CONFIG)
+        config["allowed_actors"]["member-sender"] = {
+            "display_name": "示例同事", "feishu_user_id": "ou_member"}
+        self.ledger.remember_assignee(PRINCIPAL, {"id": "ou_wrong", "name": "示例同事"})
+        result = resolve_assignee({"query": "示例同事"}, self.backend, self.ledger, config, PRINCIPAL)
+        self.assertEqual("ou_member", self.ledger.get_assignee(result["owner_ref"], PRINCIPAL)["id"])
+        config["allowed_actors"]["duplicate"] = {
+            "display_name": "示例同事", "feishu_user_id": "ou_wrong"}
+        self.assertEqual("assignee_ambiguous", resolve_assignee(
+            {"query": "示例同事"}, self.backend, self.ledger, config, PRINCIPAL)["code"])
+        self.assertEqual("needs_input", resolve_assignee(
+            {"query": "示例同是"}, self.backend, self.ledger, config, PRINCIPAL)["status"])
+
     def test_unicode_customer_creation_preview_and_raw_write_keep_original_spelling(self):
         name, contact = "示例公司（新建）①", "联系人Ａ"
         staged = self.stage(self.create_request(name=name, contact=contact))
