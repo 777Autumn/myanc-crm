@@ -115,7 +115,9 @@ def output_schema():
             "action": {"enum": actions}, "at": at, "destination": destination,
             "reply": {"type": "string"}}, "required": ["action", "at", "destination", "reply"],
             "additionalProperties": False})
-    return {"type": "object", "oneOf": branches}
+    # Claude's tool schema requires a plain root object; unions are nested.
+    return {"type": "object", "properties": {"decision": {"oneOf": branches}},
+            "required": ["decision"], "additionalProperties": False}
 
 
 def diagnostic_excerpt(text):
@@ -138,6 +140,8 @@ def parse_model_output(stdout):
         parsed = envelope.get("structured_output")
         if parsed is None:
             parsed = json.loads(envelope.get("result"))
+        if isinstance(parsed, dict) and "decision" in parsed:
+            parsed = parsed["decision"]
         return parsed, None, envelope
     except (ValueError, TypeError):
         return None, phase, envelope
@@ -182,7 +186,7 @@ def main():
                 "--json-schema", json.dumps(output_schema()),
                 "--output-format", "json", "--system-prompt", system + stage,
                 reference + text,
-            ], cwd=cwd, text=True, encoding="utf-8", capture_output=True, timeout=180)
+            ], cwd=cwd, stdin=subprocess.DEVNULL, text=True, encoding="utf-8", capture_output=True, timeout=180)
         parsed, parse_failure, envelope = parse_model_output(proc.stdout)
         model_error = bool(envelope.get("is_error"))
         failures = ["invalid_model_output"] if parse_failure else grade(case, parsed)

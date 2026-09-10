@@ -48,7 +48,9 @@ class ReminderEvalTests(unittest.TestCase):
 
     def test_schema_enforces_format_without_supplying_case_answer(self):
         self.assertEqual("object", output_schema()["type"])
-        branches = output_schema()["oneOf"]
+        self.assertEqual(["decision"], output_schema()["required"])
+        self.assertFalse(output_schema()["additionalProperties"])
+        branches = output_schema()["properties"]["decision"]["oneOf"]
         self.assertEqual({"create", "private_list", "clarify", "none", "unsupported"},
                          {action for branch in branches for action in branch["properties"]["action"]["enum"]})
         for branch in branches:
@@ -64,6 +66,8 @@ class ReminderEvalTests(unittest.TestCase):
             self.assertTrue(diagnostic_excerpt(raw))
         raw = '{"structured_output":{"action":"none","at":null,"destination":null,"reply":"测试"}}'
         self.assertIsNone(parse_model_output(raw)[1])
+        nested = '{"structured_output":{"decision":{"action":"none","at":null,"destination":null,"reply":"测试"}}}'
+        self.assertEqual(parse_model_output(raw)[0], parse_model_output(nested)[0])
         diagnostic = diagnostic_excerpt("startup email@example.invalid Bearer fake-secret sk-fixture access_token=fake-secret")
         for secret in ("email@example.invalid", "fake-secret", "sk-fixture"):
             self.assertNotIn(secret, diagnostic)
