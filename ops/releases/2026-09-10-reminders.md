@@ -1,9 +1,10 @@
-# One-shot reminders: deployed, live acceptance incomplete
+# One-shot reminders: deployed, Owner/test acceptance recorded
 
 Recorded 2026-09-10. Owner explicitly authorized the reminder maintenance window,
 backup, enabling and fictional Owner/test acceptance. The service was started
 with the new candidate at 07:04 UTC (15:04 Beijing). This record is not an
-authorization for further deployments and does not claim human acceptance.
+authorization for further deployments. Live acceptance is scoped below; the
+initial cutover alone did not establish human acceptance.
 
 ## Source delivery and installed version
 
@@ -196,11 +197,47 @@ These use fixture model/platform boundaries; they do not query or write live
 CRM/knowledge data, call live Feishu, or replace the remaining live checks.
 The earlier full Linux CI and paired candidate tests remain separate evidence.
 
-**Incomplete:** post-upgrade live CRM/knowledge
-interaction regression, image, `/new` and `/stop`. Earlier session-transition text
-in a screenshot does not establish a fresh command regression test. Existing
-CI/CUJ and historical tests do not replace these checks. Wang remains authorized;
-his live reminder acceptance is explicitly unexecuted, as requested by the user.
+### Authorized live read-only, image and session regression
+
+At 17:20–17:30 Beijing, after explicit action-time Owner permission, Computer Use
+sent only the agreed tests in Owner's existing private bot conversation. No group
+message, identity switch, service restart or business-data mutation was performed.
+
+- `OWNER-READONLY-0910`: actual `crm-tool open` returned an HTTPS entry, rendered
+  as the CRM link in the bot reply. The link was not navigated in this batch; no
+  new table-rendering claim. The same turn invoked the knowledge skill and
+  `team-brain-tool knowledge_search` twice for synthetic absent text in team
+  scope. Both returned zero sources without tool errors; the reply reported no
+  match with a coverage caveat. Five tools total, including skill/read, completed
+  17:20:57; skill expansion was a metadata row, not another human request.
+- `OWNER-IMAGE-0910`: the old local image file was missing. The original fictional
+  image was found in Owner-private history, visually checked, copied from the
+  image viewer and sent as a new image-and-text message. The 17:24:40 input has
+  one actual image block; zero tools, completed 17:24:46. The visible reply matches
+  the fictional company, contact and `IMG-CANARY-0709`. This verifies new image
+  delivery/recognition, not blind OCR in a context that had never seen the image.
+- `/new OWNER-SESSION-0910`: audit at 17:26:04 and visible confirmation agree.
+  The next request used a different gateway session and `is_resume=false`.
+- `/stop`: a no-tools fictional story began at 17:26:48, then was stopped at
+  17:27:14 with a visible stopped receipt. No completed story reply/tool call was
+  recorded. The 17:28:19 follow-up resumed the same gateway session and completed
+  at 17:28:24 with zero tools and the exact visible reply `停止后会话正常`.
+  A resumed model spawn is recorded; do not claim the model process stayed alive.
+
+At 17:30 the same service had zero restarts/errors, six engines, one receiver and
+tool listener, five shared WebSocket reusers and one outbound 443 connection.
+All 56 runtime hashes and four business DB logical snapshots matched; reminder
+integrity and six model-user EACCES checks passed. Existing reminder items/batches
+were preserved with no new ones. Operator-local redacted evidence is
+`owner-regression-live-20260910.md`; raw transcripts, images, identifiers, private
+URLs, receipts and databases are not uploaded.
+
+The authorized Owner/test reminder acceptance and this selected live regression
+batch are recorded. **Not rerun live:** CRM write approvals, knowledge publish/
+cards, positive retrieval and the broader permission matrix; prior CI/CUJ evidence
+is separate. Wang remains authorized, with his own live reminder acceptance
+explicitly waived/unexecuted as requested. This is not a claim that every original
+plan condition or presentation requirement is complete.
 
 UX observation: creation replies show date/weekday/time/content/ID but do not
 consistently say delivery is private, and some include a generic delivery caveat.
