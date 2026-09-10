@@ -1,0 +1,6 @@
+# Merge into the existing configuration, preserving all identity/project fields.
+# Check all six project overrides: they take priority over this global section.
+[display]
+reply_footer = false
+hide_agent_footer = true
+final_response_only = true

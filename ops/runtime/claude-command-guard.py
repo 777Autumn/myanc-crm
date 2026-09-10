@@ -26,6 +26,10 @@ if not isinstance(command, str) or not command.strip():
 
 blocked_literals = (
     "MYANC_REMINDER_DB",
+    "MYANC_OPS_ALERT_DB",
+    "MYANC_OPS_ALERT_OWNER_PROJECT",
+    "ops-alerts-init",
+    "/var/lib/myanc-ops-alerts",
     "/var/lib/myanc-reminders",
     "MYANC_CRM_HOST_SECRET",
     "MYANC_CRM_HOST_SECRET_FILE",

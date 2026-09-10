@@ -28,12 +28,25 @@ def _person(value):
 
 
 def resolve_assignee(request, backend, ledger, config, principal):
-    """Use an already verified person or an exact phone/user-email lookup."""
+    """Resolve trusted roster names, scoped cache, or exact phone/user-email."""
     try:
         principal = core._principal(principal)
         core._actor_for_principal(principal, config)
         core._only_keys(core._mapping(request, "request"), {"query"})
         query = core._required_text(request.get("query"), "query", 256)
+        # The administrator's roster wins over any same-name historical cache.
+        # Roster membership grants no new assistant access or approval authority.
+        roster = [actor for actor in config.get("allowed_actors", {}).values()
+                  if actor.get("display_name") == query]
+        if roster:
+            if len(roster) != 1:
+                return _needs(["exact_phone_or_user_email"], "assignee_ambiguous")
+            identifier = core._required_text(roster[0].get("feishu_user_id"), "assignee.id", 128)
+            person = _person(backend.get_assignee(identifier))
+            if person["id"] != identifier or person["name"] != query:
+                return _needs(["exact_phone_or_user_email"], "assignee_changed")
+            ref = ledger.remember_assignee(principal, person)
+            return {"status": "resolved", "owner_ref": ref, "name": core._fence_value(person["name"])}
         cached = ledger.find_assignees(query, principal)
         if cached:
             choices = [{"owner_ref": row["ref"], "name": core._fence_value(row["name"])} for row in cached]

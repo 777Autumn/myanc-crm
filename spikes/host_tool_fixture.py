@@ -42,9 +42,10 @@ class PersistentFakeFeishu(HistoryBackend):
         else:
             # Eval-only paired fixtures: do not add these claims to demo/live data.
             seed = os.environ.get("MYANC_SPIKE_SEED", "")
-            if seed not in {"", "term-ambiguous", "term-defined", "customer-trial"}:
+            if seed not in {"", "term-ambiguous", "term-defined", "customer-trial",
+                            "customer-roster", "customer-roster-ambiguous"}:
                 raise ValueError("Unknown offline fixture seed")
-            if seed == "customer-trial":
+            if seed.startswith("customer-"):
                 self.schema["customers"].append("operation_id")
                 self.customers["rec-1"].update(stage="新线索", owner=[self.people["ou_member"]])
                 self.save()
@@ -114,9 +115,15 @@ def main():
     sys.stdout.reconfigure(encoding="utf-8")
     # Configuration and external Feishu are the injected system boundaries.
     # Host authentication, envelope checks, SQLite, claim and apply stay real.
+    config = copy.deepcopy(CONFIG)
+    if os.environ.get("MYANC_SPIKE_SEED", "").startswith("customer-roster"):
+        config["allowed_actors"]["sender-2"] = {
+            "display_name": "示例同事", "feishu_user_id": "ou_member"}
+        if os.environ["MYANC_SPIKE_SEED"] == "customer-roster-ambiguous":
+            config["allowed_actors"]["sender-1"]["display_name"] = "示例同事"
     with (
         mock.patch.object(cli, "_config_path", return_value=directory / "fixture-config-unused"),
-        mock.patch.object(cli, "_load_config", return_value=CONFIG),
+        mock.patch.object(cli, "_load_config", return_value=config),
         mock.patch.object(cli, "_runtime", side_effect=lambda *_: (
             PersistentFakeFeishu(directory), core.Ledger(directory / "ledger.sqlite3"))),
         mock.patch.object(cli, "LarkCliBackend", side_effect=AssertionError("No live Lark in fixture")),

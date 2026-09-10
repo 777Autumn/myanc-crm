@@ -27,8 +27,8 @@ sender/chat, profile, Base/table/record ID, token, endpoint, or approval flag.
 - `result`: `{"change_id":"the opaque ID returned by stage"}`. Query pending or
   completed outcomes without staging again. Use customer to refresh current facts
   if needed, then continue discussing with the user.
-- `assignee`: `{"query":"exact phone, user email, or previously verified name"}`.
-  Resolve through the configured bot only, confirm the returned name with the user,
+- `assignee`: `{"query":"exact trusted roster name, phone, user email, or previously verified name"}`.
+  Resolve through the configured bot only, compare the returned name to the user's supplied name,
   and reuse its opaque `owner_ref`. Never guess an unknown person or treat customer
   ownership as permission to operate or approve the assistant. Ambiguous people
   require an exact phone/user email; do not search the unrestricted directory.
