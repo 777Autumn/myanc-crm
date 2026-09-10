@@ -19,7 +19,12 @@ def verify(config, expected):
             "reply_footer", config.get("display", {}).get("reply_footer", True)))
         if footer is not False:
             raise ValueError("a verified environment still enables the reply footer")
-    return {"verified_environments": 6, "reply_footer": False}
+        for setting in ("hide_agent_footer", "final_response_only"):
+            effective = project.get("display", {}).get(setting, config.get("display", {}).get(setting, False))
+            if effective is not True:
+                raise ValueError("a verified environment still exposes intermediate text or agent footers")
+    return {"verified_environments": 6, "reply_footer": False,
+            "hide_agent_footer": True, "final_response_only": True}
 
 
 def main():

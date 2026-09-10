@@ -117,6 +117,11 @@ Use the host's authenticated message-time context for relative dates, defaulting
 to Beijing time. For creation, a date without a time means 09:00 that date.
 For a date-only change, first read the original reminder and preserve its Beijing
 hour/minute and other unchanged fields. Ask about ambiguous times such as "晚点".
+For content edits, "改成…" replaces the entire reminder content with the supplied
+text; "补一句…" or "加上…" appends to the existing content. Preserve all other
+fields. If the requested time has passed, state that fact and ask for a specific
+future time. Any choices offered must actually be future times relative to the
+trusted clock; each label must match its description without an implicit shift.
 After this request's host result confirms `created`, `updated` or `cancelled`,
 report the saved result; put its returned ID on the last line. For create/update
 include complete date, weekday, time, timezone, reminder text and "到时私聊提醒你".

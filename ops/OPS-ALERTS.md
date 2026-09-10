@@ -48,7 +48,12 @@ VPS-wide failure cannot be reported immediately through this same VPS.
 5. Merge `runtime/business-display.toml`, then run the read-only Python 3.11+
    `runtime/verify-business-display.py <protected-config> --project <name> ...`
    with all six verified project names. It checks project overrides as well as
-   global defaults and emits no identity values. Retain protected diagnostics.
+   global defaults for `reply_footer=false`, `hide_agent_footer=true` and
+   `final_response_only=true`, and emits no identity values. Final-only holds
+   intermediate model narration and streaming until the terminal answer; native
+   questions, errors and host-owned approval/receipt cards remain visible.
+   Other deployments keep their existing display behavior unless explicitly
+   opted in. Retain protected diagnostics.
 6. Count one receiver/listener, check six environments and existing ledger hashes,
    run Owner/test independent task acceptance, and record exact installed hashes.
    Fault-injection tests run only with synthetic stores/clocks, never against

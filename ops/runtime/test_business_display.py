@@ -11,7 +11,7 @@ spec.loader.exec_module(display)
 class BusinessDisplayTests(unittest.TestCase):
     def setUp(self):
         self.names = [f"fixture-{i}" for i in range(6)]
-        self.config = {"display": {"reply_footer": False}, "projects": [{"name": n} for n in self.names]}
+        self.config = {"display": {"reply_footer": False, "hide_agent_footer": True, "final_response_only": True}, "projects": [{"name": n} for n in self.names]}
 
     def test_all_six_and_no_configuration_mutation(self):
         before = copy.deepcopy(self.config)
@@ -33,6 +33,19 @@ class BusinessDisplayTests(unittest.TestCase):
                 display.verify(config, self.names)
         with self.assertRaises(ValueError):
             display.verify(self.config, self.names[:5])
+
+    def test_intermediate_text_and_agent_footer_must_be_hidden_in_each_project(self):
+        for setting in ("final_response_only", "hide_agent_footer"):
+            with self.subTest(setting=setting):
+                config = copy.deepcopy(self.config)
+                config["projects"][2]["display"] = {setting: False}
+                with self.assertRaises(ValueError):
+                    display.verify(config, self.names)
+                config["projects"][2]["display"][setting] = True
+                display.verify(config, self.names)
+                config["display"].pop(setting)
+                with self.assertRaises(ValueError):
+                    display.verify(config, self.names)
 
 
 if __name__ == "__main__":
