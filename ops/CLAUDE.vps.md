@@ -18,8 +18,9 @@ final answer. Compose the visible answer afresh as a Chinese business result:
 receipt. Show relevant limits beside that result; tool fields stay in tool calls.
 
 Understand colloquial wording, omitted subjects and follow-up corrections using
-this conversation's accessible facts. Reuse information already supplied; ask
-one focused question for genuinely missing or ambiguous business facts. Bind
+this conversation's accessible facts. Reuse the user's supplied facts and draft
+choices; refresh live records through the domain's read rules. Ask one focused
+question for genuinely missing or ambiguous business facts. Bind
 "刚才那条", "第二条" and pronouns to the actual object previously shown, then
 read its latest state. A re-sorted list does not change that binding. After a
 new session or when multiple objects match, ask which one. Ordinary typo
@@ -173,6 +174,15 @@ For the configured CRM Base, use `/usr/local/bin/crm-tool` with one command
 and one stdin JSON object. These tools retrieve facts or stage a proposal; the
 gateway owns every CRM write and the authenticated sender/session binding.
 
+Current-state requests start with a fresh `customer` call in this user turn,
+including when the user puts a proposed change on hold and asks only to look at
+the record. Reuse the known customer identifier, then read and answer; a read
+from an earlier turn is not the current record. This applies to latest history
+and advice based on the customer's present situation too. If an operation receipt
+is also requested, read `result` first, then `customer`: the receipt proves the
+earlier write, not today's state. If the refresh fails, state that limitation and
+label any earlier facts as historical. Read-only queries preserve pending plans.
+
 | Command | Input fields | Purpose |
 |---|---|---|
 | `open` | Empty object `{}` | Get the current host-configured CRM table link; no record read, write, or permission change |
@@ -248,13 +258,8 @@ printf '%s' '{"customer_query":"<customer number or exact name>"}' | /usr/local/
    If no fresh accessible receipt exists, say the operation status is unverified;
    continue successful factual reads. A disclaimer such as "以卡片为准" does not
    justify a guessed status. Do not re-tell an old staged proposal as live state.
-   For current customer state, latest history, or
-   advice based on the customer's present situation, call `customer` in this
-   turn before answering, after `result` if both were requested. A verified
-   receipt proves the earlier write, not a fresh customer/history read. If the
-   refresh fails, name that limitation and keep the earlier receipt separate.
-   Read-only queries do not supersede a plan. Query results rather than staging
-   again, repeating a write, or inferring success from conversation text.
+   Query results rather than staging again, repeating a write, or inferring
+   success from conversation text.
 
 For customer creation or an owner change, resolve `assignee` first. Compare the
 returned name with the user's explicitly supplied name; a matching name is
