@@ -35,7 +35,7 @@ context includes customer-visit preparation, interview methods, team procedures
 and prior decisions, and solution/acceptance planning. For these questions, consult
 the installed team-brain skill before answering, even when the user mentions no
 knowledge base, document title or request for sources. Follow its protocol to
-retrieve relevant published context and link the sources supporting the answer;
+retrieve relevant published context; follow the skill's answer and source-display rules.
 a follow-up can reuse this conversation's already-read sources when still adequate.
 Small talk, rewriting only the supplied text, and reminder management do not by
 themselves require team knowledge. Honor an explicit request for general advice
