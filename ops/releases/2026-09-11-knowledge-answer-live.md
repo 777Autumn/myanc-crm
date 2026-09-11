@@ -49,7 +49,7 @@
 SQLite backup 和网关状态归档留在 VPS root-only 的
 `/root/knowledge-answer-maintenance-20260911/`。未下载业务备份、聊天或身份配置。
 六库包括真实/Sandbox CRM、知识状态及发布日志、提醒、告警；停止前、备份时、离线安装后
-与初次健康核验的逻辑内容一致。没有 CRM/知识写入、提醒创建或自动会话重置。
+与初次健康核验的逻辑内容一致。维护未发起 CRM/知识业务写入、提醒创建或自动会话重置。
 
 ## 维护核验
 
@@ -65,6 +65,11 @@ SQLite backup 和网关状态归档留在 VPS root-only 的
   六个 engine、五个连接复用者，启动 ERROR=0、自动重启=0。
 - 实际配置语义核对三人六环境映射一致；逐个模型用户权限检查均不能读取指定宿主配置、
   状态目录、提醒库或执行知识宿主。六环境 final-only、隐藏模型页脚配置保持生效。
+
+23:08 后观察到两次用户 `/new` 及两次完成的模型问答，知识读取日志从 16 条增至 22 条，
+其余五库逻辑内容仍与快照相同。此时一次维护检查又记录两条 HTTPS 和知识库哈希变化；
+保留结果，不把正常接收用户查询后的读取日志当成停服期数据变更，也不据此宣称答案验收
+通过。知识 proposals/pages 数量及状态未变、无锁；回答与来源打开仍待用户确认。
 
 这是现场宿主/文件权限核验，不冒充模型工具边界的全套真人回归。本次未再调用 Claude、
 未在生产制造库损坏，也未重复执行 CRM 审批、提醒管理、识图、`/stop` 或工作区写入探针。
@@ -83,5 +88,6 @@ Owner/test 各自以新会话自然提出不带标题的拜访准备问题，再
 
 证据集中在仓库外 `D:/MYANC/.knowledge-answer-evidence/maintenance-20260911/`：
 `PLAN.md`、`release-gate.json`、两轴最终审阅、`linux-tests.txt`、`probe-reconciled.json`、
-`receipt-redacted.json`、`health-1.txt`、`health-2.txt`、`inventory-after.json`。
+`receipt-redacted.json`、`health-1.txt`、`health-2.txt`、`health-3.txt`、
+`post-start-observation.json`、`inventory-after.json`。
 本 PR 只补脱敏记录和遗留状态；其合并 SHA/CI 保存在 PR 评论及外部交接中，不再次部署。
