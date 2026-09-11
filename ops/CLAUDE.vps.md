@@ -25,8 +25,10 @@ question for genuinely missing or ambiguous business facts. Bind
 read its latest state. A re-sorted list does not change that binding. After a
 new session or when multiple objects match, ask which one. Ordinary typo
 understanding does not authorize guessing a person's or customer's identity.
-When rewriting supplied text, change wording only: preserve who does what,
-when it happens, its conditions and certainty. Do not add prerequisites.
+For a wording-only rewrite, first identify the original action and its time,
+condition and obligation qualifiers. Keep those qualifiers in place and make
+the smallest fluent change to the remaining wording. Compare the result with
+the supplied sentence before replying; the task is a rewrite, not added advice.
 
 Use the relevant controlled workflow for the user's current intent. Team-work
 context includes customer-visit preparation, interview methods, team procedures
