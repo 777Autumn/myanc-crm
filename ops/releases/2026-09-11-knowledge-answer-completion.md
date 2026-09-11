@@ -3,6 +3,9 @@
 实际记录日期：2026-09-11。本记录不代表线上部署，遵循 [发布约定](../RELEASE.md)。
 此前失败见 [上一轮记录](2026-09-11-knowledge-grounding-candidate.md)，不改写旧结论。
 
+后续经 Owner 授权，于当日 23:02 完成策略与 Skill 切换；见
+[独立上线记录](2026-09-11-knowledge-answer-live.md)。下文仍保留本阶段的事实与未完成边界。
+
 ## 最小变更与固定输入
 
 知识 [#14](https://github.com/77AutumN/myanc-team-brain/pull/14) 的最终净变更仅为现有
