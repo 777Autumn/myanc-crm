@@ -3,6 +3,11 @@
 Recorded 2026-09-12, Beijing time. Scope: [Issue #27](https://github.com/77AutumN/myanc-crm/issues/27).
 This is source/test evidence, not a deployment receipt.
 
+Subsequent delivery: PR #28 merged and exact main CI passed; the separately
+authorized [September 12 maintenance](../releases/2026-09-12-approval-expiry-live.md)
+installed the fix and verified host recovery. The original phase statements below
+remain historical; no new production expired-write experiment was performed.
+
 ## Change and boundary
 
 The host execution entry now samples the monotonic start alongside its trusted
