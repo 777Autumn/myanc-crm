@@ -23,6 +23,50 @@ class ReleaseGateTests(unittest.TestCase):
     def test_complete_exact_run_passes(self):
         gate.validate_run(self.repo, self.sha, "push", self.run, self.jobs)
 
+    def test_knowledge_requires_all_four_exact_matrix_jobs(self):
+        repo = "77AutumN/myanc-team-brain"
+        jobs = [dict(name=f"test ({os_name}, {python})", status="completed", conclusion="success")
+                for os_name in ("ubuntu-latest", "windows-latest") for python in ("3.11", "3.13")]
+        gate.validate_run(repo, self.sha, "push", self.run, jobs)
+        for missing in range(4):
+            with self.assertRaises(ValueError):
+                gate.validate_run(repo, self.sha, "push", self.run, jobs[:missing] + jobs[missing + 1:])
+        for changed in ({"name": "test"}, {"conclusion": "skipped"}, {"conclusion": "failure"}):
+            with self.assertRaises(ValueError):
+                gate.validate_run(repo, self.sha, "push", self.run, [dict(jobs[0], **changed), *jobs[1:]])
+
+    def test_explicit_source_mapping_supports_legacy_and_three_repositories(self):
+        old = {"77AutumN/myanc-crm": "a" * 40, "77AutumN/cc-connect-anc": "b" * 40}
+        self.assertEqual(gate.source_commits("a" * 40, "b" * 40), old)
+        self.assertEqual(gate.source_commits("a" * 40, "b" * 40, "c" * 40),
+                         {**old, "77AutumN/myanc-team-brain": "c" * 40})
+        with self.assertRaises(ValueError):
+            gate.source_commits("a" * 40, "b" * 40, "")
+
+    def test_three_source_incident_cannot_be_closed_with_two_source_mapping(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            record = root / "state.json"
+            record.write_text(json.dumps(dict(version=1, reconciliation="audit", incidents=[])), encoding="utf-8")
+            evidence = root / "evidence.json"
+            opened = dict(id="synthetic", owner_approval="explicit fixture approval", audit_reference="fixture",
+                          crm_sha="a" * 40, gateway_sha="b" * 40, knowledge_sha="c" * 40,
+                          candidate_sha256="d" * 64, validation="fixture", backup="fixture")
+            evidence.write_text(json.dumps(opened), encoding="utf-8")
+            with patch.object(gate, "STATE", record), patch.object(gate, "released", return_value={}) as released:
+                gate.state_change("open", evidence)
+                mappings = {repo: dict(original=sha, merged="e" * 40, evidence="audited")
+                            for repo, sha in gate.source_commits("a" * 40, "b" * 40).items()}
+                resolution = dict(id="synthetic", owner_approval="explicit", audit_reference="fixture", mappings=mappings)
+                evidence.write_text(json.dumps(resolution), encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    gate.state_change("close", evidence)
+                self.assertEqual(gate.read_state()["incidents"][0]["status"], "open")
+                mappings["77AutumN/myanc-team-brain"] = dict(original="c" * 40, merged="f" * 40, evidence="audited")
+                evidence.write_text(json.dumps(resolution), encoding="utf-8")
+                self.assertEqual(gate.state_change("close", evidence)["incidents"][0]["status"], "closed")
+                released.assert_any_call("77AutumN/myanc-team-brain", "f" * 40)
+
     def test_stale_sha_wrong_workflow_event_or_incomplete_run_rejected(self):
         for key, value in [("head_sha", "b" * 40), ("path", ".github/workflows/stale.yml"),
                            ("event", "schedule"), ("status", "in_progress"),

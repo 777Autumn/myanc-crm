@@ -15,6 +15,10 @@ REPOS = {
     "77AutumN/cc-connect-anc": {
         "lint", "unit-test", "smoke-test", "regression-test", "performance-test"
     },
+    "77AutumN/myanc-team-brain": {
+        f"test ({runner}, {python})"
+        for runner in ("ubuntu-latest", "windows-latest") for python in ("3.11", "3.13")
+    },
 }
 WORKFLOW = ".github/workflows/ci.yml"
 STATE = Path("D:/MYANC/.release-state/state.json")
@@ -28,6 +32,13 @@ def require(condition, message):
 def sha(value):
     require(bool(re.fullmatch(r"[0-9a-f]{40}", value)), "full commit SHA required")
     return value
+
+
+def source_commits(crm_sha, gateway_sha, knowledge_sha=None):
+    sources = {"77AutumN/myanc-crm": sha(crm_sha), "77AutumN/cc-connect-anc": sha(gateway_sha)}
+    if knowledge_sha is not None:
+        sources["77AutumN/myanc-team-brain"] = sha(knowledge_sha)
+    return sources
 
 
 def command(*args):
@@ -189,8 +200,9 @@ def state_change(action, evidence_file):
             if action == "open":
                 require(not any(item["id"] == incident_id for item in record["incidents"]),
                         "incident already recorded")
-                for field in ("crm_sha", "gateway_sha"):
-                    sha(evidence.get(field, ""))
+                source_commits(evidence.get("crm_sha", ""), evidence.get("gateway_sha", ""), evidence.get("knowledge_sha"))
+                require("knowledge_sha" not in evidence or evidence["knowledge_sha"] is not None,
+                        "knowledge SHA cannot be null")
                 require(bool(re.fullmatch(r"[0-9a-f]{64}", evidence.get("candidate_sha256", ""))),
                         "frozen candidate digest required")
                 require(evidence.get("validation") and evidence.get("backup"),
@@ -201,9 +213,11 @@ def state_change(action, evidence_file):
                 require(len(items) == 1 and items[0]["status"] == "open", "open incident not found")
                 item = items[0]
                 mappings = evidence.get("mappings", {})
-                for repo, field in zip(REPOS, ("crm_sha", "gateway_sha")):
+                originals = source_commits(item["crm_sha"], item["gateway_sha"], item.get("knowledge_sha"))
+                require(set(mappings) == set(originals), "all and only original source mappings required")
+                for repo, original in originals.items():
                     mapping = mappings.get(repo, {})
-                    require(mapping.get("original") == item[field] and mapping.get("evidence"),
+                    require(mapping.get("original") == original and mapping.get("evidence"),
                             "original-to-merged mapping evidence required")
                     mapping["github"] = released(repo, mapping.get("merged", ""))
                 item.update(status="closed", resolution=evidence)
@@ -228,6 +242,7 @@ def main():
     release = sub.add_parser("release")
     release.add_argument("crm_sha", type=sha)
     release.add_argument("gateway_sha", type=sha)
+    release.add_argument("--knowledge-sha", type=sha)
     state = sub.add_parser("state")
     state.add_argument("operation", choices=("initialize", "open", "close"))
     state.add_argument("--evidence", required=True)
@@ -239,7 +254,7 @@ def main():
     else:
         ordinary_allowed()
         result = {repo: released(repo, commit) for repo, commit in
-                  zip(REPOS, (args.crm_sha, args.gateway_sha))}
+                  source_commits(args.crm_sha, args.gateway_sha, args.knowledge_sha).items()}
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
