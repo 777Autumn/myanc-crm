@@ -1,11 +1,13 @@
 """Two operators through the real host protocol; only Feishu is a fixture."""
 
 import copy
+import errno
 import multiprocessing
 import os
 import sqlite3
 import time
 import unittest
+from unittest import mock
 from contextlib import closing
 from datetime import datetime, timedelta
 import threading
@@ -184,12 +186,27 @@ class PartnerConcurrencyTests(unittest.TestCase):
         worker.start()
         try:
             self.assertTrue(entered.wait(3))
-            timer = threading.Timer(0.3, release.set)
-            timer.start()
-            self.addCleanup(timer.join)
-            before_expiry = datetime.fromisoformat(staged["expires_at"].replace("Z", "+00:00")) - timedelta(seconds=0.15)
-            with closing(core.Ledger(self.path)) as ledger:
+            clock = [100.0]
+            contended = []
+            try_lock = write_locks._try_lock
+
+            def release_on_contention(fd):
+                try:
+                    return try_lock(fd)
+                except OSError as exc:
+                    if exc.errno in (errno.EACCES, errno.EAGAIN) and not contended:
+                        contended.append(True)
+                        # Advance only after the real OS lock rejected this attempt.
+                        clock[0] += 2
+                        release.set()
+                    raise
+
+            before_expiry = datetime.fromisoformat(staged["expires_at"].replace("Z", "+00:00")) - timedelta(seconds=1)
+            with closing(core.Ledger(self.path)) as ledger, \
+                    mock.patch.object(core.time, "monotonic", side_effect=lambda: clock[0]), \
+                    mock.patch.object(write_locks, "_try_lock", side_effect=release_on_contention):
                 result = core.execute_claimed_approval(approval, self.backend, ledger, CONFIG, now=before_expiry)
+                self.assertEqual([True], contended)
                 self.assertEqual("expired", result["code"], result)
                 self.assertEqual("expired", ledger.get(staged["change_id"])["state"])
                 self.assertEqual(0, ledger._db.execute("SELECT count(*) FROM write_fences").fetchone()[0])
@@ -200,6 +217,49 @@ class PartnerConcurrencyTests(unittest.TestCase):
             if worker.is_alive():
                 worker.terminate()
                 worker.join()
+
+    def test_prelock_elapsed_time_counts_for_every_approved_write(self):
+        for operation in ("stage-customer-create", "stage-customer-update", "stage"):
+            for delayed_method in ("get_approval", "claim"):
+                for elapsed in (0.25, 2.0):
+                    with self.subTest(operation=operation, delay=delayed_method, elapsed=elapsed):
+                        self.backend = CustomerBackend()
+                        if operation == "stage-customer-create":
+                            _, person = self.call("assignee", {"query": "member@example.com"})
+                            request = {"name": "虚构计时验收", "contact": "示例甲",
+                                       "stage": "新线索", "owner_ref": person["owner_ref"]}
+                        elif operation == "stage-customer-update":
+                            request = {"customer_query": "C-001", "changes": {"stage": "已联系"}}
+                        else:
+                            request = {"customer_query": "C-001", "occurred_at": "2026-09-08T10:00:00+08:00",
+                                       "content": "虚构计时验收"}
+                        approval = self.prepare_request(operation, request)
+                        with closing(core.Ledger(self.path)) as ledger:
+                            staged = ledger.get(ledger.get_approval(approval["approval_id"])["change_id"])
+                            moment = datetime.fromisoformat(staged["expires_at"].replace("Z", "+00:00")) - timedelta(seconds=1)
+                            clock = [100.0]
+                            original = getattr(ledger, delayed_method)
+
+                            def delayed(*args):
+                                result = original(*args)
+                                clock[0] = 100.0 + elapsed
+                                return result
+
+                            with mock.patch.object(core.time, "monotonic", side_effect=lambda: clock[0]), \
+                                    mock.patch.object(ledger, delayed_method, side_effect=delayed):
+                                result = core.execute_claimed_approval(approval, self.backend, ledger, CONFIG, now=moment)
+                            if elapsed > 1:
+                                self.assertEqual("expired", result["code"], result)
+                                self.assertEqual("expired", ledger.get(staged["change_id"])["state"])
+                                self.assertEqual([], self.backend.actions)
+                                replay = core.execute_claimed_approval(approval, self.backend, ledger, CONFIG, now=moment)
+                                self.assertTrue(replay["replayed"])
+                                self.assertEqual("expired", replay["code"])
+                                self.assertEqual([], self.backend.actions)
+                            else:
+                                self.assertEqual("verified", result["status"], result)
+                                self.assertTrue(self.backend.actions)
+                            self.assertEqual(0, ledger._db.execute("SELECT count(*) FROM write_fences").fetchone()[0])
 
     @unittest.skipUnless(os.name == "posix", "Linux lock file boundary")
     def test_unsafe_lock_entries_fail_closed_without_writes(self):

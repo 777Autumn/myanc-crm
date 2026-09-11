@@ -319,8 +319,10 @@ def _observed_result(staged, actual, backend, ledger, moment):
     return core._finish(ledger, staged["change_id"], "verified", result)
 
 
-def apply_customer(staged, backend, ledger, moment):
+def apply_customer(staged, backend, ledger, moment, *, started=None):
     """Called only after core checks a claimed host approval; never retries writes."""
+    if started is None:  # Direct in-process callers start timing at this entry.
+        started = core.time.monotonic()
     change_id = staged["change_id"]
     state = staged["state"]
     if staged.get("receipt") and state not in {"staged", "applying"}:
@@ -334,7 +336,7 @@ def apply_customer(staged, backend, ledger, moment):
     if not ledger.claim(change_id):
         return {"status": "verification_unknown", "code": "apply_in_progress", "change_id": change_id}
     return core._run_customer_write(staged, ledger, moment,
-                                    lambda effective: _apply_claimed_customer(staged, backend, ledger, effective))
+                                    lambda effective: _apply_claimed_customer(staged, backend, ledger, effective), started)
 
 
 def _apply_claimed_customer(staged, backend, ledger, moment):

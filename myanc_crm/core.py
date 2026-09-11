@@ -1387,6 +1387,7 @@ def execute_claimed_approval(
 ) -> dict[str, Any]:
     """Execute only an approval already claimed by the authenticated host."""
 
+    started = time.monotonic()
     try:
         moment = _now(now)
         _only_keys(command, {"approval_id", "principal"})
@@ -1447,10 +1448,10 @@ def execute_claimed_approval(
     customer_operation = staged.get("operation_type") in {"customer_create", "customer_update"}
     if customer_operation:
         from .customers import apply_customer
-        result = apply_customer(staged, backend, ledger, moment)
+        result = apply_customer(staged, backend, ledger, moment, started=started)
     else:
         result = _apply_approved_followup(
-            approval["change_id"], approval_id, backend, ledger, moment
+            approval["change_id"], approval_id, backend, ledger, moment, started
         )
     if result.get("code") == "apply_in_progress":
         return {**result, "approval_id": approval_id, "approval_state": "executing"}
@@ -1543,6 +1544,7 @@ def _apply_approved_followup(
     backend: Backend,
     ledger: Ledger,
     moment: datetime,
+    started: float,
 ) -> dict[str, Any]:
     """Apply one host-approved change and verify the observable CRM state."""
 
@@ -1593,7 +1595,7 @@ def _apply_approved_followup(
         }
 
     return _run_customer_write(staged, ledger, moment,
-                               lambda effective: _apply_claimed_followup(staged, backend, ledger, effective))
+                               lambda effective: _apply_claimed_followup(staged, backend, ledger, effective), started)
 
 
 def _apply_claimed_followup(staged, backend, ledger, moment):
@@ -2341,8 +2343,8 @@ def _write_scopes(staged: Mapping[str, Any]) -> tuple[str, ...]:
     return tuple(sorted(scopes))
 
 
-def _run_customer_write(staged, ledger, moment, execute):
-    started = time.monotonic()
+def _run_customer_write(staged, ledger, moment, execute, started):
+    # Include approval reads and claim time, not just time spent waiting for locks.
     try:
         with ledger.customer_write(staged):
             effective = moment + timedelta(seconds=time.monotonic() - started)
