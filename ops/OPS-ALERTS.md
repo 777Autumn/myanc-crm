@@ -1,4 +1,9 @@
-# Host operations alerts — candidate, not enabled
+# Host operations alerts
+
+The managed six-environment VPS enabled this module in the separately authorized
+[September 11 maintenance](releases/2026-09-11-bot-ux-live.md). Other deployments
+remain disabled without explicit configuration and initialization. Live fault
+delivery and colleague trial are not implied by the synthetic tests or startup check.
 
 Follow [RELEASE.md](RELEASE.md). This module adds no model command, receiver,
 listener, credential or native timer access. It observes reminder health through
