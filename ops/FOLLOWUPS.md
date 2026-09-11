@@ -10,6 +10,12 @@ Post-merge version and CI evidence is in the
 authorized deployment and actual checks are in the
 [live maintenance record](releases/2026-09-11-bot-ux-live.md); earlier evidence is
 not retrospectively relabelled as live acceptance.
+The later knowledge catalog cutover is recorded separately in the
+[catalog live record](releases/2026-09-11-knowledge-catalog-live.md); source discovery
+is deployed. The untitled-question trial is partial: test's new-session lookup and
+both source links passed; Owner's old session and controlled new-session retest
+both skipped retrieval. First-query triggering remains unresolved; follow-ups
+remain pending.
 
 | Item | State / evidence | Next action and acceptance condition |
 | --- | --- | --- |
@@ -22,10 +28,14 @@ not retrospectively relabelled as live acceptance.
 | Native reminder acceptance defects found September 10 | Historical counts unchanged: later fixed-pair run 17 code passes, 3 quota-blocked, 1 not run; wording-only findings are nonblocking; September 11 representative native scope completed | Retain actual messages/questions and tool results; repeat functional failures only as needed, not style-only cases |
 | Native representative model coverage | CRM/reminder/image 12 passes on d5c67095/2a798f53, two earlier-pair passes, knowledge three-turn pass and four historical cases on c9310282 are recorded separately | Representative scope complete; stop further quota use absent functional changes; no fake-agent or live-acceptance substitution |
 | Knowledge canary installer permissions | First attempt blocked before tools by workspace/skill directory permissions; private fixture corrected, one three-turn native rerun passed | Retain failed evidence and test-only Agent/Task budget guard; do not apply these temporary permissions to production |
+| Natural knowledge discovery without exact titles | Catalog/read/scoped-cursor implementation merged in knowledge #12, gateway #9 and CRM #20; exact main CI and three-source CUJs passed; authorized catalog deployment and live isolation checks completed; test new-session lookup called catalog and two reads without errors, both sources opened | Owner old session AND user-started new-session same-question retest called no tool. First-query triggering remains a functional defect; investigate entry/skill selection, then validate without a document title or coached trigger. Both follow-ups remain pending |
+| Knowledge trigger diagnosis and English narration | Owner new-session native trace confirms no retrieval, ruling out old context alone; test new session retrieved sources but showed one English process sentence | Do not repeat /new as a fix or count coached follow-up as original-query acceptance. No silent reset/live prompt patch; English wording alone remains nonblocking under practical acceptance scope |
+| Catalog maintenance umask regression | Independent script review found root-only new directory access before execution; explicit root:root/0755 and seven real-account import checks fixed it; 14 Linux synthetic checks passed | Preserve this one-time release evidence; do not rerun historical installation scripts |
+| Selected recordings / Miaoji transcript curation | Later phase, not implemented or ingested in catalog release | Select authorized material first; filter and draft for human review before publication; no automatic scan or wholesale transcript ingestion |
 | Isolated tool transport interruption | One September 11 retest stopped on transport_unavailable before the original failing turn; no recurrence in the bounded diagnostic batch, cause unknown | Preserve failed attempt; do not claim root-cause resolution or weaken sandbox; investigate if it recurs |
 | 2026-09-08 expression candidate | Failed acceptance, never published; new policy passed selected factual regressions and exact fixed-stage replies | Keep original failures; new results are not retroactive approval of the old candidate |
 | Old-policy native session restoration | Historical 37a70b2f policy resumed into d5c67095; cancelled/pending pair passed with fresh original-operation receipts | Preserve actual native resume evidence; do not infer approval status from history absence |
-| Owner/test unguided daily tasks | Not executed for this candidate | Only task goals: CRM entry, Sandbox profile/follow-up with approvals, reminder management, knowledge query; record any needed coaching |
+| Owner/test unguided daily tasks | Prior Owner knowledge screenshots showed an untitled-query miss then an exact-title answer with an openable source; that is symptom/partial-use evidence, not acceptance of the new catalog version | Remaining task goals: CRM entry, Sandbox profile/follow-up with approvals, reminder management, new untitled knowledge query; record actual account/version and any needed coaching |
 | CI runtime upgrade | Deferred, not a current failed CI claim | Separate compatibility PR and complete workflow tests |
 | Login repair later evidence reconciliation | Deferred; repair alone does not prove root cause | Reconcile sanitized post-repair evidence without changing credentials |
 | Original dirty worktree cleanup | Deferred | Inventory user-owned edits; obtain scope before moving/removing; never bundle research or runtime data |
