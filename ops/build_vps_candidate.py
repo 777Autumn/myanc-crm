@@ -1,4 +1,4 @@
-"""Build a candidate from two merged SHAs; never install or contact the VPS."""
+"""Build a candidate from explicit merged SHAs; never install or contact the VPS."""
 import argparse
 import hashlib
 import json
@@ -19,10 +19,15 @@ def run(args, cwd, env=None):
     subprocess.run(args, cwd=cwd, env=env, check=True)
 
 
-def build_environment(crm):
+def build_environment(crm, knowledge=None):
     env = os.environ.copy()
     for name in ("GOOS", "GOARCH", "CGO_ENABLED", "GOFLAGS", "GOWORK", "GOENV"):
         env.pop(name, None)
+    for name in list(env):
+        if name == "MYANC_TEAM_BRAIN_ROOT" or name.startswith(("MYANC_REAL_CLAUDE_", "MYANC_REAL_KNOWLEDGE_")):
+            env.pop(name)
+    if knowledge is not None:
+        env["MYANC_TEAM_BRAIN_ROOT"] = str(knowledge)
     env.update(GOENV="off", GOWORK="off", GOFLAGS="", GOTOOLCHAIN="local",
                GOEXPERIMENT="", GOAMD64="v1", MYANC_SPIKE_CRM_ROOT=str(crm))
     return env
@@ -36,6 +41,8 @@ def paired_tests(gateway, env):
     events = [json.loads(line) for line in output.splitlines() if line.strip()]
     required = {"TestCUJ_CRMIPC1_CustomerApprovalAndContinuedDiscussion",
                 "TestCUJ_CRMIPC2_ProfileThenIndependentFollowup"}
+    if "MYANC_TEAM_BRAIN_ROOT" in env:
+        required.add("TestCUJ_KNOWLEDGEIPC2_CatalogReadFollowupAndScope")
     passed = {item.get("Test") for item in events if item.get("Action") == "pass"}
     gate.require(required <= passed, "required cross-repo journeys did not execute successfully")
     gate.require(any(item.get("Action") == "pass" and item.get("Test", "").startswith("TestCUJ")
@@ -72,12 +79,12 @@ def export(repo, commit, destination):
             source.extractall(destination, filter="data")
 
 
-def build(crm_sha, gateway_sha, output):
+def build(crm_sha, gateway_sha, output, knowledge_sha=None):
     output = Path(output).resolve()
     gate.require(not output.exists(), "candidate output already exists")
     gate.ordinary_allowed()
-    evidence = {repo: gate.released(repo, commit) for repo, commit in
-                zip(gate.REPOS, (crm_sha, gateway_sha))}
+    sources = gate.source_commits(crm_sha, gateway_sha, knowledge_sha)
+    evidence = {repo: gate.released(repo, commit) for repo, commit in sources.items()}
     versions = {name: gate.command("pnpm.cmd" if os.name == "nt" and name == "pnpm" else name, *args) for name, args in
                 (("go", ("version",)), ("node", ("--version",)), ("pnpm", ("--version",)),
                  ("python", ("--version",)))}
@@ -87,13 +94,18 @@ def build(crm_sha, gateway_sha, output):
         crm, gateway = root / "crm", root / "gateway"
         export("77AutumN/myanc-crm", crm_sha, crm)
         export("77AutumN/cc-connect-anc", gateway_sha, gateway)
+        knowledge = root / "knowledge" if knowledge_sha is not None else None
+        if knowledge is not None:
+            export("77AutumN/myanc-team-brain", knowledge_sha, knowledge)
         # No worktree or pre-existing ignored web assets are consulted.
         run(["pnpm", "install", "--frozen-lockfile"], gateway / "web")
         run(["pnpm", "build"], gateway / "web")
-        env = build_environment(crm)
+        env = build_environment(crm, knowledge)
         run(["go", "mod", "verify"], gateway, env)
         run(["python", "-m", "unittest", "discover", "-s", "tests"], crm, env)
         run(["python", "-m", "unittest", "discover", "-s", "spikes"], crm, env)
+        if knowledge is not None:
+            run(["python", "-m", "unittest", "discover", "-s", "tests"], knowledge, env)
         journeys = paired_tests(gateway, env)
         env.update(GOOS="linux", GOARCH="amd64", CGO_ENABLED="0")
         binary = root / "cc-connect-anc"
@@ -101,13 +113,15 @@ def build(crm_sha, gateway_sha, output):
                       "./cmd/cc-connect"]
         run(build_args, gateway, env)
         manifest = {"created_at": datetime.now(timezone.utc).isoformat(),
-                    "sources": dict(zip(gate.REPOS, (crm_sha, gateway_sha))),
+                    "sources": sources,
                     "github": evidence, "toolchain": versions, "build": build_args[:-3] + build_args[-1:],
                     "target": "linux/amd64 CGO_ENABLED=0 GOENV=off GOWORK=off GOFLAGS=",
                     "vcs": "exported source; buildvcs=false",
                     "paired_tests": {"crm_sha": crm_sha, "gateway_sha": gateway_sha,
                                      "MYANC_SPIKE_CRM_ROOT": "fresh CRM export", "passed": journeys},
                     "files": {}}
+        if knowledge_sha is not None:
+            manifest["paired_tests"].update(knowledge_sha=knowledge_sha, MYANC_TEAM_BRAIN_ROOT="fresh knowledge export")
         bundle = root / "bundle"
         bundle.mkdir()
         shutil.copy2(binary, bundle / binary.name)
@@ -115,6 +129,14 @@ def build(crm_sha, gateway_sha, output):
                         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         shutil.copytree(crm / "ops", bundle / "ops",
                         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        if knowledge is not None:
+            for directory in ("team_brain", "skills"):
+                shutil.copytree(knowledge / directory, bundle / "knowledge" / directory,
+                                ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+            templates = bundle / "knowledge" / "ops"
+            templates.mkdir()
+            for name in ("team-brain-host.example", "host.example.json"):
+                shutil.copy2(knowledge / "ops" / name, templates / name)
         for path in sorted(bundle.rglob("*")):
             if path.is_file():
                 manifest["files"][path.relative_to(bundle).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -135,6 +157,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("crm_sha", type=gate.sha)
     parser.add_argument("gateway_sha", type=gate.sha)
+    parser.add_argument("--knowledge-sha", type=gate.sha)
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
-    print(json.dumps(build(args.crm_sha, args.gateway_sha, args.output), indent=2))
+    print(json.dumps(build(args.crm_sha, args.gateway_sha, args.output, args.knowledge_sha), indent=2))

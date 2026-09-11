@@ -1,7 +1,8 @@
 # CRM / gateway delivery contract
 
 This is the authoritative development handoff and VPS release contract for the
-private repositories `77AutumN/myanc-crm` and `77AutumN/cc-connect-anc`.
+private repositories `77AutumN/myanc-crm`, `77AutumN/cc-connect-anc` and
+`77AutumN/myanc-team-brain` when the knowledge runtime is in the candidate.
 
 ## Completion
 
@@ -33,7 +34,7 @@ Run `python ops/release_gate.py merge --help`; its default checks only, while
 `--execute` performs the head-matched squash merge. It fixes the target to main
 and the CI workflow to `.github/workflows/ci.yml`. Required jobs live in the
 tool's REPOS mapping. Missing, failed, pending or skipped jobs reject delivery.
-After merging, run the release check against both exact merge SHAs; scheduled
+After merging, run the release check against all candidate merge SHAs; scheduled
 workflows and old green attempts are not substitutes.
 
 ## VPS candidate
@@ -46,6 +47,27 @@ assets, explicitly pairs the CRM fixture with gateway Journey/CUJ tests, and
 cross-builds Linux/amd64. Full Linux suites remain required in exact-SHA CI.
 It packages code and versioned runtime templates, never production configuration,
 credentials, SQLite ledgers, real chats or historical research binaries.
+
+For a knowledge change, also supply `--knowledge-sha <full-merged-SHA>` to both
+the release check and candidate builder. The original two-SHA interface remains
+for candidates that do not change knowledge; it does not verify or package a
+knowledge version. The catalog release requires all three SHAs. Knowledge CI must
+pass all four `test (runner, python)` matrix jobs (Ubuntu/Windows, 3.11/3.13), not
+an unrelated or aggregate `test` green light.
+
+Three-source builds export the exact knowledge commit, run its tests, and set
+`MYANC_TEAM_BRAIN_ROOT` as well as `MYANC_SPIKE_CRM_ROOT` to fresh exports. The
+named catalog Engine/Brain journey must actually pass, not skip. Ambient local
+knowledge paths and live-model canary flags are removed. The bundle includes
+knowledge runtime/client, skill with its protocol, and non-sensitive host templates;
+it excludes bootstrap/first-install scripts. Every packaged file is hashed.
+
+An existing knowledge host must be upgraded, not reinitialized. Before a later
+authorized maintenance window, reconcile installed wrapper/runtime/client/skill
+hashes and any historical compatibility patches with these source versions. Back
+up and retain the existing protected configuration and publication journal. Do not
+rerun first installation, bootstrap seed registration, or roll a business journal
+back to an earlier snapshot. Candidate creation is not cutover authorization.
 
 The candidate manifest records source SHAs, CI, toolchain, parameters and hashes.
 This command has no installation or VPS access. Existing Makefile targets remain
@@ -67,6 +89,11 @@ digest, validate, back up, then record `state open` with `id`, `owner_approval`,
 `audit_reference`, `crm_sha`, `gateway_sha`, `candidate_sha256`, `validation` and
 `backup`. The ordinary candidate entrance stays blocked until the debt is closed;
 there is no persistent bypass switch or automatic installation path.
+
+Include `knowledge_sha` when the incident candidate contains knowledge. Closing
+requires exactly the repositories recorded at incident creation; a two-source
+mapping cannot discharge three-source debt. Existing two-source incidents remain
+compatible and do not acquire an invented historical knowledge version.
 
 Use `state close` only after backfill. Its evidence binds the same incident and
 contains `mappings` keyed by each repository: `original`, `merged`, and an audited
