@@ -1,6 +1,6 @@
 # Tracked delivery and experience follow-ups
 
-Updated 2026-09-11. This ledger distinguishes implemented source, GitHub delivery
+Updated 2026-09-12. This ledger distinguishes implemented source, GitHub delivery
 and online acceptance under [RELEASE.md](RELEASE.md); it is not a deployment receipt.
 The current model acceptance scope is defined once in the
 [candidate record](acceptance/2026-09-10-bot-ux-candidate.md#当前验收口径2026-09-10-用户调整):
@@ -55,6 +55,7 @@ revision is not a new deployment or a new live-model run.
 | 2026-09-08 expression candidate | Failed acceptance, never published; new policy passed selected factual regressions and exact fixed-stage replies | Keep original failures; new results are not retroactive approval of the old candidate |
 | Old-policy native session restoration | Historical 37a70b2f policy resumed into d5c67095; cancelled/pending pair passed with fresh original-operation receipts | Preserve actual native resume evidence; do not infer approval status from history absence |
 | Owner/test unguided daily tasks | New-version knowledge first queries, natural follow-ups and requested-source answers now passed within the recorded scope. Original September 10 reminder acceptance remains complete, not relabelled as a new run | Remaining new-version task goals: CRM entry, Sandbox profile/follow-up with approvals and ordinary reminder management. Local evidence reconciliation found no completed record for those new-version daily tasks; record actual account/version and any coaching, without replaying the entire old test matrix |
+| Pre-write approval expiry and contention-test timing | [Issue #27](https://github.com/77AutumN/myanc-crm/issues/27): local isolated real-clock/SQLite/fake-backend experiment reproduced an old pre-guard elapsed-time gap. Separately, early Timer scheduling reproduced the CI expiry-test failure. Relevant runtime/test code is unchanged in the source-display revision; an unchanged CI retry passing does not fix either finding | Prioritize a separate expiry fix and synchronized regression. No production misuse established, no hotfix performed; hold a future runtime release until independent review, full CI and authorized maintenance. Do not waive expiry/zero-write checks or mix this into a wording-only deployment |
 | CI runtime upgrade | Deferred, not a current failed CI claim | Separate compatibility PR and complete workflow tests |
 | Login repair later evidence reconciliation | Deferred; repair alone does not prove root cause | Reconcile sanitized post-repair evidence without changing credentials |
 | Original dirty worktree cleanup | Deferred | Inventory user-owned edits; obtain scope before moving/removing; never bundle research or runtime data |
