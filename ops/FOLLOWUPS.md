@@ -14,8 +14,11 @@ The later knowledge catalog cutover is recorded separately in the
 [catalog live record](releases/2026-09-11-knowledge-catalog-live.md); source discovery
 is deployed. The untitled-question trial is partial: test's new-session lookup and
 both source links passed; Owner's old session and controlled new-session retest
-both skipped retrieval. First-query triggering remains unresolved; follow-ups
-remain pending.
+both skipped retrieval. Owner's later explicitly guided follow-up retrieved and
+cited a page (screenshot and native trace), without a separately confirmed link
+click. Test's follow-up reused its previously read source; its UI/click result is
+not separately confirmed. These do not close the first-query trigger defect.
+The scoped follow-up is [implicit knowledge intent](acceptance/2026-09-11-knowledge-intent.md).
 
 | Item | State / evidence | Next action and acceptance condition |
 | --- | --- | --- |
@@ -28,7 +31,7 @@ remain pending.
 | Native reminder acceptance defects found September 10 | Historical counts unchanged: later fixed-pair run 17 code passes, 3 quota-blocked, 1 not run; wording-only findings are nonblocking; September 11 representative native scope completed | Retain actual messages/questions and tool results; repeat functional failures only as needed, not style-only cases |
 | Native representative model coverage | CRM/reminder/image 12 passes on d5c67095/2a798f53, two earlier-pair passes, knowledge three-turn pass and four historical cases on c9310282 are recorded separately | Representative scope complete; stop further quota use absent functional changes; no fake-agent or live-acceptance substitution |
 | Knowledge canary installer permissions | First attempt blocked before tools by workspace/skill directory permissions; private fixture corrected, one three-turn native rerun passed | Retain failed evidence and test-only Agent/Task budget guard; do not apply these temporary permissions to production |
-| Natural knowledge discovery without exact titles | Catalog/read/scoped-cursor implementation merged in knowledge #12, gateway #9 and CRM #20; exact main CI and three-source CUJs passed; authorized catalog deployment and live isolation checks completed; test new-session lookup called catalog and two reads without errors, both sources opened | Owner old session AND user-started new-session same-question retest called no tool. First-query triggering remains a functional defect; investigate entry/skill selection, then validate without a document title or coached trigger. Both follow-ups remain pending |
+| Natural knowledge discovery without exact titles | Catalog/read/scoped-cursor implementation merged in knowledge #12, gateway #9 and CRM #20; exact main CI and three-source CUJs passed; authorized catalog deployment and live isolation checks completed; test new-session lookup called catalog and two reads without errors, both sources opened | Owner old session AND user-started new-session same-question retest called no tool. First-query triggering remains a functional defect. Later coached Owner answer has screenshot plus successful reads/citation; test follow-up reused its read source. Neither follow-up's link/UI evidence closes original-query acceptance. Repair entry/skill selection and validate ordinary, uncoached questions |
 | Knowledge trigger diagnosis and English narration | Owner new-session native trace confirms no retrieval, ruling out old context alone; test new session retrieved sources but showed one English process sentence | Do not repeat /new as a fix or count coached follow-up as original-query acceptance. No silent reset/live prompt patch; English wording alone remains nonblocking under practical acceptance scope |
 | Catalog maintenance umask regression | Independent script review found root-only new directory access before execution; explicit root:root/0755 and seven real-account import checks fixed it; 14 Linux synthetic checks passed | Preserve this one-time release evidence; do not rerun historical installation scripts |
 | Selected recordings / Miaoji transcript curation | Later phase, not implemented or ingested in catalog release | Select authorized material first; filter and draft for human review before publication; no automatic scan or wholesale transcript ingestion |
