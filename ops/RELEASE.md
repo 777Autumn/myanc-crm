@@ -74,6 +74,10 @@ This command has no installation or VPS access. Existing Makefile targets remain
 general development/upstream builds, not substitutes for this VPS entry.
 Installation still uses the existing approved maintenance workflow and business
 safety checks. Save sanitized acceptance and version mappings under `ops/releases/`.
+For an authorized service start or protective pause, use the candidate's shared
+[maintenance startup helper](MAINTENANCE_START.md); its receipt contract and bounded
+identity wait replace historical immediate process-name checks. Keep subsequent
+application-health, stable-window and business-state verification separate.
 
 ## Emergency exception and shared state
 
