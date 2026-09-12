@@ -36,6 +36,22 @@ count check caused a protective pause; one separately authorized recovery correc
 the check and passed the stable-window, control-file, isolation and store checks.
 No new live-model or colleague acceptance is inferred from that maintenance.
 
+The [September 12 transcript-intake record](acceptance/2026-09-12-transcript-intake.md)
+records the first three selected, de-identified trial suggestions published through
+the Owner's real private-chat approval card and verified readback. Two subsequent
+Owner-authorized, operator-sent questions in the same old session received visible
+replies but failed overall acceptance: the model did not read the newly published
+body and carried forward an obsolete pending-approval claim. This is not an
+uncoached Owner trial or a runtime deployment. The intake turn also exposed a
+source-interpretation defect: the model called existing templates empty despite
+three successful, nonempty reads. A minimal Skill candidate is in
+[knowledge PR #16](https://github.com/77AutumN/myanc-team-brain/pull/16), merged as
+`b093670c0c3f7dab8ba923a2869e1284db628152` after exact-head independent source review
+and PR CI. Its four required exact-merge push CI jobs also passed, verified by the
+release gate. It is not installed or exercised in a real-model candidate regression. The Owner has
+explicitly waived the new Sandbox profile/follow-up trial; it is not a required
+remaining task and is not recorded as passed.
+
 | Item | State / evidence | Next action and acceptance condition |
 | --- | --- | --- |
 | Historical GitHub reconciliation / release gate | Complete, `releases/2026-09-09-backfill.md` and exact merge evidence | Keep gate in supported candidate path; no automatic VPS deploy |
@@ -55,12 +71,15 @@ No new live-model or colleague acceptance is inferred from that maintenance.
 | Rewrite temporal fidelity (P3) | Positive rewrite procedure passed one prior combined-candidate sample, with no tool calls; earlier failures remain recorded. CRM #23 policy included in this installed candidate | Rewrite not retested in the P2 three-turn trial or this maintenance; source equivalence and deployment are not new behavioral evidence |
 | Knowledge example assumptions / redundant execution question | Latest passing native visit trial includes a suggested “three or four revisions” confirmation and asks whether to execute after explicit analysis-only intent; no customer fact assertion or tool operation occurred | Nonblocking UX follow-up: use the customer's actual number in examples, and finish after explicit analysis. Retain observations without more style-only model trials or weakening authorization |
 | Catalog maintenance umask regression | Independent script review found root-only new directory access before execution; explicit root:root/0755 and seven real-account import checks fixed it; 14 Linux synthetic checks passed | Preserve this one-time release evidence; do not rerun historical installation scripts |
-| Selected recordings / Miaoji transcript curation | Later phase, not implemented or ingested in catalog release | Select authorized material first; filter and draft for human review before publication; no automatic scan or wholesale transcript ingestion |
+| Selected recordings / Miaoji transcript curation | First selected batch published through the Owner's real private-chat approval card on September 12: three de-identified, unverified trial suggestions; host readback `verified`, revision 2 to 3, original 57 non-root blocks retained, one append and unchanged 9-page/8-team-page counts. [Intake record](acceptance/2026-09-12-transcript-intake.md) | Publication is complete for this batch only. Two authorized operator-sent post-publication questions were partly useful but failed overall: no new-body read and an obsolete pending claim. This was not an uncoached Owner trial or a candidate regression. Remaining recordings are not implicitly reviewed or published |
+| Existing-template emptiness claim | September 12 intake turn described existing templates as empty, but the three successful tool results contained 452, 397 and 468 body characters without truncation. This is a contradiction between the answer and available read evidence, not a retrieval outage or style-only defect | Minimal Skill candidate merged in knowledge PR #16 with exact-merge push CI verified; real-model candidate regression not run and candidate not installed. Keep the focused template-vs-filled-record check; successful content publication does not close this defect |
+| Obsolete pending-approval claim after publication | At 12:58:47 the authorized operator-sent trial completed both catalog pages but did not read a body, then called the already-verified batch pending; the 13:02:09 follow-up searched with zero results and no body read, and did not correct the status. Both UI replies and complete native traces were observed; no CRM/reminder/proposal calls | Address evidence-grounded status wording and fresh body reads in knowledge PR #16, then run the bounded candidate check. Do not infer current status from old pending text or page similarity. A full proposal-status query capability is separate scope, not part of this patch |
 | Isolated tool transport interruption | One September 11 retest stopped on transport_unavailable before the original failing turn; no recurrence in the bounded diagnostic batch, cause unknown | Preserve failed attempt; do not claim root-cause resolution or weaken sandbox; investigate if it recurs |
 | Initial three-source candidate build failure | Previous full builder failed in paired Go tests without preserving the failed subprocess stdout. A separate paired diagnostic and one unchanged full-builder retry passed; initial cause remains unknown | Keep failed evidence separate from the native transport issue. On recurrence capture full subprocess output; do not attribute it to path/load or declare a root-cause fix |
 | 2026-09-08 expression candidate | Failed acceptance, never published; new policy passed selected factual regressions and exact fixed-stage replies | Keep original failures; new results are not retroactive approval of the old candidate |
 | Old-policy native session restoration | Historical 37a70b2f policy resumed into d5c67095; cancelled/pending pair passed with fresh original-operation receipts | Preserve actual native resume evidence; do not infer approval status from history absence |
-| Owner/test unguided daily tasks | New-version knowledge first queries, natural follow-ups and requested-source answers now passed within the recorded scope. Original September 10 reminder acceptance remains complete, not relabelled as a new run | Remaining new-version task goals: CRM entry, Sandbox profile/follow-up with approvals and ordinary reminder management. Local evidence reconciliation found no completed record for those new-version daily tasks; record actual account/version and any coaching, without replaying the entire old test matrix |
+| Owner/test unguided daily tasks | New-version knowledge first queries, natural follow-ups and requested-source answers passed within the recorded scope. Original September 10 reminder acceptance remains complete, not relabelled as a new run. New Sandbox profile/follow-up trial explicitly waived by the Owner on September 12, not passed | Remaining unwaived new-version daily-task evidence gaps: CRM entry and ordinary reminder management. Record actual account/version and any coaching; do not re-add the waived Sandbox trial or replay the entire old test matrix |
+| New-version Sandbox profile/follow-up trial | Waived by explicit Owner decision on September 12 after the guarded test stopped before a create approval. This is a scope change, not successful Sandbox acceptance | No mandatory retest or environment switch. Any later business action keeps its normal environment, authorization and approval checks; historical Sandbox/core acceptance remains unchanged |
 | Pre-write approval expiry and contention-test timing | [Issue #27](https://github.com/77AutumN/myanc-crm/issues/27): the [elapsed-time fix and synchronized regression](acceptance/2026-09-12-approval-expiry.md) passed red/green and Linux contention checks. PR #28 merged with exact main CI, frozen candidate installed and host recovery verified September 12 | This scoped source/GitHub/installation work is complete. No production expired-write fault injection or misuse established; preserve zero-write tests and original failing evidence, and do not substitute host recovery for new-version daily-task acceptance |
 | Maintenance startup connection classifier | The September 12 first start was protectively paused because a health check counted all HTTPS sockets as WebSocket receivers. Separately authorized recovery used SDK WebSocket lifecycle evidence, passed 13 samples over 131 seconds, and HTTPS count settled from two to one | Keep failed and recovered receipts. Unique process/receiver/listener checks remain; do not revive the HTTPS-total-equals-one startup rule or reuse the historical one-time installer |
 | CI runtime upgrade | Deferred, not a current failed CI claim | Separate compatibility PR and complete workflow tests |
@@ -70,5 +89,10 @@ No new live-model or colleague acceptance is inferred from that maintenance.
 For the September 11 Bot UX release, CRM #17 and gateway #8 are merged; exact main CI completion is recorded
 in the linked delivery record. Deployment and post-start checks are complete;
 **online colleague acceptance remains incomplete**. Owner/test independent trial
-is still required. Installed hashes and protected-store preservation are recorded
-separately from model/synthetic/historical human evidence.
+evidence is still missing for new-version CRM entry and ordinary reminder management;
+the newly waived Sandbox profile/follow-up item is excluded. Installed hashes and
+protected-store preservation are recorded separately from model/synthetic/historical
+human evidence. The first transcript batch is published, while the two authorized
+operator-sent answer trials failed overall. The source-interpretation and obsolete
+status defects remain open; the PR #16 candidate is merged but not installed or
+real-model verified.
