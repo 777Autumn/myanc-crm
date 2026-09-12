@@ -6,6 +6,7 @@ verification and protected, non-overwriting receipt writer.
 import hashlib
 import json
 from pathlib import Path
+import re
 import subprocess
 import time
 
@@ -71,7 +72,15 @@ def unit_identity(state):
             and state['KillMode'] == 'control-group'
             and state['ExecStart'].startswith('{ path=' + EXE + ' ;'), 'unexpected_unit')
     require(state['NeedDaemonReload'] == 'no', 'unit_needs_reload')
-    return {key: state[key] for key in CONFIG_KEYS}
+    # systemctl's ExecStart display also includes mutable execution status.
+    command = re.fullmatch(
+        r'\{ path=([^;{}\n]+) ; argv\[\]=(.*?) ; ignore_errors=(yes|no)'
+        r' ; start_time=\[[^\]\n]*\] ; stop_time=\[[^\]\n]*\]'
+        r' ; pid=\d+ ; code=[^;\n]* ; status=[^{}\n]* \}', state['ExecStart'])
+    require(command is not None and state['ExecStart'].count('{ path=') == 1, 'unsupported_exec_format')
+    identity = {key: state[key] for key in CONFIG_KEYS}
+    identity['ExecStart'] = command.groups()  # path, displayed argv, ignore_errors
+    return identity
 
 
 def diagnostic(state):

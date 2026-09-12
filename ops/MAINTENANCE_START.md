@@ -39,7 +39,10 @@ persisting it; any failure receipt/error takes precedence pending reconciliation
 fragment/drop-ins, credentials/configuration, ownership, modes or protected paths.
 It runs before start, before success and before protective stop; preserve the
 existing full manifest/backup/ledger checks around it. The helper also pins the
-loaded unit properties and rejects a pending daemon reload. It does not grant a
+loaded unit properties, including ExecStart's static path/argv/ignore-errors fields,
+and rejects a pending daemon reload. ExecStart's start/stop time, PID and exit
+status are runtime observations, not configuration identity. Unknown display
+formats fail closed; no static command field is silently dropped. It does not grant a
 new authorization or replace external coordination between maintenance operators.
 
 ## Lifecycle and evidence
@@ -76,6 +79,11 @@ check failure on a delayed-exec fixture; the bounded-wait implementation passes 
 Tests also cover protected pre-exec stop, uncertainty, replacement, PID reuse,
 receipts and interruption. CI exercises the real Linux `/proc` adapter with
 systemctl stubbed, never stopping or starting an actual service.
+Independent Spec review found that the first helper revision incorrectly pinned
+ExecStart's dynamic status; actual-format fixtures reproduced the failure before
+the parser was corrected. The
+[official display implementation](https://github.com/systemd/systemd/blob/main/src/systemctl/systemctl-show.c)
+defines that format. This review failure is retained, not counted as a passed revision.
 
 This fix is code/CI delivery only. No VPS invocation, production restart, model
 call, credential change, candidate rebuild or real startup-race reproduction is

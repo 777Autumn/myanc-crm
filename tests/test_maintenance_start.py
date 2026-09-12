@@ -14,13 +14,20 @@ def sample(active='active', exe=m.EXE, pid='42', **changes):
     value = dict(Id=m.UNIT, LoadState='loaded', Type='simple', User='ccconnect', Group='ccconnect',
                  WorkingDirectory='/var/lib/cc-connect', KillMode='control-group',
                  FragmentPath='/etc/systemd/system/cc-connect.service', DropInPaths='',
-                 ExecStart='{ path=' + m.EXE + ' ; argv[]=fixed ; }', NeedDaemonReload='no',
+                 ExecStart=exec_status(pid='0' if active == 'inactive' else pid), NeedDaemonReload='no',
                  MainPID=pid, InvocationID='fixture-invocation', ActiveState=active,
                  SubState='running', NRestarts='0', exe=exe, process_start='123', receivers=[pid])
     if active == 'inactive':
         value.update(MainPID='0', InvocationID='', SubState='dead', exe=None, process_start=None, receivers=[])
     value.update(changes)
     return value
+
+
+def exec_status(pid='42', argv='fixed', ignore='no'):
+    start = 'n/a' if pid == '0' else 'Sat 2026-09-12 00:00:01 UTC'
+    return ('{ path=' + m.EXE + ' ; argv[]=' + argv + ' ; ignore_errors=' + ignore
+            + ' ; start_time=[' + start + '] ; stop_time=[n/a] ; pid=' + pid
+            + ' ; code=(null) ; status=0/0 }')
 
 
 class FakeSystemd:
@@ -202,6 +209,22 @@ class LifecycleTests(unittest.TestCase):
             with self.assertRaises(m.StartError):
                 m.Systemd().command('restart')
             self.assertEqual(run.call_count, 1)
+
+    def test_dynamic_exec_status_is_not_configuration_drift(self):
+        before = sample('inactive')
+        after = sample(ExecStart=exec_status().replace('stop_time=[n/a]', 'stop_time=[Sat 2026-09-12 00:01:00 UTC]')
+                       .replace('code=(null)', 'code=exited').replace('status=0/0', 'status=1'))
+        self.assertEqual(m.unit_identity(before), m.unit_identity(after))
+
+    def test_static_exec_arguments_and_flags_remain_pinned(self):
+        before = m.unit_identity(sample('inactive'))
+        for changed in (exec_status(argv='changed'), exec_status(ignore='yes')):
+            self.assertNotEqual(before, m.unit_identity(sample(ExecStart=changed)))
+
+    def test_unknown_or_multiple_exec_display_fails_closed(self):
+        for value in ('{ path=' + m.EXE + ' ; argv[]=fixed ; }', exec_status() + ' ' + exec_status()):
+            with self.subTest(value=value), self.assertRaisesRegex(m.StartError, 'unsupported_exec_format'):
+                m.unit_identity(sample(ExecStart=value))
 
     def test_show_failure_propagates_instead_of_empty_success(self):
         with patch.object(m.subprocess, 'check_output', side_effect=TimeoutError('private output')):
