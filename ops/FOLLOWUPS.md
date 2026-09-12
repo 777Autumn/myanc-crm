@@ -48,7 +48,30 @@ three successful, nonempty reads. A minimal Skill candidate is in
 [knowledge PR #16](https://github.com/77AutumN/myanc-team-brain/pull/16), merged as
 `b093670c0c3f7dab8ba923a2869e1284db628152` after exact-head independent source review
 and PR CI. Its four required exact-merge push CI jobs also passed, verified by the
-release gate. It is not installed or exercised in a real-model candidate regression. The Owner has
+release gate. It is not installed. Its first isolated real-model regression has now
+run once and failed after 77.15 seconds: template interpretation was usable, but
+the later answer searched without rereading the changed body and inferred that
+the collected suggestion was not yet included from old pending evidence. The synthetic
+proposal itself remained pending; this was not a verified fixture-ledger result.
+Gateway PR #12 (`009244cfdbb3bd7400ea58cec2b3ba0207093be2`) adds the bounded
+regression; knowledge PR #17 (`8f5c53f794b615b492305f599c4e7777c23ba7c3`) makes
+the reread step explicit. The second isolated trial on that knowledge head ran
+once in 135.95 seconds: all four code-gated turns passed and independent semantic
+review accepted the core functional scope under the Owner's practical gate. It
+read the changed body and used the new hypothesis without stale pending or
+non-inclusion assertions. This is bounded acceptance, not full semantic or
+per-turn reread compliance; residual content-boundary defects remain below.
+Both PRs completed independent source review, head-matched squash merge and exact
+main push CI: gateway `3269160359ec5c5cae004dceea86cc1f004aeb94` (five jobs, run
+[34676142562](https://github.com/77AutumN/cc-connect-anc/actions/runs/34676142562)) and
+knowledge `89d7ed11df3005328be2c4a6feb97e2ee196de53` (four matrix jobs, run
+[34676117445](https://github.com/77AutumN/myanc-team-brain/actions/runs/34676117445)).
+Reviewed and merged trees match in each repository. The prior PR #16 candidate is
+superseded and must not be installed; the supported replacement build and this
+record's own merge/CI will be attached to its PR without self-referential commits.
+Neither candidate is installed. Both trials passed temporary-token cleanup and
+production service/config preservation checks; neither is real-colleague
+acceptance. The Owner has
 explicitly waived the new Sandbox profile/follow-up trial; it is not a required
 remaining task and is not recorded as passed.
 
@@ -72,8 +95,10 @@ remaining task and is not recorded as passed.
 | Knowledge example assumptions / redundant execution question | Latest passing native visit trial includes a suggested “three or four revisions” confirmation and asks whether to execute after explicit analysis-only intent; no customer fact assertion or tool operation occurred | Nonblocking UX follow-up: use the customer's actual number in examples, and finish after explicit analysis. Retain observations without more style-only model trials or weakening authorization |
 | Catalog maintenance umask regression | Independent script review found root-only new directory access before execution; explicit root:root/0755 and seven real-account import checks fixed it; 14 Linux synthetic checks passed | Preserve this one-time release evidence; do not rerun historical installation scripts |
 | Selected recordings / Miaoji transcript curation | First selected batch published through the Owner's real private-chat approval card on September 12: three de-identified, unverified trial suggestions; host readback `verified`, revision 2 to 3, original 57 non-root blocks retained, one append and unchanged 9-page/8-team-page counts. [Intake record](acceptance/2026-09-12-transcript-intake.md) | Publication is complete for this batch only. Two authorized operator-sent post-publication questions were partly useful but failed overall: no new-body read and an obsolete pending claim. This was not an uncoached Owner trial or a candidate regression. Remaining recordings are not implicitly reviewed or published |
-| Existing-template emptiness claim | September 12 intake turn described existing templates as empty, but the three successful tool results contained 452, 397 and 468 body characters without truncation. This is a contradiction between the answer and available read evidence, not a retrieval outage or style-only defect | Minimal Skill candidate merged in knowledge PR #16 with exact-merge push CI verified; real-model candidate regression not run and candidate not installed. Keep the focused template-vs-filled-record check; successful content publication does not close this defect |
-| Obsolete pending-approval claim after publication | At 12:58:47 the authorized operator-sent trial completed both catalog pages but did not read a body, then called the already-verified batch pending; the 13:02:09 follow-up searched with zero results and no body read, and did not correct the status. Both UI replies and complete native traces were observed; no CRM/reminder/proposal calls | Address evidence-grounded status wording and fresh body reads in knowledge PR #16, then run the bounded candidate check. Do not infer current status from old pending text or page similarity. A full proposal-status query capability is separate scope, not part of this patch |
+| Existing-template emptiness claim | September 12 intake turn described existing templates as empty, but the three successful tool results contained 452, 397 and 468 body characters without truncation. Both isolated trials recognized existing guidance and an unparsed table; they read bodies containing unfilled fields without calling the templates empty. The first whole trial failed; the second knowledge PR #17 trial passed the bounded core task but later still reduced template guidance to fields | Preserve original failure and bounded improvement. Candidate not installed; the remaining template/content-boundary overstatement is a nonblocking follow-up under the practical gate, not full semantic compliance or a formatting-only issue |
+| Obsolete pending-approval claim after publication | At 12:58:47 the authorized operator-sent trial completed both catalog pages but did not read a body, then called the already-verified batch pending; the 13:02:09 follow-up searched with zero results and no body read, and did not correct the status. Both UI replies and complete native traces were observed; no CRM/reminder/proposal calls. The first isolated candidate also inferred non-inclusion from old pending evidence; the second read the changed body and no longer asserted historical pending or non-inclusion | The second isolated trial passed this bounded core check. Its synthetic proposal actually remained pending throughout, so current body inclusion is not proof of a verified proposal or callback synchronization. Do not infer current proposal state from old receipts or page similarity. A full proposal-status query capability remains separate scope; no online installation/acceptance inferred |
+| Isolated template/current-body regression | First native trial on knowledge `b093670`, gateway test `009244cf` failed after 77.15 seconds at turn 3; turn 4 was not run. Second trial on knowledge `8f5c53f` with the same CRM/test/model completed all four code-gated turns in 135.95 seconds and passed bounded core semantic review: current revision 3 read, new unverified advice used, only one real temporary-Brain proposal with a bound synthetic card, no CRM/reminder/quoted-command/extra-proposal action. Both trials preserved production service/config and cleaned temporary authentication | Retain both results separately. Gateway PR #12 and knowledge PR #17 completed independent review, merge and exact main CI; reviewed/merged trees match. Supported replacement candidate build is separate and no candidate is installed. Isolated fixture results do not replace real-colleague acceptance or prove a terminal proposal state |
+| Knowledge reread and content-boundary residuals | In the second trial, turn 4 searched twice then reused turn 3's newly read revision 3 rather than rereading each turn as the Skill directs; the fixture did not change after turn 3, so this sample had no stale body. Turn 3 still said the template only specifies fields, and both later answers overgeneralized absence of dedicated documents without retaining unparsed-table limits | Nonblocking under the Owner's practical task gate, but these are instruction/content-boundary defects, not merely formatting. Preserve them without claiming full semantic compliance or universal/per-turn freshness; do not expand the model matrix just to polish these outputs |
 | Isolated tool transport interruption | One September 11 retest stopped on transport_unavailable before the original failing turn; no recurrence in the bounded diagnostic batch, cause unknown | Preserve failed attempt; do not claim root-cause resolution or weaken sandbox; investigate if it recurs |
 | Initial three-source candidate build failure | Previous full builder failed in paired Go tests without preserving the failed subprocess stdout. A separate paired diagnostic and one unchanged full-builder retry passed; initial cause remains unknown | Keep failed evidence separate from the native transport issue. On recurrence capture full subprocess output; do not attribute it to path/load or declare a root-cause fix |
 | 2026-09-08 expression candidate | Failed acceptance, never published; new policy passed selected factual regressions and exact fixed-stage replies | Keep original failures; new results are not retroactive approval of the old candidate |
@@ -93,6 +118,12 @@ evidence is still missing for new-version CRM entry and ordinary reminder manage
 the newly waived Sandbox profile/follow-up item is excluded. Installed hashes and
 protected-store preservation are recorded separately from model/synthetic/historical
 human evidence. The first transcript batch is published, while the two authorized
-operator-sent answer trials failed overall. The source-interpretation and obsolete
-status defects remain open; the PR #16 candidate is merged but not installed or
-real-model verified.
+operator-sent answer trials failed overall. The merged PR #16 candidate's first
+isolated real-model trial failed. Further knowledge PR #17 passed the second
+trial's bounded core functional scope, with per-turn reread and content-boundary
+limitations retained as nonblocking follow-ups; it is not full semantic
+compliance. PR #17 and gateway regression PR #12 completed exact main CI delivery
+verification with merge mappings in the intake record. The superseded candidate
+remains preserved but ineligible for installation; a supported replacement build
+must be evidenced separately. No candidate installation or new real-colleague
+acceptance has occurred.
