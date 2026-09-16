@@ -273,7 +273,7 @@ def _change_result(request, principal, ledger, *, include_related=True):
         return {"status": "blocked", "code": "result_not_accessible"}
     now = datetime.now(timezone.utc)
     state = approval["state"]
-    if state == "pending" and now > datetime.fromisoformat(approval["expires_at"]):
+    if state == "pending" and now > core._parse_time(approval["expires_at"], "expires_at"):
         state = "expired"
     result = {"status": state, "change_id": request["change_id"],
               "queried_at": now.isoformat(), "receipt": approval["receipt"],

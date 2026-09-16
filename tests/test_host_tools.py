@@ -168,6 +168,14 @@ class HostToolTests(unittest.TestCase):
                 self.assertEqual("available", result["latest_operation_status"])
                 self.assertEqual(expected, operation["status"])
                 self.assertEqual(staged["change_id"], operation["change_id"])
+
+    def test_pending_result_uses_canonical_parser_for_utc_z_on_python310(self):
+        _, staged = self.call("stage", stage_command())
+        self.bind_card(staged)
+        with mock.patch.object(cli, "datetime", wraps=datetime) as legacy_datetime:
+            legacy_datetime.fromisoformat.side_effect = ValueError("Python 3.10 rejects UTC Z")
+            _, result = self.call("result", {"change_id": staged["change_id"]})
+        self.assertEqual("pending", result["status"])
                 self.assertTrue(operation["card_bound"])
                 self.assertEqual([], result["history"])
                 self.assertEqual([], self.backend.actions)
