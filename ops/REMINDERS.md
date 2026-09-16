@@ -19,9 +19,9 @@ service configuration and data, and freeze the knowledge/CRM files to preserve.
 The deployed knowledge client/protocol may be newer than old CRM templates:
 **do not replace whole runtime workspaces or managed settings from a template**.
 Apply only the reviewed reminder client/policy additions, preserving knowledge
-commands and current proxy behavior. `CLAUDE.vps.md`'s reminder section is the
-single authoritative model contract; copy that section without erasing existing
-knowledge instructions.
+commands and current proxy behavior. [team-reminders](skills/team-reminders/SKILL.md)
+owns the model contract. Install the matching policy and skill set following
+[SKILLS.md](SKILLS.md), without erasing existing knowledge instructions.
 
 Create `/var/lib/myanc-reminders` owned by `ccconnect:ccconnect`, mode 0700,
 then run the new binary's `reminders-init /var/lib/myanc-reminders/reminders.sqlite`

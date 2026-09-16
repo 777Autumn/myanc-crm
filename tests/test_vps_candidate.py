@@ -27,7 +27,11 @@ class CandidateTests(unittest.TestCase):
                 exported, commands = [], []
                 def export(repo, commit, destination):
                     exported.append((repo, commit, destination))
-                    files = {"77AutumN/myanc-crm": ["myanc_crm/cli.py", "ops/runtime.py"],
+                    files = {"77AutumN/myanc-crm": ["myanc_crm/cli.py", "ops/runtime.py",
+                                 "ops/CLAUDE.vps.md", "ops/skills/team-crm/SKILL.md",
+                                 "ops/skills/team-crm/references/tools.md",
+                                 "ops/skills/team-reminders/SKILL.md",
+                                 "ops/skills/team-reminders/references/tools.md"],
                              "77AutumN/cc-connect-anc": ["web/pnpm-lock.yaml"],
                              "77AutumN/myanc-team-brain": ["team_brain/tool.py", "team_brain/host.py",
                                  "skills/team-brain/SKILL.md", "skills/team-brain/references/tools.md",
@@ -62,6 +66,11 @@ class CandidateTests(unittest.TestCase):
                     for name, digest in result["files"].items():
                         self.assertEqual(hashlib.sha256(archive.extractfile("candidate/" + name).read()).hexdigest(), digest)
                     self.assertEqual("candidate/knowledge/team_brain/tool.py" in names, bool(knowledge_sha))
+                    for skill in ("team-crm", "team-reminders"):
+                        for name in ("SKILL.md", "references/tools.md"):
+                            path = f"ops/skills/{skill}/{name}"
+                            self.assertIn(path, result["files"])
+                            self.assertEqual(archive.extractfile("candidate/" + path).read(), b"a" * 40)
                 if knowledge_sha:
                     knowledge_root = next(destination for repo, _, destination in exported if repo.endswith("team-brain"))
                     self.assertTrue(any(cwd == knowledge_root and args[:3] == ["python", "-m", "unittest"]
