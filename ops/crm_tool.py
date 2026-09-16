@@ -18,7 +18,7 @@ FIELDS = {
     "reminder-list": {"all", "id"},
     "reminder-update": {"id", "version", "content", "at"},
     "reminder-cancel": {"id", "version"},
-    "open": set(),
+    "open": {"target"},
     "customer": {"customer_query", "history_offset"},
     "customers": {"keyword", "owner", "owner_ref", "stages", "due", "date_from", "date_to", "offset"},
     "stage": {"customer_query", "occurred_at", "channel", "content", "next_action", "next_followup_at", "remind", "backfill"},

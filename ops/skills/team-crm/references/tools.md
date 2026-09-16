@@ -15,7 +15,7 @@ label any earlier facts as historical. Read-only queries preserve pending plans.
 
 | Command | Input fields | Purpose |
 |---|---|---|
-| `open` | Empty object `{}` | Get the current host-configured CRM table link; no record read, write, or permission change |
+| `open` | Optional `target`: `mine` (default), `team`, `stages` | Get a host-selected CRM view link; no record read, write, or permission change |
 | `customers` | Optional `keyword`, `owner` (`me` default or `all`), verified `owner_ref` instead of `owner`, `stages`, `due` (`today`, `overdue`, `unscheduled`), `date_from`, `date_to`, `offset` | Find customers; bounded pages of 20 |
 | `customer` | `customer_query`; optional `history_offset` | Read current facts, pages of 10 history rows, and this session's latest stored operation |
 | `stage` | `customer_query`, `occurred_at`, `content`; optional `channel`, `next_action`, `next_followup_at`, `remind`, `backfill` | Stage a truthful communication and explicitly requested plan changes |
@@ -24,11 +24,20 @@ label any earlier facts as historical. Read-only queries preserve pending plans.
 | `stage-customer-create` | `name`, `stage`, `owner_ref`, at least one of `contact`/`phone`/`email`; optional `allow_same_name`, `followup` | Preview one new customer without writing CRM |
 | `stage-customer-update` | `customer_query`, `changes`; optional `allow_same_name`, `followup`, `remind` | Preview requested profile or independent plan changes, without inventing communication |
 
-When asked to see/open the CRM table or get its link (for example “我想看 CRM 表”),
-call `printf '%s' '{}' | /usr/local/bin/crm-tool open` in this turn and reply with
-a clickable `[打开 CRM 表格](<returned url>)`. No customer number or confirmation
-is needed. Use the returned URL exactly, including the host-selected environment;
-the link opens under the user's existing Feishu permissions and grants none.
+When asked to open CRM or “我的客户”, call
+`printf '%s' '{}' | /usr/local/bin/crm-tool open` in this turn (defaults to `mine`).
+For “打开全团队跟进/进展”, send `{"target":"team"}`; for a stage board,
+send `{"target":"stages"}`. No customer number or confirmation is needed.
+Reply with a clickable link using the returned `label` and exact `url`, including
+the host-selected environment. If returned `target` is `base`, explicitly say it
+opens the CRM total table, not a personal view; never invent a missing personal
+link. The host resolves “mine”; never supply an identity, owner, view ID or URL.
+Links use existing Feishu access and grant none. View filters are not access
+controls. Existing editors can change records directly, including dragging stage
+cards; recommend Bot approval for changes, without claiming the page is read-only.
+“我的客户” means assigned owner, not reminder recipient. Do not infer delivery
+status from the page. “已过计划日期” means a date before today in Beijing;
+today's earlier times remain “今日安排”. This display group does not end a plan.
 If unavailable, explain that the table link could not be obtained; do not invent
 a URL or fall back to an earlier environment's link. Use `customers` for searches,
 filtered lists and due-work questions; offer the table link for browsing/export.
