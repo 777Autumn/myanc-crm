@@ -918,6 +918,7 @@ def stage_followup(
     trusted_record_id: str | None = None,
     trusted_plan_binding: Mapping[str, str] | None = None,
     trusted_expected_plan_revision: int | None = None,
+    trusted_expected_plan_target: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Read and stage one follow-up.  This function never writes to Feishu."""
 
@@ -1016,6 +1017,7 @@ def stage_followup(
             followup["next_followup_at"] = patch["next_followup_at"]
         plan = plans.freeze(customer, patch, command, ledger, config, moment,
                             binding=trusted_plan_binding, expected_revision=trusted_expected_plan_revision,
+                            expected_target=trusted_expected_plan_target,
                             historical=bool(followup.get("backfill")) or not patch)
         if trusted_principal is not None:
             plans.verify_binding(plan, trusted_principal)
@@ -1458,11 +1460,13 @@ def execute_claimed_approval(
             "host_approval_required",
             "No executing host approval was found.",
         )
-    if approval["preview_hash"] != _hash(_approval_material(staged)):
+    from . import plans
+    environment_changed = staged.get("plan") is not None and staged["plan"]["namespace"] != plans.namespace(config)
+    if environment_changed or approval["preview_hash"] != _hash(_approval_material(staged)):
         result = _replan(
             approval["change_id"],
-            "preview_changed",
-            "Stage this follow-up again.",
+            "plan_environment_changed" if environment_changed else "preview_changed",
+            "The CRM environment changed; preview again." if environment_changed else "Stage this follow-up again.",
         )
         ledger.finish_approval(
             approval_id, "failed", "approve", _iso(moment), result

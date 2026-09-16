@@ -30,11 +30,11 @@ class PlanTests(unittest.TestCase):
         self.addCleanup(timeout.stop)
 
     def stage(self, changes, *, request=None, principal=PRINCIPAL, binding=BINDING, token=TOKEN,
-              expected=None, config=None):
+              expected=None, config=None, target=None):
         return stage_customer({"customer_query": "C-001", "changes": changes, **(request or {})},
                               "customer_update", self.backend, self.ledger, config or self.config,
                               token, principal, NOW, trusted_plan_binding=binding,
-                              trusted_expected_plan_revision=expected)
+                              trusted_expected_plan_revision=expected, trusted_expected_plan_target=target)
 
     def apply(self, staged, moment=NOW):
         self.assertEqual("staged", staged["status"], staged)
@@ -83,6 +83,28 @@ class PlanTests(unittest.TestCase):
         self.assertFalse(self.queued()[0]["enabled"])
         self.assertEqual("blocked", self.stage({}, request={"remind": True})["status"])
         self.assertEqual("blocked", self.stage({"next_action": "新计划"}, request={"remind": False})["status"])
+
+    def test_linked_edit_cannot_stage_same_number_in_another_environment_or_record(self):
+        target = {"namespace": plans.namespace(self.config), "customer_id": "rec-1"}
+        self.assertEqual("staged", self.stage({"next_action": "目标"}, target=target)["status"])
+        for target in ({**target, "namespace": "other-base"}, {**target, "customer_id": "rec-other"}):
+            self.assertEqual("blocked", self.stage({"next_action": "目标"}, target=target)["status"])
+        self.assertEqual([], self.backend.actions)
+
+    def test_environment_change_after_preview_cannot_apply_plan_to_another_base(self):
+        staged = self.stage({"next_action": "待批计划", "next_followup_at": "2026-09-04"})
+        approval = core.begin_approval({"change_id": staged["change_id"], "principal": PRINCIPAL},
+                                       self.backend, self.ledger, self.config, TOKEN, NOW)
+        self.ledger.bind_card_message(approval["approval_id"], PRINCIPAL["message_id"])
+        command = {"approval_id": approval["approval_id"], "principal": PRINCIPAL, "decision": "approve"}
+        claimed = core.claim_approval_decision(command, self.ledger, self.config, NOW, backend=self.backend)
+        self.assertTrue(claimed["execute"])
+        changed = {**self.config, "base_token": "different-base"}
+        result = core.execute_claimed_approval({key: command[key] for key in ("approval_id", "principal")},
+                                              self.backend, self.ledger, changed, NOW)
+        self.assertEqual("plan_environment_changed", result["code"])
+        self.assertEqual([], self.backend.actions)
+        self.assertEqual([], self.queued())
 
     def test_plan_and_verified_receipt_are_atomic_on_storage_failure(self):
         staged = self.stage({"next_followup_at": "2026-09-04"})

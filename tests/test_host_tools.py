@@ -139,7 +139,7 @@ class HostToolTests(unittest.TestCase):
         self.assertEqual((0, "disabled"), (code, result["status"]))
 
     def test_model_fields_cannot_supply_reminder_binding_or_expected_revision(self):
-        for field in ("plan_reminder_binding", "expected_plan_revision", "private_chat_id"):
+        for field in ("plan_reminder_binding", "expected_plan_revision", "expected_plan_target", "private_chat_id"):
             with self.subTest(field=field):
                 code, result = self.call("stage-customer-update", {
                     "customer_query": "C-001", "changes": {"next_action": "虚构下一步"}, field: "forged",

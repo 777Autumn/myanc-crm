@@ -117,7 +117,8 @@ def _duplicates(name, backend, excluded=None):
 
 
 def stage_customer(command, operation_type, backend, ledger, config, action_token, principal, now=None,
-                   *, trusted_plan_binding=None, trusted_expected_plan_revision=None):
+                   *, trusted_plan_binding=None, trusted_expected_plan_revision=None,
+                   trusted_expected_plan_target=None):
     """Freeze an exact profile plan and optional later follow-up; write no CRM."""
     try:
         principal = core._principal(principal)
@@ -209,7 +210,8 @@ def stage_customer(command, operation_type, backend, ledger, config, action_toke
                                              fields["owner" if key == "owner_ref" else key] for key in values}
         plan = None if create else plans.freeze(customer, patch, command, ledger, config, moment,
                                                 binding=trusted_plan_binding,
-                                                expected_revision=trusted_expected_plan_revision)
+                                                expected_revision=trusted_expected_plan_revision,
+                                                expected_target=trusted_expected_plan_target)
         plans.verify_binding(plan, principal)
         identifier = None if create else core._record_id(customer)
         duplicates = _duplicates(fields["name"], backend, identifier)

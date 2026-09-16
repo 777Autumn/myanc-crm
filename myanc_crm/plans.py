@@ -65,10 +65,13 @@ def current(ledger, scope, customer_id):
 
 
 def freeze(customer, patch, request, ledger, config, moment, *, binding=None,
-           expected_revision=None, historical=False):
+           expected_revision=None, expected_target=None, historical=False):
     """Return a frozen effect, or None for unrelated/no-op/historical writes."""
     if "remind" in request and not isinstance(request["remind"], bool):
         raise ValueError("remind must be a boolean.")
+    scope = namespace(config)
+    if expected_target is not None and expected_target != {"namespace": scope, "customer_id": core._record_id(customer)}:
+        raise ValueError("The associated plan belongs to a different CRM environment or customer.")
     if historical:
         return None
     changed = any(key in patch and not core._equal(customer.get(key), patch[key]) for key in FIELDS)
@@ -81,7 +84,6 @@ def freeze(customer, patch, request, ledger, config, moment, *, binding=None,
         raise ValueError("The current plan time has passed; specify a future time or explicitly clear it.")
     if request.get("remind") is True and at is None:
         raise ValueError("A reminder needs a future next_followup_at.")
-    scope = namespace(config)
     previous = current(ledger, scope, core._record_id(customer))
     revision = previous["revision"] if previous else 0
     if expected_revision is not None and (type(expected_revision) is not int or expected_revision != revision):

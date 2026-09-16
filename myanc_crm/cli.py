@@ -48,7 +48,7 @@ NON_PENDING_STAGE_STATUSES = frozenset(
 CREATE_FIELDS = frozenset({"name", "contact", "phone", "email", "stage", "owner_ref",
                            "allow_same_name", "followup"})
 UPDATE_FIELDS = frozenset({"customer_query", "changes", "allow_same_name", "followup", "remind"})
-PLAN_HOST_FIELDS = frozenset({"plan_reminder_binding", "expected_plan_revision"})
+PLAN_HOST_FIELDS = frozenset({"plan_reminder_binding", "expected_plan_revision", "expected_plan_target"})
 
 
 def _plan_host_options(value, principal):
@@ -72,6 +72,13 @@ def _plan_host_options(value, principal):
         if type(revision) is not int or revision < 0:
             raise ValueError("Invalid expected plan revision.")
         options["trusted_expected_plan_revision"] = revision
+    if "expected_plan_target" in value:
+        target = value["expected_plan_target"]
+        if not isinstance(target, Mapping) or set(target) != {"namespace", "customer_id"}:
+            raise ValueError("Invalid expected plan target.")
+        for item in target.values():
+            core._required_text(item, "expected plan target", 256)
+        options["trusted_expected_plan_target"] = dict(target)
     return options
 
 
