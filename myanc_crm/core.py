@@ -1889,6 +1889,7 @@ def _finish_after_customer_write(
 
 
 def _resolve_customer(query: str, backend: Backend) -> tuple[list[Mapping[str, Any]], str]:
+    number_query = re.fullmatch(r"[a-z][a-z0-9_]*-[0-9]+", _normal(query)) is not None
     exact_lookup = getattr(backend, "find_customers_by_number", None)
     if callable(exact_lookup):
         exact = list(exact_lookup(query))
@@ -1896,14 +1897,14 @@ def _resolve_customer(query: str, backend: Backend) -> tuple[list[Mapping[str, A
             _validate_customer(row)
             if _normal(row.get("customer_number")) != _normal(query):
                 raise ValueError("Exact customer-number lookup returned a different customer.")
-        if exact:
+        if exact or number_query:
             return exact, "customer_number"
     rows = list(backend.find_customers(query))
     for row in rows:
         _validate_customer(row)
     needle = _normal(query)
     numbered = [row for row in rows if _normal(row.get("customer_number")) == needle]
-    if numbered:
+    if numbered or number_query:
         return numbered, "customer_number"
     named = [row for row in rows if _normal(row.get("name")) == needle]
     return named, "name"

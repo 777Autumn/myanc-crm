@@ -279,6 +279,15 @@ class PlanTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             core._resolve_customer("C-WRONG", self.backend)
 
+    def test_missing_number_never_falls_back_to_another_companys_name(self):
+        other = dict(self.backend.get_customer("rec-1"), customer_number="C-999", name="C-001")
+        self.backend.find_customers_by_number = lambda query: []
+        self.backend.find_customers = mock.Mock(return_value=[other])
+        self.assertEqual(([], "customer_number"), core._resolve_customer("C-001", self.backend))
+        self.backend.find_customers.assert_not_called()
+        self.backend.find_customers_by_number = None
+        self.assertEqual(([], "customer_number"), core._resolve_customer("C-001", self.backend))
+
     def approve_followup(self, staged):
         approval = core.begin_approval({"change_id": staged["change_id"], "principal": PRINCIPAL},
                                        self.backend, self.ledger, self.config, TOKEN, NOW)
