@@ -118,7 +118,7 @@ class CliBoundaryTests(unittest.TestCase):
                 self.config.update(base_token=environment, base_url=f"https://example.invalid/base/{environment}?record=old&view=old#old")
                 owners = {f"ou_{name}": f"vew{environment}{name}" for name in ("test", "owner", "partner")}
                 self.config["workbench_views"] = dict(base_token=environment, customer_table_id="tbl_customers",
-                                                     owners=owners, team="vewTeam", stages="vewStages")
+                                                     owners=owners, team="vewTeam", stages="vewStages", overview="blkOverview")
                 self.config["allowed_actors"] = {f"sender-{name}": dict(display_name=name, feishu_user_id=f"ou_{name}")
                                                   for name in ("test", "owner", "partner")}
                 self.config_path.write_text(json.dumps(self.config), encoding="utf-8")
@@ -127,10 +127,12 @@ class CliBoundaryTests(unittest.TestCase):
                         for request, target, view in (({}, "mine", owners[f"ou_{name}"]),
                                                      ({"target": "mine"}, "mine", owners[f"ou_{name}"]),
                                                      ({"target": "team"}, "team", "vewTeam"),
-                                                     ({"target": "stages"}, "stages", "vewStages")):
+                                                     ({"target": "stages"}, "stages", "vewStages"),
+                                                     ({"target": "overview"}, "overview", "blkOverview")):
                             code, result = self.run_cli(["host-tool"], json.dumps({"command": "open", "request": request,
                                 "principal": {**principal, "user_id": f"sender-{name}", "chat_id": chat}}), host=True)
-                            self.assertEqual((0, target, f"https://example.invalid/base/{environment}?table=tbl_customers&view={view}"),
+                            query = f"table={view}" if target == "overview" else f"table=tbl_customers&view={view}"
+                            self.assertEqual((0, target, f"https://example.invalid/base/{environment}?{query}"),
                                              (code, result["target"], result["url"]))
             runtime.assert_not_called()
         self.assertFalse(self.ledger_path.exists())
@@ -142,7 +144,7 @@ class CliBoundaryTests(unittest.TestCase):
         views = dict(base_token="base_test", customer_table_id="tbl_customers", owners={})
         self.config["workbench_views"] = views
         self.config_path.write_text(json.dumps(self.config), encoding="utf-8")
-        for target in ("mine", "team", "stages"):
+        for target in ("mine", "team", "stages", "overview"):
             code, result = self.run_cli(["host-tool"], json.dumps({"command": "open", "request": {"target": target}, "principal": principal}), host=True)
             self.assertEqual((0, "base", self.config["base_url"]), (code, result["target"], result["url"]))
         good = copy.deepcopy(self.config)
@@ -150,12 +152,16 @@ class CliBoundaryTests(unittest.TestCase):
             {**views, "base_token": "another_base"}, {**views, "customer_table_id": "another_table"},
             {**views, "owners": []}, {**views, "owners": {"ou_test": "https://other.invalid"}},
             {**views, "team": "vewTeam&record=other"}, {**views, "stages": None},
+            *({**views, "overview": value} for value in
+              (None, "", [], 123, "vewNotDashboard", "blk", "blkOverview&table=other",
+               "https://other.invalid/base/another?table=blkOverview")),
             {**views, "url": "https://other.invalid"}, [],
         ]
         with mock.patch.object(cli, "_runtime") as runtime:
             for config, request in [(good, {"target": value}) for value in ("all", "", None, [], {}, 1)] + [
-                ({**good, "workbench_views": value}, {}) for value in invalid_configs
-            ] + [({**good, "base_url": "https://example.invalid/base/different"}, {})]:
+                ({**good, "workbench_views": value}, {"target": target})
+                for value in invalid_configs for target in ("mine", "overview")
+            ] + [({**good, "base_url": "https://example.invalid/base/different"}, {"target": "overview"})]:
                 self.config_path.write_text(json.dumps(config), encoding="utf-8")
                 code, result = self.run_cli(["host-tool"], json.dumps({"command": "open", "request": request, "principal": principal}), host=True)
                 self.assertEqual((2, "invalid_local_input"), (code, result["code"]))

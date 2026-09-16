@@ -116,6 +116,7 @@ class CrmToolClientTests(unittest.TestCase):
             ("open", {"target": "mine"}, {"status": "available", "target": "base", "label": "CRM 总表", "url": "https://example.invalid/base/fixture"}),
             ("open", {"target": "team"}, {"status": "available", "target": "team", "url": "https://example.invalid/base/fixture?view=vewTeam"}),
             ("open", {"target": "stages"}, {"status": "available", "target": "stages", "url": "https://example.invalid/base/fixture?view=vewStages"}),
+            ("open", {"target": "overview"}, {"status": "available", "target": "overview", "url": "https://example.invalid/base/fixture?table=blkOverview"}),
             ("stage", {"customer_query": "演示客户", "content": "确认了需求"}, {"status": "needs_time", "question": "When?"}),
             ("result", {"change_id": "chg_test"}, {"status": "partial", "followup": "verified", "customer_update": "failed"}),
             ("assignee", {"query": "member@example.com"}, {"status": "resolved", "owner_ref": "own_fixture", "name": "示例同事"}),

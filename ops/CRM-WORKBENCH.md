@@ -5,9 +5,10 @@ uses the existing [team-crm protocol](skills/team-crm/references/tools.md).
 This is display configuration plus a read-only link selector, not a new CRM.
 
 Current delivery: the Owner-approved [September 16 first phase](releases/2026-09-16-crm-mobile-workbench.md)
-provides team follow-up and stage views. Personal filters remain deferred and all
-`owners` maps stay empty, so `mine` explicitly falls back to the original Base.
-The five-view setup below remains the full target, not a claim that all five exist.
+provides team follow-up and stage views. The second-phase candidate adds personal
+views and the team overview; see its release record for actual per-environment
+acceptance. An unverified personal mapping stays absent, so `mine` explicitly
+falls back to the original Base rather than silently exposing a team view.
 
 ## Protected configuration
 
@@ -26,7 +27,8 @@ It binds to that same configuration's `base_token` and `customer_table_id`:
       "VERIFIED_CRM_USER_ID_TEST": "vewTestExample"
     },
     "team": "vewTeamExample",
-    "stages": "vewStagesExample"
+    "stages": "vewStagesExample",
+    "overview": "blkOverviewExample"
   }
 }
 ```
@@ -35,7 +37,10 @@ Replace placeholders only in the protected configuration, never in Git. Owner
 keys are `allowed_actors[*].feishu_user_id`, not display names or transport IDs.
 Copy view IDs from the administrator-verified native view URLs; never guess them.
 The Base URL must be the current `/base/<base_token>` entry. The selector builds
-only `table` and `view` parameters, dropping stale record/filter/fragment values.
+only `table` and `view` parameters for views. For `overview`, `table` is the
+administrator-verified native dashboard ID (`blk...`), with no `view` parameter.
+Both forms drop stale record/filter/fragment values. Verify the dashboard belongs
+to this Base before saving its ID; IDs alone do not establish membership.
 Absent configuration or an absent target mapping falls back to the existing Base
 entry with explicit nonpersonal wording. Malformed/cross-environment configuration
 fails closed. No API call, ledger or new gateway route is needed to select a link.
@@ -45,6 +50,10 @@ fails closed. No API call, ledger or new gateway route is needed to select a lin
 Inventory the existing views, fields and sharing first. Reuse matching views;
 preserve the original total-table view. Use the existing administrator UI, without
 granting view-management scopes to the Bot or changing sharing/advanced permissions.
+When native owner selection cannot find a verified member, the authorized existing
+administrator's user API may save the exact filter. Confirm that this profile's
+app matches the CRM writer app before using app-scoped member IDs; never seed
+production customers or change their owners to populate a picker.
 Start in Sandbox and apply the verified setup to the production Base only afterward.
 
 Create these five views on the customer table:
@@ -81,6 +90,24 @@ Verify each personal view against its exact owner, team inclusion of unassigned
 customers, five stage groups and record counts without treating partial loading
 as totals. Reload saved URLs to verify persistence, not just the current UI state.
 Check that CRM schema/query/approval/plan-reminder regression tests still pass.
+
+## Team today overview
+
+Create one native dashboard in each Base, reusing a matching existing one. Three
+statistics cards count all customer records, filtered only by `计划时间分组`:
+`今日安排`, `已过计划日期`, `未设置时间`. Include unassigned and all stages. These
+are full-source counts, not loaded-page counts; their sum excludes future plans.
+Enable native record drill-down and provide links to the existing team and stage
+views. Keep sharing restricted to existing collaborators; no subscriptions,
+automations, public links, helper tables or business fields are needed.
+
+Use the existing formula, not hard-coded dates. Observe actual Beijing midnight
+refresh against complete record exports; the platform may briefly retain earlier
+formula/chart results. Record observed delay instead of promising instant refresh.
+Verify empty dates, yesterday, both ends of today, tomorrow, and won/deferred rows
+with Sandbox fixtures. Check personal membership again after reassigning a fixture.
+Remove only newly created fixture records after verification, retaining evidence.
+The dashboard shows recorded plans, not completion or reminder delivery status.
 
 ## Cutover, acceptance and rollback
 
