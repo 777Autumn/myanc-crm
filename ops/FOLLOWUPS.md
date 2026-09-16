@@ -82,6 +82,7 @@ remaining task and is not recorded as passed.
 
 | Item | State / evidence | Next action and acceptance condition |
 | --- | --- | --- |
+| Daily CRM discovery / shared plan notifications | Implementation in progress; [scope and rollout](CRM-PLANS.md). Not deployed. | Complete paired tests, independent reviews, exact-SHA CI/merge and candidate; request a separate maintenance window before enabling. |
 | Historical GitHub reconciliation / release gate | Complete, `releases/2026-09-09-backfill.md` and exact merge evidence | Keep gate in supported candidate path; no automatic VPS deploy |
 | One-shot reminders and agreed Owner/test acceptance | Complete within documented scope, `releases/2026-09-10-reminders.md` | Preserve historical evidence; Wang live acceptance waived, not substituted |
 | Business reply wording, shown-ID continuity, date edits, pagination | Representative native tasks passed once on the September 11 recorded pair; minor English/internal-field narration remains nonblocking | Keep practical gate; zero wrong-object, invented-fact, false-success or cross-user actions; separate live trial remains |

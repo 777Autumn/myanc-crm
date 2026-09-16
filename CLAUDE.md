@@ -13,6 +13,9 @@ Use the installed `crm_tool.py` client with exactly one command and one stdin JS
 object. The gateway supplies identity and routing; never invent or pass an actor,
 sender/chat, profile, Base/table/record ID, token, endpoint, or approval flag.
 
+- `customers`: bounded filtered customer discovery; `customer` accepts optional
+  `history_offset` for complete history pagination. The canonical query/plan
+  contract is [Controlled CRM tools in ops/CLAUDE.vps.md](ops/CLAUDE.vps.md#controlled-crm-tools-crm_host_tools_v1).
 - `customer`: `{"customer_query":"customer number or exact name"}`. Read current
   customer facts and bounded recent history before answering history questions.
   `latest_operation` is a fresh receipt for this Principal/customer's most recently
@@ -37,8 +40,9 @@ sender/chat, profile, Base/table/record ID, token, endpoint, or approval flag.
   fields below without `customer_query`). Company name, one contact detail, stage
   and verified owner are required. Stages: 新线索、已联系、沟通中、已成交、暂缓.
 - `stage-customer-update`: `customer_query`, `changes` containing only mentioned
-  fields among `name/contact/phone/email/stage/owner_ref`, optional `allow_same_name`
-  and `followup`. Preserve omitted fields; clear only on an explicit user request.
+  fields among `name/contact/phone/email/stage/owner_ref/next_action/next_followup_at`,
+  optional `allow_same_name`, `followup` and `remind`. Independent plan changes do
+  not create communication history. Preserve omitted fields; clear only on an explicit user request.
   Never change customer numbers, system fields or existing follow-up history.
 
 Collect missing requirements for both customer operation and follow-up in one

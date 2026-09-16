@@ -94,7 +94,8 @@ class CandidateTests(unittest.TestCase):
 
     def test_three_source_pair_requires_knowledge_journey_not_just_old_green_tests(self):
         names = ["TestCUJ_CRMIPC1_CustomerApprovalAndContinuedDiscussion",
-                 "TestCUJ_CRMIPC2_ProfileThenIndependentFollowup"]
+                 "TestCUJ_CRMIPC2_ProfileThenIndependentFollowup",
+                 "TestCUJ_CRMDaily1_ListAndPlanApproval"]
         events = [dict(Action="pass", Test=name, Package="fixture/actionhost/crmfollowup") for name in names]
         events.append(dict(Action="pass", Test="TestCUJ_REMINDER1_ClockCreateKnowledgeAndCRM", Package="fixture/core"))
         env = {"MYANC_TEAM_BRAIN_ROOT": "fresh"}

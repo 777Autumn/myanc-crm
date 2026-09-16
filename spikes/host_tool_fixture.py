@@ -20,6 +20,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 from myanc_crm import cli, core
 from test_host_tools import CONFIG, HistoryBackend
 from test_customer_journey import CustomerBackend
+from test_core import customer
 
 
 class PersistentFakeFeishu(HistoryBackend):
@@ -43,9 +44,27 @@ class PersistentFakeFeishu(HistoryBackend):
             # Eval-only paired fixtures: do not add these claims to demo/live data.
             seed = os.environ.get("MYANC_SPIKE_SEED", "")
             if seed not in {"", "term-ambiguous", "term-defined", "customer-trial",
-                            "customer-roster", "customer-roster-ambiguous"}:
+                            "customer-roster", "customer-roster-ambiguous", "daily-followup"}:
                 raise ValueError("Unknown offline fixture seed")
-            if seed.startswith("customer-"):
+            if seed == "daily-followup":
+                self.schema["customers"].append("operation_id")
+                self.people.update({f"ou_fixture_sender-{n}": {
+                    "id": f"ou_fixture_sender-{n}", "name": f"Fixture sender-{n}"}
+                    for n in (1, 2)})
+                self.customers = {}
+                for n in range(1, 23):
+                    row = customer(f"rec-{n}", f"C-{n:03d}", f"虚构日常客户{n:03d}")
+                    row.update(stage="新线索", owner=[self.people[
+                        "ou_fixture_sender-1" if n <= 21 else "ou_fixture_sender-2"]],
+                        next_action="准备虚构材料", next_followup_at="2099-01-03T09:00:00+08:00")
+                    self.customers[row["record_id"]] = row
+                self.followups = {f"history-{n:02d}": {
+                    "record_id": f"history-{n:02d}", "customer_record_id": "rec-2",
+                    "occurred_at": f"2026-09-{n:02d}T09:00:00+08:00",
+                    "content": f"虚构历史沟通{n:02d}",
+                } for n in range(1, 13)}
+                self.save()
+            elif seed.startswith("customer-"):
                 self.schema["customers"].append("operation_id")
                 self.customers["rec-1"].update(stage="新线索", owner=[self.people["ou_member"]])
                 self.save()
@@ -105,8 +124,9 @@ class PersistentFakeFeishu(HistoryBackend):
 def main():
     if len(sys.argv) != 2 or sys.argv[1] not in {
         "host-tool", "host-bind-card", "host-claim", "host-execute",
+        "host-plan-events", "host-plan-read", "host-plan-ack",
     }:
-        raise SystemExit("Offline fixture accepts only the four documented host commands.")
+        raise SystemExit("Offline fixture accepts only the documented host commands.")
     directory = Path(os.environ.get("MYANC_SPIKE_DIR", ""))
     if not directory.is_absolute() or not directory.is_dir():
         raise SystemExit("MYANC_SPIKE_DIR must be an existing absolute scratch directory.")
@@ -116,6 +136,8 @@ def main():
     # Configuration and external Feishu are the injected system boundaries.
     # Host authentication, envelope checks, SQLite, claim and apply stay real.
     config = copy.deepcopy(CONFIG)
+    if os.environ.get("MYANC_SPIKE_SEED") == "daily-followup":
+        config.update(crm_plan_reminders_enabled=True, crm_plan_namespace="offline-daily-plan")
     if os.environ.get("MYANC_SPIKE_SEED", "").startswith("customer-roster"):
         config["allowed_actors"]["sender-2"] = {
             "display_name": "示例同事", "feishu_user_id": "ou_member"}

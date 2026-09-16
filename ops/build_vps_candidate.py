@@ -40,7 +40,8 @@ def paired_tests(gateway, env):
         text=True, encoding="utf-8")
     events = [json.loads(line) for line in output.splitlines() if line.strip()]
     required = {"TestCUJ_CRMIPC1_CustomerApprovalAndContinuedDiscussion",
-                "TestCUJ_CRMIPC2_ProfileThenIndependentFollowup"}
+                "TestCUJ_CRMIPC2_ProfileThenIndependentFollowup",
+                "TestCUJ_CRMDaily1_ListAndPlanApproval"}
     if "MYANC_TEAM_BRAIN_ROOT" in env:
         required.add("TestCUJ_KNOWLEDGEIPC2_CatalogReadFollowupAndScope")
     passed = {item.get("Test") for item in events if item.get("Action") == "pass"}
