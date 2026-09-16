@@ -1,7 +1,10 @@
 # CRM daily follow-up v1
 
-Status: implementation in progress; GitHub delivery and online acceptance are
-not yet complete. This is not a deployment receipt. Follow [RELEASE.md](RELEASE.md).
+Source implementation and regression tests are present. Exact-head reviews, CI,
+model evidence and merge status are tracked in [CRM PR #34](https://github.com/77AutumN/myanc-crm/pull/34)
+and [gateway PR #15](https://github.com/77AutumN/cc-connect-anc/pull/15).
+Online enablement and acceptance remain incomplete pending a separately authorized
+maintenance window. This is not a deployment receipt. Follow [RELEASE.md](RELEASE.md).
 The model contract lives in [CLAUDE.vps.md](CLAUDE.vps.md#controlled-crm-tools-crm_host_tools_v1).
 
 ## Scope and invariants

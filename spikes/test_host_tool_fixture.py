@@ -7,13 +7,50 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import closing
 from unittest import mock
 
 from host_tool_fixture import PersistentFakeFeishu
-from test_host_tools import PRINCIPAL, SECRET, TOKEN
+from myanc_crm import core
+from test_core import NOW
+from test_host_tools import CONFIG, PRINCIPAL, SECRET, TOKEN
 
 
 class OwnerFixtureTests(unittest.TestCase):
+    def test_daily_history_without_change_ids_allows_approved_backfill(self):
+        with tempfile.TemporaryDirectory() as path, mock.patch.dict(
+                os.environ, {"MYANC_SPIKE_SEED": "daily-followup"}):
+            backend = PersistentFakeFeishu(Path(path))
+            before = dict(backend.customers["rec-2"])
+            with closing(core.Ledger()) as ledger:
+                staged = core.stage_followup({
+                    "customer_query": "C-002", "occurred_at": "2026-09-01T09:00:00+08:00",
+                    "content": "讨论了虚构演示", "backfill": True, "remind": False,
+                }, backend, ledger, CONFIG, TOKEN, NOW)
+                approval = core.begin_approval({
+                    "change_id": staged["change_id"], "principal": PRINCIPAL,
+                }, backend, ledger, CONFIG, TOKEN, NOW)
+                core.bind_approval_card({
+                    "approval_id": approval["approval_id"], "principal": PRINCIPAL,
+                }, ledger, CONFIG)
+                result = core.decide_approval({
+                    "approval_id": approval["approval_id"], "decision": "approve",
+                    "principal": PRINCIPAL,
+                }, backend, ledger, CONFIG, NOW)
+                replay = core.decide_approval({
+                    "approval_id": approval["approval_id"], "decision": "approve",
+                    "principal": PRINCIPAL,
+                }, backend, ledger, CONFIG, NOW)
+                self.assertEqual("verified", replay["status"], replay)
+                self.assertEqual(0, ledger._db.execute("SELECT count(*) FROM plan_outbox").fetchone()[0])
+            self.assertEqual("verified", result["status"], result)
+            reopened = PersistentFakeFeishu(Path(path))
+            self.assertEqual(before, reopened.customers["rec-2"])
+            self.assertEqual(13, len(reopened.followups))
+            self.assertEqual(["create_followup"], reopened.actions)
+            self.assertEqual("讨论了虚构演示",
+                             reopened.find_followup_by_change(staged["change_id"])["content"])
+
     def test_first_exact_roster_name_uses_real_host_without_cached_lookup(self):
         for seed, status in (("customer-roster", "resolved"),
                              ("customer-roster-ambiguous", "needs_input")):

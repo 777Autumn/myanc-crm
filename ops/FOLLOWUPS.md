@@ -1,6 +1,6 @@
 # Tracked delivery and experience follow-ups
 
-Updated 2026-09-12. This ledger distinguishes implemented source, GitHub delivery
+Updated 2026-09-16. This ledger distinguishes implemented source, GitHub delivery
 and online acceptance under [RELEASE.md](RELEASE.md); it is not a deployment receipt.
 The current model acceptance scope is defined once in the
 [candidate record](acceptance/2026-09-10-bot-ux-candidate.md#当前验收口径2026-09-10-用户调整):
@@ -82,7 +82,7 @@ remaining task and is not recorded as passed.
 
 | Item | State / evidence | Next action and acceptance condition |
 | --- | --- | --- |
-| Daily CRM discovery / shared plan notifications | Implementation in progress; [scope and rollout](CRM-PLANS.md). Not deployed. | Complete paired tests, independent reviews, exact-SHA CI/merge and candidate; request a separate maintenance window before enabling. |
+| Daily CRM discovery / shared plan notifications | Source and regression tests implemented; [scope, delivery PRs and rollout](CRM-PLANS.md). Not deployed. | Exact-head source review, CI, native model evidence and candidate are tracked in the linked PRs; separate maintenance authorization, additive-store upgrade and fictional live acceptance remain before enabling. |
 | Historical GitHub reconciliation / release gate | Complete, `releases/2026-09-09-backfill.md` and exact merge evidence | Keep gate in supported candidate path; no automatic VPS deploy |
 | One-shot reminders and agreed Owner/test acceptance | Complete within documented scope, `releases/2026-09-10-reminders.md` | Preserve historical evidence; Wang live acceptance waived, not substituted |
 | Business reply wording, shown-ID continuity, date edits, pagination | Representative native tasks passed once on the September 11 recorded pair; minor English/internal-field narration remains nonblocking | Keep practical gate; zero wrong-object, invented-fact, false-success or cross-user actions; separate live trial remains |
