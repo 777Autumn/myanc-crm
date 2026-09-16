@@ -73,6 +73,17 @@ class PlanTests(unittest.TestCase):
         self.assertEqual("current", self.read(event)["status"])
         self.assertEqual({}, self.backend.followups)
 
+    def test_notification_only_disable_does_not_reject_or_clear_an_overdue_plan(self):
+        row = self.backend.customers["rec-1"]
+        row["next_followup_at"] = "2026-09-01T09:00:00+08:00"
+        row["next_action"] = "仍需完成的旧计划"
+        staged = self.stage({}, request={"remind": False})
+        self.assertEqual("verified", self.apply(staged)["status"])
+        self.assertEqual("2026-09-01T09:00:00+08:00", self.backend.customers["rec-1"]["next_followup_at"])
+        self.assertFalse(self.queued()[0]["enabled"])
+        self.assertEqual("blocked", self.stage({}, request={"remind": True})["status"])
+        self.assertEqual("blocked", self.stage({"next_action": "新计划"}, request={"remind": False})["status"])
+
     def test_plan_and_verified_receipt_are_atomic_on_storage_failure(self):
         staged = self.stage({"next_followup_at": "2026-09-04"})
         self.ledger._db.execute("CREATE TRIGGER fail_outbox BEFORE INSERT ON plan_outbox "

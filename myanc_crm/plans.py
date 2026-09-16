@@ -76,7 +76,8 @@ def freeze(customer, patch, request, ledger, config, moment, *, binding=None,
         return None
     fields = {key: patch.get(key, customer.get(key)) for key in FIELDS}
     at = fields["next_followup_at"]
-    if at is not None and core._parse_time(at, "next_followup_at") <= moment:
+    check_time = changed or request.get("remind") is not False
+    if check_time and at is not None and core._parse_time(at, "next_followup_at") <= moment:
         raise ValueError("The current plan time has passed; specify a future time or explicitly clear it.")
     if request.get("remind") is True and at is None:
         raise ValueError("A reminder needs a future next_followup_at.")
@@ -91,6 +92,7 @@ def freeze(customer, patch, request, ledger, config, moment, *, binding=None,
     return {"namespace": scope, "customer_id": core._record_id(customer),
             "expected_revision": revision, "fields": fields, "enabled": bool(notify),
             "queue_enabled": enabled(config), "reminder_binding": dict(binding or {}),
+            "check_time": check_time,
             "replaces_previous": bool(previous and previous.get("enabled")),
             "explicit_remind": request.get("remind")}
 
@@ -127,7 +129,7 @@ def check(staged, ledger, moment):
     if revision != plan["expected_revision"]:
         return core._replan(staged["change_id"], "plan_changed", "The customer plan changed after preview.")
     at = plan["fields"]["next_followup_at"]
-    if at is not None and core._parse_time(at, "next_followup_at") <= moment:
+    if plan.get("check_time", True) and at is not None and core._parse_time(at, "next_followup_at") <= moment:
         return core._replan(staged["change_id"], "plan_time_passed", "The plan time passed before execution; preview again.")
     return None
 
