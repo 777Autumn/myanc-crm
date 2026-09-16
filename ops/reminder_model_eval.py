@@ -162,8 +162,8 @@ def main():
     args = parser.parse_args()
     if args.output.exists():
         raise SystemExit("output already exists")
-    policy = Path(__file__).with_name("CLAUDE.vps.md").read_text(encoding="utf-8")
-    contract = policy.split("## Controlled personal reminders:", 1)[1].split("## Controlled CRM tools:", 1)[0]
+    # This legacy no-tools diagnostic is not a skill-discovery acceptance test.
+    contract = (Path(__file__).parent / "skills/team-reminders/references/tools.md").read_text(encoding="utf-8")
     system = ("You are evaluating reminder intent and evidence-grounded replies under this production policy:\n" + contract +
               '\nNo tools are available: do not execute anything. Return ONLY JSON with '
               'action (create/clarify/none/unsupported/private_list), at (RFC3339 or null), '

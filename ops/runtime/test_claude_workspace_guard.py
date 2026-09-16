@@ -42,13 +42,16 @@ class WorkspaceGuardTests(unittest.TestCase):
         self.assertEqual(2, invoke("notes.txt", user="unregistered").returncode)
 
     def test_allows_installed_skill_and_reference_reads(self) -> None:
-        for path in (
-            ".claude/skills/lark-base/SKILL.md",
-            ".claude/skills/lark-base/references/records.md",
-        ):
-            with self.subTest(path=path):
-                result = invoke(path)
-                self.assertEqual(result.returncode, 0, result.stderr)
+        users = ("claude", "claude-owner-group", "claude-partner-private", "claude-partner-group", "claude-test-private", "claude-test-group")
+        for user in users:
+            for skill in ("team-crm", "team-reminders", "team-brain"):
+                for name in ("SKILL.md", "references/tools.md"):
+                    path = f".claude/skills/{skill}/{name}"
+                    with self.subTest(user=user, path=path):
+                        result = invoke(path, user=user, cwd=f"/home/{user}/ClaudeRemote")
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        for tool in ("Write", "Edit"):
+                            self.assertEqual(2, invoke(path, tool, user, f"/home/{user}/ClaudeRemote").returncode)
 
     def test_read_exception_does_not_allow_policy_reads_or_skill_writes(self) -> None:
         for path, tool in (
