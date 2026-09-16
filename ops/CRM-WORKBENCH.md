@@ -4,6 +4,11 @@ Deployment follows [the release contract](RELEASE.md). Runtime/model navigation
 uses the existing [team-crm protocol](skills/team-crm/references/tools.md).
 This is display configuration plus a read-only link selector, not a new CRM.
 
+Current delivery: the Owner-approved [September 16 first phase](releases/2026-09-16-crm-mobile-workbench.md)
+provides team follow-up and stage views. Personal filters remain deferred and all
+`owners` maps stay empty, so `mine` explicitly falls back to the original Base.
+The five-view setup below remains the full target, not a claim that all five exist.
+
 ## Protected configuration
 
 The optional `workbench_views` object lives in each environment's protected CRM
