@@ -6,12 +6,14 @@ import json
 import re
 import subprocess
 import tempfile
+import time
 from collections.abc import Mapping
+from datetime import timedelta
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from .core import CUSTOMER_TEXT_LIMITS
+from .core import CUSTOMER_TEXT_LIMITS, _normal, _parse_time
 
 
 READ_TIMEOUT_SECONDS = 30
@@ -200,6 +202,27 @@ class LarkCliBackend:
             "followups": _stable_schema(followups, _FOLLOWUP_SCHEMA),
         }
 
+    def find_customers_by_number(self, query: str) -> list[Mapping[str, Any]]:
+        query = _query(query)
+        numbered = re.fullmatch(r"[a-z][a-z0-9_]*-([0-9]+)", _normal(query))
+        if numbered:
+            # Auto-number conditions use the numeric part, not the rendered prefix.
+            # Verify the full number afterward, so a different prefix cannot match.
+            schema = self._read_table_schema(self.customer_table_id, "read customer schema")
+            self._validate_schema(schema, self.customer_schema, self.customer_canonical,
+                                  self.customer_fields, "customer")
+            page = self._read_record_page(
+                ["base", "+record-list", "--base-token", self.base_token,
+                 "--table-id", self.customer_table_id, "--filter-json",
+                 json.dumps({"logic": "and", "conditions": [
+                     ["客户编号", "==", int(numbered[1])]]}, ensure_ascii=False),
+                 "--limit", "2"], tuple(self.customer_fields.values()), "find customer number")
+            if page["has_more"]:
+                raise LarkBackendError("protocol_error", "find customer number")
+            rows = [_customer(row, self.customer_fields) for row in page["items"]]
+            return [row for row in rows if _normal(row.get("customer_number")) == _normal(query)]
+        return []
+
     def find_customers(self, query: str) -> list[Mapping[str, Any]]:
         query = _query(query)
         args = [
@@ -219,6 +242,56 @@ class LarkCliBackend:
             args, tuple(self.customer_fields.values()), "search customers"
         )
         return [_customer(row, self.customer_fields) for row in rows]
+
+    def list_customers(self, *, keyword=None, owner_id=None, stages=(), date_from=None,
+                       date_to=None, unscheduled=False, offset=0, limit=20):
+        """One bounded, server-filtered page; never scan customer data locally."""
+        _page_bounds(offset, limit, 20)
+        if keyword is not None:
+            keyword = _query(keyword)
+        if owner_id is not None:
+            owner_id = _open_id(owner_id)
+        if not isinstance(stages, (list, tuple)) or any(
+                not isinstance(stage, str) or stage not in _CUSTOMER_STAGES for stage in stages):
+            raise LarkBackendError("invalid_input", "validate customer stages")
+        if type(unscheduled) is not bool or (unscheduled and (date_from or date_to)):
+            raise LarkBackendError("invalid_input", "validate customer date filter")
+        conditions = []
+        if owner_id:
+            conditions.append(["负责人", "intersects", [{"id": owner_id}]])
+        if stages:
+            conditions.append(["阶段", "intersects", list(stages)])
+        if unscheduled:
+            conditions.append(["下次跟进时间", "empty"])
+        elif date_from or date_to:
+            conditions.append(["下次跟进时间", "non_empty"])
+            if date_from:
+                # Stored dates have millisecond precision; use the preceding value.
+                lower = _parse_time(date_from, "date_from") - timedelta(microseconds=1)
+                conditions.append(["下次跟进时间", ">", f"ExactDate({lower.isoformat(timespec='milliseconds')})"])
+            if date_to:
+                upper = _parse_time(date_to, "date_to")
+                if upper.microsecond % 1000:
+                    upper += timedelta(microseconds=1000 - upper.microsecond % 1000)
+                conditions.append(["下次跟进时间", "<", f"ExactDate({upper.isoformat(timespec='milliseconds')})"])
+        schema = self._read_table_schema(self.customer_table_id, "read customer schema")
+        self._validate_schema(schema, self.customer_schema, self.customer_canonical,
+                              self.customer_fields, "customer")
+        args = ["base", "+record-search" if keyword else "+record-list",
+                "--base-token", self.base_token, "--table-id", self.customer_table_id]
+        if keyword:
+            args.extend(("--keyword", keyword))
+            for key in ("name", "customer_number", "contact", "phone", "email"):
+                args.extend(("--search-field", self.customer_fields[key]))
+        sort = [] if unscheduled else [{"field": "下次跟进时间", "desc": False}]
+        sort.append({"field": "客户编号", "desc": False})
+        args.extend(("--filter-json", json.dumps({"logic": "and", "conditions": conditions}, ensure_ascii=False),
+                     "--sort-json", json.dumps(sort, ensure_ascii=False),
+                     "--offset", str(offset), "--limit", str(limit)))
+        page = self._read_record_page(args, tuple(self.customer_fields.values()), "list customers")
+        if len(page["items"]) > limit:
+            raise LarkBackendError("protocol_error", "list customers")
+        return {**page, "items": [_customer(row, self.customer_fields) for row in page["items"]]}
 
     def get_customer(self, record_id: str) -> Mapping[str, Any] | None:
         record_id = _record_id(record_id)
@@ -356,7 +429,8 @@ class LarkCliBackend:
         self, record_id: str, fields: Mapping[str, Any]
     ) -> Mapping[str, Any] | None:
         record_id = _record_id(record_id)
-        values = _write_fields(fields, _PROFILE_FIELDS, set(), "update customer profile")
+        values = _write_fields(fields, _PROFILE_FIELDS | {"next_action", "next_followup_at"},
+                               set(), "update customer profile")
         patch = self._profile_cells(values)
         if not patch:
             return None
@@ -383,34 +457,67 @@ class LarkCliBackend:
                 if not isinstance(value, str) or value not in _CUSTOMER_STAGES:
                     raise LarkBackendError("invalid_input", "validate customer stage")
                 cell = [value]
+            elif key == "next_followup_at":
+                try:
+                    cell = None if value is None else _parse_time(value, key).isoformat()
+                except ValueError as exc:
+                    raise LarkBackendError("invalid_input", "validate next follow-up time") from exc
             else:
-                cell = None if value is None and key != "name" else _text(value, key, CUSTOMER_TEXT_LIMITS[key])
+                limit = 1000 if key == "next_action" else CUSTOMER_TEXT_LIMITS[key]
+                cell = None if value is None and key != "name" else _text(value, key, limit)
             record[self.customer_fields[key]] = cell
         return record
 
     def read_customer_history(self, record_id: str, limit: int = 11) -> list[Mapping[str, Any]]:
-        """Newest bounded history for one resolved customer, never a full-table scan."""
+        return self.read_customer_history_page(record_id, limit=limit)["items"]
+
+    def read_customer_history_page(self, record_id: str, *, offset=0, limit=10):
+        """Sort complete customer-scoped history by time and real record ID, then page."""
         record_id = _record_id(record_id)
-        if type(limit) is not int or not 1 <= limit <= 11:
-            raise LarkBackendError("invalid_input", "validate history limit")
+        _page_bounds(offset, limit, 11)
+        deadline = time.monotonic() + READ_TIMEOUT_SECONDS
         # CLI 1.0.90 help + official filter SOP document field-name tuples.
         # Validate those names against pinned IDs before using them as selectors.
         schema = self._read_table_schema(self.followup_table_id, "read history schema")
         self._validate_schema(schema, _FOLLOWUP_SCHEMA, _FOLLOWUP_CANONICAL,
                               self.followup_fields, "follow-up")
-        rows = self._read_records(
-            ["base", "+record-list", "--base-token", self.base_token,
-             "--table-id", self.followup_table_id,
-             "--filter-json", json.dumps({"logic": "and", "conditions": [
-                 ["关联客户", "intersects", [{"id": record_id}]]]}, ensure_ascii=False),
-             "--sort-json", json.dumps([{"field": "沟通时间", "desc": True}], ensure_ascii=False),
-             "--limit", str(limit)],
-            tuple(self.followup_fields.values()), "read customer history",
-        )
-        history = [_followup(row, self.followup_fields) for row in rows]
-        if len(history) > limit or any(row.get("customer_record_id") != record_id for row in history):
-            raise LarkBackendError("protocol_error", "read customer history")
-        return history
+        args = ["base", "+record-list", "--base-token", self.base_token,
+                "--table-id", self.followup_table_id,
+                "--filter-json", json.dumps({"logic": "and", "conditions": [
+                    ["关联客户", "intersects", [{"id": record_id}]]]}, ensure_ascii=False)]
+        # CLI 1.0.90 exports at most 2000 rows per command and retains has_more.
+        # ponytail: O(this customer's history) memory/read ceiling, O(n log n) sort;
+        # native record-ID sorting would remove full reads. Never truncate silently.
+        history = []
+        seen = set()
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise LarkBackendError("timeout", "read customer history")
+            page = self._read_record_page(
+                [*args, "--offset", str(len(history)), "--limit", "2000"],
+                tuple(self.followup_fields.values()), "read customer history", timeout=remaining,
+            )
+            if len(page["items"]) > 2000 or (page["has_more"] and not page["items"]):
+                raise LarkBackendError("protocol_error", "read customer history")
+            for raw in page["items"]:
+                row = _followup(raw, self.followup_fields)
+                if row["customer_record_id"] != record_id or row["record_id"] in seen:
+                    raise LarkBackendError("protocol_error", "read customer history")
+                try:
+                    _record_id(row["record_id"])
+                    _parse_time(row["occurred_at"], "occurred_at")
+                except (LarkBackendError, ValueError):
+                    raise LarkBackendError("protocol_error", "read customer history") from None
+                seen.add(row["record_id"])
+                history.append(row)
+            if not page["has_more"]:
+                break
+        history.sort(key=lambda row: row["record_id"])
+        history.sort(key=lambda row: _parse_time(row["occurred_at"], "occurred_at"), reverse=True)
+        if time.monotonic() >= deadline:
+            raise LarkBackendError("timeout", "read customer history")
+        return {"items": history[offset:offset + limit], "has_more": offset + limit < len(history)}
 
     def create_followup(self, fields: Mapping[str, Any]) -> str:
         allowed = {
@@ -640,6 +747,10 @@ class LarkCliBackend:
         fields: tuple[str, ...],
         operation: str,
     ) -> list[Mapping[str, Any]]:
+        return self._read_record_page(args, fields, operation, require_pagination=False)["items"]
+
+    def _read_record_page(self, args, fields, operation, *, require_pagination=True,
+                          timeout=READ_TIMEOUT_SECONDS):
         with tempfile.TemporaryDirectory(prefix="myanc-crm-read-") as raw_dir:
             directory = Path(raw_dir)
             output_name = "records.ndjson"
@@ -655,10 +766,10 @@ class LarkCliBackend:
                     "--overwrite",
                 )
             )
-            self._run_json(
+            manifest = self._run_json(
                 projected,
                 operation,
-                READ_TIMEOUT_SECONDS,
+                timeout,
                 cwd=directory,
                 artifact_manifest=True,
             )
@@ -677,7 +788,10 @@ class LarkCliBackend:
                         rows.append(row)
             except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
                 raise LarkBackendError("protocol_error", operation) from None
-            return rows
+            if manifest["records_count"] != len(rows) or (
+                    require_pagination and type(manifest.get("has_more")) is not bool):
+                raise LarkBackendError("protocol_error", operation)
+            return {"items": rows, "has_more": manifest.get("has_more", False)}
 
     def _write_records(
         self,
@@ -726,7 +840,7 @@ class LarkCliBackend:
         self,
         args: list[str],
         operation: str,
-        timeout: int,
+        timeout: float,
         *,
         cwd: Path | None = None,
         artifact_manifest: bool = False,
@@ -759,7 +873,8 @@ class LarkCliBackend:
             if (
                 envelope.get("format") != "ndjson"
                 or not isinstance(envelope.get("record_file"), str)
-                or not isinstance(envelope.get("records_count"), int)
+                or type(envelope.get("records_count")) is not int
+                or envelope["records_count"] < 0
             ):
                 raise LarkBackendError("protocol_error", operation)
             return envelope
@@ -900,6 +1015,12 @@ def _query(value: Any) -> str:
     ):
         raise LarkBackendError("invalid_input", "validate customer query")
     return value.strip()
+
+
+def _page_bounds(offset, limit, maximum):
+    if (type(offset) is not int or not 0 <= offset <= 2**31 - 1
+            or type(limit) is not int or not 1 <= limit <= maximum):
+        raise LarkBackendError("invalid_input", "validate pagination")
 
 
 def _text(value: Any, name: str, limit: int) -> str:

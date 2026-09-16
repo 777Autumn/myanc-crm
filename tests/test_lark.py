@@ -112,19 +112,19 @@ class LarkCliBackendTests(unittest.TestCase):
         )
 
     @patch("myanc_crm.lark.subprocess.run")
-    def test_customer_history_pushes_link_filter_sort_and_bound_into_fixed_cli(self, run):
+    def test_customer_history_collects_only_linked_records_before_local_paging(self, run):
         def fake(argv, **kwargs):
             if "+field-list" in argv:
                 return completed({"items": FOLLOWUP_FIELDS})
             self.assertIn("+record-list", argv)
             self.assertEqual("tblFollowups", argv[argv.index("--table-id") + 1])
-            self.assertEqual("11", argv[argv.index("--limit") + 1])
+            self.assertEqual("2000", argv[argv.index("--limit") + 1])
+            self.assertEqual("0", argv[argv.index("--offset") + 1])
             self.assertEqual(
                 {"logic": "and", "conditions": [["关联客户", "intersects", [{"id": "recCustomer1"}]]]},
                 json.loads(argv[argv.index("--filter-json") + 1]),
             )
-            self.assertEqual([{"field": "沟通时间", "desc": True}],
-                             json.loads(argv[argv.index("--sort-json") + 1]))
+            self.assertNotIn("--sort-json", argv)
             Path(kwargs["cwd"], "records.ndjson").write_text(json.dumps({
                 "record_id": "recFollowup1", "关联客户": [{"id": "recCustomer1"}],
                 "沟通时间": "2026-09-03T10:00:00+08:00", "沟通内容": "Synthetic history",
