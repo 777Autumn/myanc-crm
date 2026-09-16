@@ -237,6 +237,8 @@ class Ledger:
             "(scope_key TEXT PRIMARY KEY, change_id TEXT NOT NULL, "
             "FOREIGN KEY(change_id) REFERENCES staged_changes(change_id))"
         )
+        from . import plans
+        plans.initialize(self._db)
         self._db.commit()
         self._validate_storage()
 
@@ -781,7 +783,12 @@ class Ledger:
         return cursor.rowcount == 1
 
     def finish(self, change_id: str, state: str, receipt: Mapping[str, Any]) -> None:
-        with self._db:
+        with self._immediate():
+            if state == "verified":
+                from . import plans
+                staged = self.get(change_id)
+                if staged is not None:
+                    plans.finish(self, staged, receipt)
             self._db.execute(
                 """
                 UPDATE staged_changes SET state = ?, receipt_json = ?
@@ -909,6 +916,9 @@ def stage_followup(
     *,
     trusted_principal: Mapping[str, str] | None = None,
     trusted_record_id: str | None = None,
+    trusted_plan_binding: Mapping[str, str] | None = None,
+    trusted_expected_plan_revision: int | None = None,
+    trusted_expected_plan_target: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Read and stage one follow-up.  This function never writes to Feishu."""
 
@@ -931,6 +941,8 @@ def stage_followup(
                 "content",
                 "next_action",
                 "next_followup_at",
+                "remind",
+                "backfill",
             },
         )
         action_token_hash = _action_token_hash(action_token)
@@ -950,6 +962,8 @@ def stage_followup(
                     "content",
                     "next_action",
                     "next_followup_at",
+                    "remind",
+                    "backfill",
                 )
                 if key in command
             }
@@ -997,6 +1011,16 @@ def stage_followup(
         _validate_customer(customer)
         canonical_snapshot = _snapshot(customer)
         patch = _customer_patch(customer, followup)
+        from . import plans
+        if "next_followup_at" in patch:
+            patch["next_followup_at"] = plans.normalize_time(command["next_followup_at"], customer.get("next_followup_at"))
+            followup["next_followup_at"] = patch["next_followup_at"]
+        plan = plans.freeze(customer, patch, command, ledger, config, moment,
+                            binding=trusted_plan_binding, expected_revision=trusted_expected_plan_revision,
+                            expected_target=trusted_expected_plan_target,
+                            historical=bool(followup.get("backfill")) or not patch)
+        if trusted_principal is not None:
+            plans.verify_binding(plan, trusted_principal)
         change_id = "chg_" + secrets.token_urlsafe(18)
         created_at = _iso(moment)
         expires_at = _iso(moment + timedelta(seconds=ttl))
@@ -1020,6 +1044,8 @@ def stage_followup(
         }
         if trusted_principal is not None:
             body["principal"] = dict(trusted_principal)
+        if plan is not None:
+            body["plan"] = plan
         ledger.stage(body, action_token_hash, intent_version=intent_version)
     except (TypeError, ValueError) as exc:
         return _blocked("invalid_backend_data", str(exc))
@@ -1041,6 +1067,7 @@ def stage_followup(
         },
         "untouched_fields": list(_UNTOUCHED_FIELDS),
         "message": "Staged only. Feishu has not been changed.",
+        **plans.preview(body),
     }
 
 
@@ -1141,6 +1168,11 @@ def begin_approval(
         return result
 
     bound = {**staged, "principal": principal, "actor": actor}
+    try:
+        from . import plans
+        plans.verify_binding(staged.get("plan"), principal)
+    except (ValueError, TypeError) as exc:
+        return _blocked("plan_route_mismatch", str(exc))
     preview_hash = _hash(_approval_material(bound))
     try:
         replayed = ledger.get_approval_for_change(change_id) is not None
@@ -1428,11 +1460,13 @@ def execute_claimed_approval(
             "host_approval_required",
             "No executing host approval was found.",
         )
-    if approval["preview_hash"] != _hash(_approval_material(staged)):
+    from . import plans
+    environment_changed = staged.get("plan") is not None and staged["plan"]["namespace"] != plans.namespace(config)
+    if environment_changed or approval["preview_hash"] != _hash(_approval_material(staged)):
         result = _replan(
             approval["change_id"],
-            "preview_changed",
-            "Stage this follow-up again.",
+            "plan_environment_changed" if environment_changed else "preview_changed",
+            "The CRM environment changed; preview again." if environment_changed else "Stage this follow-up again.",
         )
         ledger.finish_approval(
             approval_id, "failed", "approve", _iso(moment), result
@@ -1491,12 +1525,21 @@ def _prepare_child_followup(staged, receipt, backend, ledger, config, moment):
                 {"customer_query": customer["customer_number"], **staged["followup"]},
                 backend, temporary, config, secrets.token_urlsafe(32), moment,
                 trusted_record_id=record_id,
+                trusted_plan_binding=staged.get("plan_reminder_binding"),
             )
             if preview.get("status") != "staged":
                 return result, None
             body = temporary.planned_body(preview["change_id"])
         finally:
             temporary.close()
+        if body is not None:
+            from . import plans
+            plan = plans.freeze(customer, body["customer_patch"], staged["followup"], ledger, config, moment,
+                                binding=staged.get("plan_reminder_binding"),
+                                historical=bool(staged["followup"].get("backfill")) or not body["customer_patch"])
+            plans.verify_binding(plan, staged["principal"])
+            if plan is not None:
+                body["plan"] = plan
         approval = ledger.stage_child(staged["change_id"], body, _iso(moment))
         if approval is None:
             result["next_approval_status"] = "not_published"
@@ -1601,6 +1644,10 @@ def _apply_approved_followup(
 def _apply_claimed_followup(staged, backend, ledger, moment):
     change_id = staged["change_id"]
     try:
+        from . import plans
+        plan_error = plans.check(staged, ledger, moment)
+        if plan_error is not None:
+            return _finish(ledger, change_id, "replan_required", plan_error)
         schema = _mapping(backend.read_schema(), "schema")
         if _hash(schema) != staged["schema_hash"]:
             return _finish(
@@ -1846,12 +1893,22 @@ def _finish_after_customer_write(
 
 
 def _resolve_customer(query: str, backend: Backend) -> tuple[list[Mapping[str, Any]], str]:
+    number_query = re.fullmatch(r"[a-z][a-z0-9_]*-[0-9]+", _normal(query)) is not None
+    exact_lookup = getattr(backend, "find_customers_by_number", None)
+    if callable(exact_lookup):
+        exact = list(exact_lookup(query))
+        for row in exact:
+            _validate_customer(row)
+            if _normal(row.get("customer_number")) != _normal(query):
+                raise ValueError("Exact customer-number lookup returned a different customer.")
+        if exact or number_query:
+            return exact, "customer_number"
     rows = list(backend.find_customers(query))
     for row in rows:
         _validate_customer(row)
     needle = _normal(query)
     numbered = [row for row in rows if _normal(row.get("customer_number")) == needle]
-    if numbered:
+    if numbered or number_query:
         return numbered, "customer_number"
     named = [row for row in rows if _normal(row.get("name")) == needle]
     return named, "name"
@@ -1861,7 +1918,7 @@ def _followup(value: Any) -> dict[str, Any]:
     item = _mapping(value, "followup")
     _only_keys(
         item,
-        {"occurred_at", "content", "channel", "next_action", "next_followup_at"},
+        {"occurred_at", "content", "channel", "next_action", "next_followup_at", "remind", "backfill"},
     )
     occurred = _parse_time(item.get("occurred_at"), "followup.occurred_at")
     result: dict[str, Any] = {
@@ -1878,9 +1935,13 @@ def _followup(value: Any) -> dict[str, Any]:
             item["next_action"], "followup.next_action", 1000
         )
     if item.get("next_followup_at") is not None:
-        result["next_followup_at"] = _parse_time(
-            item["next_followup_at"], "followup.next_followup_at"
-        ).isoformat()
+        from . import plans
+        result["next_followup_at"] = plans.normalize_time(item["next_followup_at"])
+    for flag in ("remind", "backfill"):
+        if flag in item:
+            if not isinstance(item[flag], bool):
+                raise ValueError(f"{flag} must be a boolean.")
+            result[flag] = item[flag]
     return result
 
 
@@ -1893,6 +1954,8 @@ def _customer_patch(customer: Mapping[str, Any], followup: Mapping[str, Any]) ->
         return patch
     patch["last_followup_at"] = followup["occurred_at"]
     patch["last_followup_content"] = followup["content"]
+    if followup.get("backfill"):
+        return patch
     for field in ("next_action", "next_followup_at"):
         if field in followup:
             patch[field] = followup[field]
@@ -1900,13 +1963,16 @@ def _customer_patch(customer: Mapping[str, Any], followup: Mapping[str, Any]) ->
 
 
 def _followup_payload(staged: Mapping[str, Any]) -> dict[str, Any]:
-    return {
+    result = {
         "change_id": staged["change_id"],
         "customer_record_id": staged["customer_record_id"],
         "customer_number": staged.get("customer_number"),
         **staged["followup"],
         "created_by": staged["actor"]["feishu_user_id"],
     }
+    result.pop("remind", None)
+    result.pop("backfill", None)
+    return result
 
 
 def _followup_verification_payload(staged: Mapping[str, Any]) -> dict[str, Any]:
@@ -2060,6 +2126,9 @@ def _approval_material(staged: Mapping[str, Any]) -> dict[str, Any]:
             material[key] = staged.get(key)
     if "parent_change_id" in staged:
         material["parent_change_id"] = staged["parent_change_id"]
+    for key in ("plan", "plan_reminder_binding"):
+        if key in staged:
+            material[key] = staged[key]
     return material
 
 
@@ -2072,6 +2141,7 @@ def _approval_preview(
     customer = _mapping(staged.get("customer_snapshot"), "customer_snapshot")
     patch = _mapping(staged.get("customer_patch"), "customer_patch")
     repairing = staged.get("state") == "partial"
+    from . import plans
     return {
         "actor": _mapping(staged.get("actor"), "actor")["display_name"],
         "matched_by": staged.get("matched_by"),
@@ -2102,6 +2172,7 @@ def _approval_preview(
         "failure_policy": (
             "A verified follow-up is retained if the customer-summary write fails."
         ),
+        **plans.preview(staged),
         **({"parent_change_id": staged["parent_change_id"],
             "parent_message": "客户建档／资料修改已成功；本卡只批准跟进，取消不会撤销客户操作。"}
            if staged.get("parent_change_id") else {}),

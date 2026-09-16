@@ -39,6 +39,32 @@ class HistoryBackend(MemoryBackend):
         return sorted(rows, key=lambda row: datetime.fromisoformat(row["occurred_at"]),
                       reverse=True)[:limit]
 
+    def read_customer_history_page(self, record_id, *, offset=0, limit=10):
+        rows = self.read_customer_history(record_id, offset + limit + 1)
+        return {"items": rows[offset:offset + limit], "has_more": len(rows) > offset + limit}
+
+    def list_customers(self, *, keyword=None, owner_id=None, stages=(), date_from=None,
+                       date_to=None, unscheduled=False, offset=0, limit=20):
+        rows = list(self.customers.values())
+        if owner_id is not None:
+            rows = [row for row in rows if any(person.get("id") == owner_id for person in row.get("owner", []))]
+        if keyword:
+            rows = [row for row in rows if any(keyword.lower() in str(row.get(key, "")).lower()
+                    for key in ("customer_number", "name", "contact", "phone", "email"))]
+        if stages:
+            rows = [row for row in rows if row.get("stage") in stages]
+        if unscheduled:
+            rows = [row for row in rows if not row.get("next_followup_at")]
+        else:
+            for value, lower in ((date_from, True), (date_to, False)):
+                if value:
+                    bound = datetime.fromisoformat(value)
+                    rows = [row for row in rows if row.get("next_followup_at") and
+                            ((datetime.fromisoformat(row["next_followup_at"]) >= bound) if lower else
+                             (datetime.fromisoformat(row["next_followup_at"]) < bound))]
+        rows.sort(key=lambda row: (row.get("next_followup_at") or "", row["customer_number"]))
+        return {"items": copy.deepcopy(rows[offset:offset + limit]), "has_more": len(rows) > offset + limit}
+
 
 class HostToolTests(unittest.TestCase):
     def setUp(self):
@@ -82,6 +108,45 @@ class HostToolTests(unittest.TestCase):
         self.assertEqual("none", result["latest_operation_status"])
         self.assertIsNone(result["latest_operation"])
 
+        _, page = self.call("customer", {"customer_query": "C-001", "history_offset": result["next_offset"]})
+        self.assertEqual(2, len(page["history"]))
+        self.assertFalse(page["has_more"])
+        self.assertIsNone(page["next_offset"])
+
+    def test_customer_lists_are_self_scoped_and_paginated_without_writes(self):
+        for index in range(25):
+            row = customer(f"rec-{index}", f"C-{index:03}")
+            row["owner"] = [{"id": "ou_fixture_sender-1", "name": "Fixture sender-1"}]
+            self.backend.customers[row["record_id"]] = row
+        code, first = self.call("customers", {})
+        self.assertEqual(0, code)
+        self.assertEqual(20, len(first["customers"]))
+        self.assertTrue(first["has_more"])
+        _, second = self.call("customers", first["next_request"])
+        self.assertEqual(5, len(second["customers"]))
+        self.assertFalse(second["has_more"])
+        self.assertEqual([], self.backend.actions)
+
+    def test_host_plan_commands_are_not_model_tools_and_need_host_auth(self):
+        for command in ("host-plan-events", "host-plan-read", "host-plan-ack"):
+            with self.subTest(command=command):
+                code, result = self.call(command, {})
+                self.assertEqual(2, code)
+                self.assertEqual("invalid_local_input", result["code"])
+                code, _ = self.call("", {}, host_command=command, env={})
+                self.assertEqual(2, code)
+        code, result = self.call("", {}, host_command="host-plan-events", env={cli.HOST_SECRET_ENV: SECRET})
+        self.assertEqual((0, "disabled"), (code, result["status"]))
+
+    def test_model_fields_cannot_supply_reminder_binding_or_expected_revision(self):
+        for field in ("plan_reminder_binding", "expected_plan_revision", "expected_plan_target", "private_chat_id"):
+            with self.subTest(field=field):
+                code, result = self.call("stage-customer-update", {
+                    "customer_query": "C-001", "changes": {"next_action": "虚构下一步"}, field: "forged",
+                })
+                self.assertEqual((2, "invalid_local_input"), (code, result["code"]))
+        self.assertEqual([], self.backend.actions)
+
     def bind_card(self, staged, message_id="card-1"):
         approval = {"approval_id": staged["approval_id"],
                     "principal": {**PRINCIPAL, "message_id": message_id}}
@@ -103,6 +168,7 @@ class HostToolTests(unittest.TestCase):
                 self.assertEqual("available", result["latest_operation_status"])
                 self.assertEqual(expected, operation["status"])
                 self.assertEqual(staged["change_id"], operation["change_id"])
+
                 self.assertTrue(operation["card_bound"])
                 self.assertEqual([], result["history"])
                 self.assertEqual([], self.backend.actions)
@@ -111,6 +177,14 @@ class HostToolTests(unittest.TestCase):
                 if expected == "cancelled":
                     self.assertEqual("cancelled", operation["durable_change_state"])
                     self.assertEqual("cancelled", operation["durable_change_receipt"]["status"])
+
+    def test_pending_result_uses_canonical_parser_for_utc_z_on_python310(self):
+        _, staged = self.call("stage", stage_command())
+        self.bind_card(staged)
+        with mock.patch.object(cli, "datetime", wraps=datetime) as legacy_datetime:
+            legacy_datetime.fromisoformat.side_effect = ValueError("Python 3.10 rejects UTC Z")
+            _, result = self.call("result", {"change_id": staged["change_id"]})
+        self.assertEqual("pending", result["status"])
 
     def test_customer_operation_is_scoped_to_five_principal_fields_not_token_or_message(self):
         _, staged = self.call("stage", stage_command())

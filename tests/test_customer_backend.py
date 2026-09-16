@@ -94,13 +94,31 @@ class CustomerBackendTests(unittest.TestCase):
         self.assertEqual(6, len(cells))
         self.assertIsNone(cells[self.fields["customers"]["phone"]])
         self.assertEqual(["沟通中"], cells[self.fields["customers"]["stage"]])
-        for key in ("customer_number", "operation_id", "last_followup_content", "next_action", "record_id"):
+        for key in ("customer_number", "operation_id", "last_followup_content", "last_followup_at", "record_id"):
             with self.subTest(key=key), self.assertRaises(LarkBackendError):
                 self.subject.update_customer_profile("recCustomer", {key: "forbidden"})
         for key in ("name", "contact", "phone", "email", "stage", "owner"):
             with self.subTest(summary_field=key), self.assertRaises(LarkBackendError):
                 self.subject.update_customer("recCustomer", {key: "forbidden"})
         self.assertEqual(1, self.run.call_count)
+
+    def test_profile_plan_serializes_time_and_explicit_clears_without_history_write(self):
+        self.run.side_effect = self.capture_write
+        self.subject.update_customer_profile("recCustomer", {
+            "next_action": "发送报价", "next_followup_at": "2026-09-18T09:30:00+08:00"})
+        self.assertEqual({self.fields["customers"]["next_action"]: "发送报价",
+                          self.fields["customers"]["next_followup_at"]: "2026-09-18T09:30:00+08:00"},
+                         self.payload["update_records"]["recCustomer"])
+        self.subject.update_customer_profile("recCustomer", {"next_action": None, "next_followup_at": None})
+        self.assertEqual({self.fields["customers"]["next_action"]: None,
+                          self.fields["customers"]["next_followup_at"]: None},
+                         self.payload["update_records"]["recCustomer"])
+        for value in ("2026-09-18", "2026-09-18T09:30:00", "tomorrow", 42):
+            with self.subTest(value=value), self.assertRaises(LarkBackendError):
+                self.subject.update_customer_profile("recCustomer", {"next_followup_at": value})
+        with self.assertRaises(LarkBackendError):
+            self.subject.create_customer({**self.values(), "next_followup_at": "2026-09-18T09:30:00+08:00"})
+        self.assertEqual(2, self.run.call_count)
 
     def test_profile_rejects_unknown_stage_and_invalid_owner_and_empty_name(self):
         for fields in ({"stage": "new-stage"}, {"owner": []}, {"owner": [{"id": "ou_a"}]},

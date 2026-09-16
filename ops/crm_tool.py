@@ -19,13 +19,14 @@ FIELDS = {
     "reminder-update": {"id", "version", "content", "at"},
     "reminder-cancel": {"id", "version"},
     "open": set(),
-    "customer": {"customer_query"},
-    "stage": {"customer_query", "occurred_at", "channel", "content", "next_action", "next_followup_at"},
+    "customer": {"customer_query", "history_offset"},
+    "customers": {"keyword", "owner", "owner_ref", "stages", "due", "date_from", "date_to", "offset"},
+    "stage": {"customer_query", "occurred_at", "channel", "content", "next_action", "next_followup_at", "remind", "backfill"},
     "result": {"change_id"},
     "assignee": {"query"},
     "stage-customer-create": {"name", "contact", "phone", "email", "stage", "owner_ref",
                               "allow_same_name", "followup"},
-    "stage-customer-update": {"customer_query", "changes", "allow_same_name", "followup"},
+    "stage-customer-update": {"customer_query", "changes", "allow_same_name", "followup", "remind"},
 }
 
 

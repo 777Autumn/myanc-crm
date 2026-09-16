@@ -112,7 +112,7 @@ class MemoryBackend:
             self.find_followup_misses -= 1
             return None
         for row in self.followups.values():
-            if row["change_id"] == change_id:
+            if row.get("change_id") == change_id:
                 result = copy.deepcopy(row)
                 result.pop("customer_number", None)
                 return result

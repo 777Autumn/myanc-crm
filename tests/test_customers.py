@@ -261,7 +261,7 @@ class CustomerTests(unittest.TestCase):
         self.assertEqual([], self.backend.actions)
 
     def test_immutable_and_unexpected_fields_are_rejected(self):
-        for field in ("customer_number", "record_id", "last_followup_content", "next_action", "actor", "approved"):
+        for field in ("customer_number", "record_id", "last_followup_content", "actor", "approved"):
             with self.subTest(field=field):
                 self.assertEqual("blocked", self.update({field: "override"})["status"])
         self.assertEqual("blocked", self.update({"stage": "自定义阶段"})["status"])

@@ -7,13 +7,14 @@ import secrets
 from datetime import timedelta
 from typing import Any, Mapping
 
-from . import core
+from . import core, plans
 
 
 STAGES = frozenset({"新线索", "已联系", "沟通中", "已成交", "暂缓"})
 PROFILE_FIELDS = {"name", "contact", "phone", "email", "stage", "owner"}
 INPUT_FIELDS = PROFILE_FIELDS - {"owner"} | {"owner_ref"}
 _LIMITS = {**core.CUSTOMER_TEXT_LIMITS, "stage": 64, "owner_ref": 132}
+UPDATE_FIELDS = INPUT_FIELDS | plans.FIELDS
 
 
 def _needs(fields, code="customer_input_required"):
@@ -115,7 +116,9 @@ def _duplicates(name, backend, excluded=None):
     return [rows[key] for key in sorted(rows)]
 
 
-def stage_customer(command, operation_type, backend, ledger, config, action_token, principal, now=None):
+def stage_customer(command, operation_type, backend, ledger, config, action_token, principal, now=None,
+                   *, trusted_plan_binding=None, trusted_expected_plan_revision=None,
+                   trusted_expected_plan_target=None):
     """Freeze an exact profile plan and optional later follow-up; write no CRM."""
     try:
         principal = core._principal(principal)
@@ -128,16 +131,19 @@ def stage_customer(command, operation_type, backend, ledger, config, action_toke
         create = operation_type == "customer_create"
         command = core._mapping(command, "request")
         allowed = INPUT_FIELDS if create else {"customer_query", "changes"}
-        core._only_keys(command, allowed | {"allow_same_name", "followup"})
+        core._only_keys(command, allowed | {"allow_same_name", "followup"} | ({"remind"} if not create else set()))
+        if "remind" in command and not isinstance(command["remind"], bool):
+            raise ValueError("remind must be a boolean.")
         allow_same = command.get("allow_same_name", False)
         if not isinstance(allow_same, bool):
             raise ValueError("allow_same_name must be a boolean.")
         raw = ({key: command[key] for key in INPUT_FIELDS if key in command} if create
                else core._mapping(command.get("changes"), "changes"))
-        core._only_keys(raw, INPUT_FIELDS)
-        if not raw and not create:
+        core._only_keys(raw, INPUT_FIELDS if create else UPDATE_FIELDS)
+        if not raw and not create and "remind" not in command:
             raise ValueError("At least one customer field must be changed.")
-        values = {key: None if value is None else core._required_text(value, key, _LIMITS[key])
+        limits = {**_LIMITS, "next_action": 1000, "next_followup_at": 64}
+        values = {key: None if value is None else core._required_text(value, key, limits[key])
                   for key, value in raw.items()}
         if values.get("stage") is not None and values["stage"] not in STAGES:
             raise ValueError("stage must be one of the five configured choices.")
@@ -146,7 +152,7 @@ def stage_customer(command, operation_type, backend, ledger, config, action_toke
         followup_missing = []
         if followup is not None:
             followup = core._mapping(followup, "followup")
-            core._only_keys(followup, {"occurred_at", "content", "channel", "next_action", "next_followup_at"})
+            core._only_keys(followup, {"occurred_at", "content", "channel", "next_action", "next_followup_at", "remind", "backfill"})
             followup_missing = ["followup." + key for key in ("occurred_at", "content") if not followup.get(key)]
         if create and (missing or followup_missing):
             return _needs(missing + followup_missing)
@@ -173,6 +179,8 @@ def stage_customer(command, operation_type, backend, ledger, config, action_toke
             if customer is None:
                 raise ValueError("The selected customer disappeared.")
             core._validate_customer(customer)
+            if "next_followup_at" in values:
+                values["next_followup_at"] = plans.normalize_time(values["next_followup_at"], customer.get("next_followup_at"))
         fields = {key: customer.get(key) for key in PROFILE_FIELDS}
         fields.update(values)
         missing = _missing(fields) + followup_missing
@@ -200,6 +208,11 @@ def stage_customer(command, operation_type, backend, ledger, config, action_toke
         fields["owner"] = [assignee]
         patch = dict(fields) if create else {("owner" if key == "owner_ref" else key):
                                              fields["owner" if key == "owner_ref" else key] for key in values}
+        plan = None if create else plans.freeze(customer, patch, command, ledger, config, moment,
+                                                binding=trusted_plan_binding,
+                                                expected_revision=trusted_expected_plan_revision,
+                                                expected_target=trusted_expected_plan_target)
+        plans.verify_binding(plan, principal)
         identifier = None if create else core._record_id(customer)
         duplicates = _duplicates(fields["name"], backend, identifier)
         renamed = not create and core._normal(fields["name"]) != core._normal(customer["name"])
@@ -219,6 +232,10 @@ def stage_customer(command, operation_type, backend, ledger, config, action_toke
                 "duplicate_hash": core._hash(duplicates), "followup": followup,
                 "request": {**dict(command), "followup": followup}, "principal": principal, "actor": actor,
                 "created_at": core._iso(moment), "expires_at": core._iso(moment + timedelta(seconds=ttl))}
+        if plan is not None:
+            body["plan"] = plan
+        if followup is not None and trusted_plan_binding is not None:
+            body["plan_reminder_binding"] = dict(trusted_plan_binding)
         ledger.stage(body, token_hash, intent_version=intent)
         return {"status": "staged", "change_id": change_id, "expires_at": body["expires_at"],
                 "preview": approval_preview(body, backend)}
@@ -245,6 +262,7 @@ def approval_preview(staged, backend):
             "allow_same_name": staged["request"].get("allow_same_name", False),
             "created_at": staged["created_at"], "expires_at": staged["expires_at"],
             "execution_order": ["create_customer" if create else "update_customer_profile", "read_customer"],
+            **plans.preview(staged),
             "failure_policy": "结果未知时停止，不盲目重试。首次跟进是独立待审批方案，取消它不撤销已核验的客户变更。"}
 
 
@@ -343,6 +361,9 @@ def _apply_claimed_customer(staged, backend, ledger, moment):
     change_id = staged["change_id"]
     create = staged["operation_type"] == "customer_create"
     try:
+        plan_error = plans.check(staged, ledger, moment)
+        if plan_error is not None:
+            return core._finish(ledger, change_id, "replan_required", plan_error)
         if create:
             existing = backend.find_customer_by_change(change_id)
             if existing is not None:
@@ -370,7 +391,8 @@ def _apply_claimed_customer(staged, backend, ledger, moment):
             ledger.set_resolved_customer(change_id, identifier)
         else:
             identifier = staged["customer_record_id"]
-            backend.update_customer_profile(identifier, staged["customer_patch"])
+            if staged["customer_patch"]:
+                backend.update_customer_profile(identifier, staged["customer_patch"])
         actual = _read_verified(lambda: backend.get_customer(identifier), staged)
     except Exception:
         read = (lambda: backend.find_customer_by_change(change_id)) if create else (lambda: backend.get_customer(staged["customer_record_id"]))
