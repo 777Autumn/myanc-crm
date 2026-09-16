@@ -118,6 +118,9 @@ class CrmToolClientTests(unittest.TestCase):
             ("assignee", {"query": "member@example.com"}, {"status": "resolved", "owner_ref": "own_fixture", "name": "示例同事"}),
             ("stage-customer-create", {"name": "虚构公司"}, {"status": "needs_input", "missing": ["stage", "owner_ref", "contact_detail"]}),
             ("stage-customer-update", {"customer_query": "C-001", "changes": {"stage": "沟通中"}}, {"status": "pending", "change_id": "chg_fixture"}),
+            ("customers", {"keyword": "虚构", "owner": "me", "due": "today"}, {"status": "found", "customers": [], "has_more": False}),
+            ("customer", {"customer_query": "C-001", "history_offset": 10}, {"status": "found", "history": [], "has_more": False}),
+            ("stage-customer-update", {"customer_query": "C-001", "changes": {"next_action": None, "next_followup_at": None}, "remind": False}, {"status": "pending", "change_id": "chg_fixture"}),
         ):
             with self.subTest(command=command):
                 peer = ProxyPeer(expected)

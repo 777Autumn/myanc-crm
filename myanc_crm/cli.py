@@ -35,6 +35,8 @@ BUSINESS_FIELDS = frozenset(
         "content",
         "next_action",
         "next_followup_at",
+        "remind",
+        "backfill",
     }
 )
 PRINCIPAL_FIELDS = frozenset(
@@ -45,7 +47,32 @@ NON_PENDING_STAGE_STATUSES = frozenset(
 )
 CREATE_FIELDS = frozenset({"name", "contact", "phone", "email", "stage", "owner_ref",
                            "allow_same_name", "followup"})
-UPDATE_FIELDS = frozenset({"customer_query", "changes", "allow_same_name", "followup"})
+UPDATE_FIELDS = frozenset({"customer_query", "changes", "allow_same_name", "followup", "remind"})
+PLAN_HOST_FIELDS = frozenset({"plan_reminder_binding", "expected_plan_revision"})
+
+
+def _plan_host_options(value, principal):
+    """These options come from the authenticated gateway, never its model input."""
+    options = {}
+    if "plan_reminder_binding" in value:
+        binding = value["plan_reminder_binding"]
+        fields = {"user_id", "source_chat_id", "project", "private_chat_id"}
+        if not isinstance(binding, Mapping) or set(binding) != fields or any(
+            not isinstance(item, str) or not item.strip() or len(item) > 1024
+            for item in binding.values()
+        ):
+            raise ValueError("Invalid host reminder binding.")
+        if any(binding[key] != principal[source] for key, source in (
+            ("user_id", "user_id"), ("source_chat_id", "chat_id"), ("project", "project")
+        )):
+            raise ValueError("Reminder binding differs from the trusted principal.")
+        options["trusted_plan_binding"] = dict(binding)
+    if "expected_plan_revision" in value:
+        revision = value["expected_plan_revision"]
+        if type(revision) is not int or revision < 0:
+            raise ValueError("Invalid expected plan revision.")
+        options["trusted_expected_plan_revision"] = revision
+    return options
 
 
 class CliConfigurationError(ValueError):
@@ -152,8 +179,8 @@ def _host_prepare_payload(
 ) -> tuple[Mapping[str, Any], dict[str, str]]:
     """Validate the complete host-to-CRM handoff before any CRM read."""
 
-    if set(value) != {"request", "principal"}:
-        raise ValueError("host-prepare requires exactly request and principal.")
+    if not {"request", "principal"} <= set(value) or set(value) - {"request", "principal"} - PLAN_HOST_FIELDS:
+        raise ValueError("host-prepare requires request, principal and supported host options.")
 
     request = value.get("request")
     if not isinstance(request, Mapping):
@@ -178,13 +205,17 @@ def _host_prepare_payload(
         raise ValueError("principal is not configured.")
     _required_text(actor, "display_name")
     _required_text(actor, "feishu_user_id")
+    _plan_host_options(value, principal)
     return request, principal
 
 
 def _host_tool_payload(value, config):
-    if set(value) != {"command", "request", "principal"}:
-        raise ValueError("host-tool requires exactly command, request and principal.")
-    fields = {"open": frozenset(), "customer": frozenset({"customer_query"}),
+    from .queries import CUSTOMER_FIELDS
+    required = {"command", "request", "principal"}
+    if not required <= set(value) or set(value) - required - PLAN_HOST_FIELDS:
+        raise ValueError("host-tool requires command, request, principal and supported host options.")
+    fields = {"open": frozenset(), "customer": frozenset({"customer_query", "history_offset"}),
+              "customers": CUSTOMER_FIELDS,
               "stage": BUSINESS_FIELDS, "result": frozenset({"change_id"}),
               "assignee": frozenset({"query"}),
               "stage-customer-create": CREATE_FIELDS,
@@ -192,8 +223,10 @@ def _host_tool_payload(value, config):
     command = value.get("command")
     if not isinstance(command, str) or command not in fields:
         raise ValueError("Unsupported controlled tool.")
+    if set(value) & PLAN_HOST_FIELDS and command not in {"stage", "stage-customer-create", "stage-customer-update"}:
+        raise ValueError("Host plan options require a staging command.")
     request, principal = _host_prepare_payload(
-        {"request": value["request"], "principal": value["principal"]}, config, fields[command]
+        {key: item for key, item in value.items() if key != "command"}, config, fields[command]
     )
     if command == "customer":
         core._required_text(request.get("customer_query"), "customer_query", 256)
@@ -203,6 +236,10 @@ def _host_tool_payload(value, config):
 
 
 def _customer_result(request, backend, principal, ledger):
+    from .queries import customer_history
+    offset = request.get("history_offset", 0)
+    if type(offset) is not int or offset < 0:
+        return {"status": "blocked", "code": "invalid_history_offset"}
     matches, matched_by = core._resolve_customer(request["customer_query"], backend)
     if len(matches) != 1:
         return {"status": "needs_selection" if matches else "not_found",
@@ -224,19 +261,7 @@ def _customer_result(request, backend, principal, ledger):
     except Exception:
         # A missing outcome is not evidence that the old approval is still pending.
         result.update(latest_operation_status="unavailable", latest_operation=None)
-    try:
-        # Request one sentinel row to distinguish an empty history from a truncated one.
-        history = list(backend.read_customer_history(row["record_id"], 11))
-        if len(history) > 11 or any(
-            item.get("customer_record_id") != row["record_id"] for item in history
-        ):
-            raise ValueError("Invalid bounded history response.")
-        history.sort(key=lambda item: datetime.fromisoformat(item["occurred_at"]), reverse=True)
-    except Exception:
-        # Never represent an unavailable history as an empty customer history.
-        return {**result, "history": None, "history_status": "unavailable"}
-    return {**result, "history_status": "available", "truncated": len(history) > 10,
-            "history": [core._display_followup(item, backend) for item in history[:10]]}
+    return {**result, **customer_history(row["record_id"], backend, offset)}
 
 
 def _change_result(request, principal, ledger, *, include_related=True):
@@ -256,6 +281,10 @@ def _change_result(request, principal, ledger, *, include_related=True):
               # Cancelling repair approval does not undo a previously verified follow-up.
               "durable_change_state": staged["state"],
               "durable_change_receipt": staged["receipt"]}
+    from .plans import synchronization
+    sync = synchronization(staged, ledger)
+    if sync is not None:
+        result["plan_synchronization"] = sync
     if state == "executing" and approval["receipt"] is None:
         uncertain = now >= core._parse_time(approval["decided_at"], "decided_at") + timedelta(
             seconds=core.APPROVAL_EXECUTION_UNCERTAIN_SECONDS
@@ -344,13 +373,16 @@ def main(
         "host-claim",
         "host-execute",
         "host-decide",
+        "host-plan-events",
+        "host-plan-read",
+        "host-plan-ack",
     }:
         result = {
             "status": "failed",
             "code": "usage",
             "message": (
                 "Usage: crm-followup host-tool|host-prepare|host-begin|host-bind-card|host-claim|"
-                "host-execute|host-decide, or "
+                "host-execute|host-decide|host-plan-events|host-plan-read|host-plan-ack, or "
                 "the exact request-approval marker."
             ),
         }
@@ -370,10 +402,13 @@ def main(
         prepare_request = None
         prepare_principal = None
         tool_command = None
+        plan_options = {}
         if command == "host-prepare":
             prepare_request, prepare_principal = _host_prepare_payload(request, config)
         elif command == "host-tool":
             tool_command, prepare_request, prepare_principal = _host_tool_payload(request, config)
+        if prepare_principal is not None:
+            plan_options = _plan_host_options(request, prepare_principal)
         if tool_command == "open":
             # A host-configured navigation link needs neither CRM IO nor a ledger.
             _write(target, {"status": "available", "url": _base_url(config.get("base_url"))})
@@ -391,6 +426,9 @@ def main(
     try:
         if tool_command == "customer":
             result = _customer_result(prepare_request, backend, prepare_principal, ledger)
+        elif tool_command == "customers":
+            from .queries import customers
+            result = customers(prepare_request, backend, ledger, config, prepare_principal)
         elif tool_command == "result":
             result = _change_result(prepare_request, prepare_principal, ledger)
         elif tool_command == "assignee":
@@ -403,11 +441,12 @@ def main(
                 from .customers import stage_customer
                 operation = "customer_create" if tool_command.endswith("create") else "customer_update"
                 staged = stage_customer(prepare_request, operation, backend, ledger, config,
-                                        action_token, prepare_principal)
+                                        action_token, prepare_principal, **plan_options)
             else:
                 staged = stage_followup(
                     prepare_request, backend, ledger, config, action_token,
                     trusted_principal=prepare_principal,
+                    **plan_options,
                 )
             if staged.get("status") == "staged":
                 result = begin_approval(
@@ -430,6 +469,14 @@ def main(
                         "CRM staging returned an unsupported result; Feishu is unchanged."
                     ),
                 }
+        elif command.startswith("host-plan-"):
+            from . import plans
+            if command == "host-plan-read":
+                result = plans.read(request, backend, ledger, config)
+            elif command == "host-plan-events":
+                result = plans.events(request, ledger, config)
+            else:
+                result = plans.ack(request, ledger, config)
         elif command == "host-begin":
             result = begin_approval(
                 request,
