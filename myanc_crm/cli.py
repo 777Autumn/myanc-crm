@@ -245,9 +245,10 @@ def _host_tool_payload(value, config):
 
 
 def _open_result(request, config, principal):
-    """Select native views from protected configuration, never model identity/URLs."""
+    """Select native pages from protected configuration, never model identity/URLs."""
     requested = request.get("target", "mine")
-    labels = {"mine": "我的客户", "team": "全团队跟进", "stages": "全团队阶段看板"}
+    labels = {"mine": "我的客户", "team": "全团队跟进", "stages": "全团队阶段看板",
+              "overview": "全团队今日跟进总览"}
     if not isinstance(requested, str) or requested not in labels:
         raise ValueError("Unsupported CRM navigation target.")
     base_url = _base_url(config.get("base_url"))
@@ -255,7 +256,7 @@ def _open_result(request, config, principal):
     view_id = None
     if views is not None:
         if not isinstance(views, Mapping) or set(views) - {
-            "base_token", "customer_table_id", "owners", "team", "stages"
+            "base_token", "customer_table_id", "owners", "team", "stages", "overview"
         }:
             raise ValueError("Invalid CRM workbench configuration.")
         for name in ("base_token", "customer_table_id"):
@@ -270,12 +271,17 @@ def _open_result(request, config, principal):
         for value in [*owners.values(), *(views[key] for key in ("team", "stages") if key in views)]:
             if not isinstance(value, str) or not re.fullmatch(r"vew[A-Za-z0-9]+", value):
                 raise ValueError("Invalid CRM view identifier.")
+        if "overview" in views and (not isinstance(views["overview"], str) or
+                                   not re.fullmatch(r"blk[A-Za-z0-9]+", views["overview"])):
+            raise ValueError("Invalid CRM dashboard identifier.")
         actor = config["allowed_actors"][principal["user_id"]]
         view_id = owners.get(actor["feishu_user_id"]) if requested == "mine" else views.get(requested)
         if view_id:
             # Discard record/filter/old view parameters and fragments from the Base link.
+            query = ({"table": view_id} if requested == "overview" else
+                     {"table": config["customer_table_id"], "view": view_id})
             base_url = urlunsplit((parts.scheme, parts.netloc, parts.path,
-                                  urlencode({"table": config["customer_table_id"], "view": view_id}), ""))
+                                  urlencode(query), ""))
     return {"status": "available", "url": base_url, "requested_target": requested,
             "target": requested if view_id else "base",
             "label": labels[requested] if view_id else "CRM 总表",

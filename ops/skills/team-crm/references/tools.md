@@ -15,7 +15,7 @@ label any earlier facts as historical. Read-only queries preserve pending plans.
 
 | Command | Input fields | Purpose |
 |---|---|---|
-| `open` | Optional `target`: `mine` (default), `team`, `stages` | Get a host-selected CRM view link; no record read, write, or permission change |
+| `open` | Optional `target`: `mine` (default), `team`, `stages`, `overview` | Get a host-selected CRM page link; no record read, write, or permission change |
 | `customers` | Optional `keyword`, `owner` (`me` default or `all`), verified `owner_ref` instead of `owner`, `stages`, `due` (`today`, `overdue`, `unscheduled`), `date_from`, `date_to`, `offset` | Find customers; bounded pages of 20 |
 | `customer` | `customer_query`; optional `history_offset` | Read current facts, pages of 10 history rows, and this session's latest stored operation |
 | `stage` | `customer_query`, `occurred_at`, `content`; optional `channel`, `next_action`, `next_followup_at`, `remind`, `backfill` | Stage a truthful communication and explicitly requested plan changes |
@@ -27,7 +27,10 @@ label any earlier facts as historical. Read-only queries preserve pending plans.
 When asked to open CRM or “我的客户”, call
 `printf '%s' '{}' | /usr/local/bin/crm-tool open` in this turn (defaults to `mine`).
 For “打开全团队跟进/进展”, send `{"target":"team"}`; for a stage board,
-send `{"target":"stages"}`. No customer number or confirmation is needed.
+send `{"target":"stages"}`. For “打开今日总览/团队跟进总览”, send
+`{"target":"overview"}`: this is the whole team's dashboard, not a personal one.
+No customer number or confirmation is needed. “我今天该跟进谁” uses
+`customers` with `due=today` and the default `owner=me`, not the team dashboard.
 Reply with a clickable link using the returned `label` and exact `url`, including
 the host-selected environment. If returned `target` is `base`, explicitly say it
 opens the CRM total table, not a personal view; never invent a missing personal
@@ -38,6 +41,9 @@ cards; recommend Bot approval for changes, without claiming the page is read-onl
 “我的客户” means assigned owner, not reminder recipient. Do not infer delivery
 status from the page. “已过计划日期” means a date before today in Beijing;
 today's earlier times remain “今日安排”. This display group does not end a plan.
+The overview counts 今日安排、已过计划日期、未设置时间 from the full CRM;
+future plans are outside these three counts, so their sum is not the customer
+total. Read the actual page for numbers; conversation memory is not a data source.
 If unavailable, explain that the table link could not be obtained; do not invent
 a URL or fall back to an earlier environment's link. Use `customers` for searches,
 filtered lists and due-work questions; offer the table link for browsing/export.
