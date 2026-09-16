@@ -89,3 +89,8 @@ This fix is code/CI delivery only. No VPS invocation, production restart, model
 call, credential change, candidate rebuild or real startup-race reproduction is
 part of this task. A future maintenance window must integrate this frozen module
 and record its actual application-health and safety outcomes separately.
+
+Subsequent integration: the [September 16 CRM/Skills maintenance](releases/2026-09-16-crm-skills-live.md)
+used the frozen helper for two separately verified stages, each with one start
+request and a successful 130-second application-health window. This is real
+integration evidence, not a reproduction or retrospective diagnosis of the old race.

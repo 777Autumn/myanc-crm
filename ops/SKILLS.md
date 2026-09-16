@@ -5,6 +5,11 @@ This is a rules-only refactor of CRM main
 candidate remains a separate release; this document is not a deployment receipt.
 Follow [RELEASE.md](RELEASE.md) for review, CI, merge and candidate gates.
 
+Both releases were installed sequentially in the Owner-authorized September 16
+window. See [installed hashes and acceptance limits](releases/2026-09-16-crm-skills-live.md).
+Six-environment file/access checks passed; production model auto-trigger evidence
+is still distinct from the prior isolated native-model validation.
+
 ## Rule migration map
 
 The source below means `ops/CLAUDE.vps.md` at that exact base commit. Domain
@@ -68,8 +73,9 @@ No database migration or new permission is part of this release.
   receipt, personal reminder changes/cancel, quoted instructions and existing
   knowledge discovery. Record misses, wrong triggers, repeat reads, reply quality
   and semantic review separately from code-grader outcomes.
-- Real six-environment installed hashes/access and online acceptance remain
-  pending until that window. Local fixtures do not certify production loading.
+- Real six-environment installed hashes/access passed in the recorded window;
+  subsequent releases must repeat those checks. Current production model behavior
+  acceptance remains incomplete; local fixtures do not certify production loading.
 
 If loading or behavior regresses, restore the matching prior rules/skills from
 the same business version's backup. Do not downgrade application state or
