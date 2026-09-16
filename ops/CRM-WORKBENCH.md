@@ -5,9 +5,10 @@ uses the existing [team-crm protocol](skills/team-crm/references/tools.md).
 This is display configuration plus a read-only link selector, not a new CRM.
 
 Current delivery: the Owner-approved [September 16 first phase](releases/2026-09-16-crm-mobile-workbench.md)
-provides team follow-up and stage views. The second-phase candidate adds personal
-views and the team overview; see its release record for actual per-environment
-acceptance. An unverified personal mapping stays absent, so `mine` explicitly
+provides team follow-up and stage views. The [September 17 second phase](releases/2026-09-17-crm-overview.md)
+adds verified personal views and the team overview in both environments; technical
+cutover is complete and this round's phone/natural-language acceptance is pending.
+An unverified personal mapping stays absent, so `mine` explicitly
 falls back to the original Base rather than silently exposing a team view.
 
 ## Protected configuration
