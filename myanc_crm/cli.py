@@ -6,10 +6,12 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Mapping, TextIO
+from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from .core import (
     Ledger,
@@ -221,7 +223,7 @@ def _host_tool_payload(value, config):
     required = {"command", "request", "principal"}
     if not required <= set(value) or set(value) - required - PLAN_HOST_FIELDS:
         raise ValueError("host-tool requires command, request, principal and supported host options.")
-    fields = {"open": frozenset(), "customer": frozenset({"customer_query", "history_offset"}),
+    fields = {"open": frozenset({"target"}), "customer": frozenset({"customer_query", "history_offset"}),
               "customers": CUSTOMER_FIELDS,
               "stage": BUSINESS_FIELDS, "result": frozenset({"change_id"}),
               "assignee": frozenset({"query"}),
@@ -240,6 +242,45 @@ def _host_tool_payload(value, config):
     elif command == "result":
         core._opaque_id(request.get("change_id"), "change_id", "chg_")
     return command, request, principal
+
+
+def _open_result(request, config, principal):
+    """Select native views from protected configuration, never model identity/URLs."""
+    requested = request.get("target", "mine")
+    labels = {"mine": "我的客户", "team": "全团队跟进", "stages": "全团队阶段看板"}
+    if not isinstance(requested, str) or requested not in labels:
+        raise ValueError("Unsupported CRM navigation target.")
+    base_url = _base_url(config.get("base_url"))
+    views = config.get("workbench_views")
+    view_id = None
+    if views is not None:
+        if not isinstance(views, Mapping) or set(views) - {
+            "base_token", "customer_table_id", "owners", "team", "stages"
+        }:
+            raise ValueError("Invalid CRM workbench configuration.")
+        for name in ("base_token", "customer_table_id"):
+            if _required_text(views, name) != _required_text(config, name):
+                raise ValueError("CRM workbench belongs to a different environment.")
+        parts = urlsplit(base_url)
+        if parts.path.rstrip("/") != "/base/" + config["base_token"]:
+            raise ValueError("CRM workbench URL differs from its configured Base.")
+        owners = views.get("owners", {})
+        if not isinstance(owners, Mapping) or any(not isinstance(key, str) or not key for key in owners):
+            raise ValueError("Invalid CRM owner view mapping.")
+        for value in [*owners.values(), *(views[key] for key in ("team", "stages") if key in views)]:
+            if not isinstance(value, str) or not re.fullmatch(r"vew[A-Za-z0-9]+", value):
+                raise ValueError("Invalid CRM view identifier.")
+        actor = config["allowed_actors"][principal["user_id"]]
+        view_id = owners.get(actor["feishu_user_id"]) if requested == "mine" else views.get(requested)
+        if view_id:
+            # Discard record/filter/old view parameters and fragments from the Base link.
+            base_url = urlunsplit((parts.scheme, parts.netloc, parts.path,
+                                  urlencode({"table": config["customer_table_id"], "view": view_id}), ""))
+    return {"status": "available", "url": base_url, "requested_target": requested,
+            "target": requested if view_id else "base",
+            "label": labels[requested] if view_id else "CRM 总表",
+            "message": ("按现有飞书权限打开；视图筛选不限制数据访问权限。" if view_id else
+                        "该工作台入口尚未配置，返回 CRM 总表，不是个人视图。")}
 
 
 def _customer_result(request, backend, principal, ledger):
@@ -418,7 +459,7 @@ def main(
             plan_options = _plan_host_options(request, prepare_principal)
         if tool_command == "open":
             # A host-configured navigation link needs neither CRM IO nor a ledger.
-            _write(target, {"status": "available", "url": _base_url(config.get("base_url"))})
+            _write(target, _open_result(prepare_request, config, prepare_principal))
             return 0
         backend, ledger = _runtime(config, path)
     except (CliConfigurationError, LarkBackendError, OSError, TypeError, ValueError):

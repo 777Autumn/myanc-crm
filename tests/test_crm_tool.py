@@ -113,6 +113,9 @@ class CrmToolClientTests(unittest.TestCase):
     def test_stage_clarification_and_result_partial_are_not_reinterpreted(self):
         for command, request, expected in (
             ("open", {}, {"status": "available", "url": "https://example.invalid/base/fixture"}),
+            ("open", {"target": "mine"}, {"status": "available", "target": "base", "label": "CRM 总表", "url": "https://example.invalid/base/fixture"}),
+            ("open", {"target": "team"}, {"status": "available", "target": "team", "url": "https://example.invalid/base/fixture?view=vewTeam"}),
+            ("open", {"target": "stages"}, {"status": "available", "target": "stages", "url": "https://example.invalid/base/fixture?view=vewStages"}),
             ("stage", {"customer_query": "演示客户", "content": "确认了需求"}, {"status": "needs_time", "question": "When?"}),
             ("result", {"change_id": "chg_test"}, {"status": "partial", "followup": "verified", "customer_update": "failed"}),
             ("assignee", {"query": "member@example.com"}, {"status": "resolved", "owner_ref": "own_fixture", "name": "示例同事"}),
@@ -126,6 +129,7 @@ class CrmToolClientTests(unittest.TestCase):
                 peer = ProxyPeer(expected)
                 code, result, _ = self.invoke([command], json.dumps(request).encode(), peer)
                 self.assertEqual((0, expected), (code, result))
+                self.assertEqual({"command": command, "input": request}, json.loads(bytes(peer.sent).split(b"\r\n\r\n", 1)[1]))
 
     def test_transport_failure_is_unknown_without_leaking_details_or_retry(self):
         peer = ProxyPeer({})
