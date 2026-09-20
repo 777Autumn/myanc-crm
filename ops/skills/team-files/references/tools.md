@@ -49,8 +49,23 @@ First-version limits: up to 4 selected input files, 20 MiB each and 40 MiB per
 batch; each output is at most 20 MiB, with at most 100 MiB expanded OOXML content.
 Only valid DOCX/XLSX packages are accepted. Macros, embedded active objects,
 external relationships (including external hyperlinks), and active external/DDE
-formulas are rejected; ordinary formulas such as SUM are allowed. Report the
-specific unsupported content; do not silently remove it or change the format.
+formulas are rejected. All DOCX fields (`fldSimple`, `fldChar`, `instrText`) are
+unsupported, including ordinary PAGE and TOC fields; static text and tables remain
+supported. XLSX formulas such as SUM remain supported when they have no external
+references. Report the specific unsupported content and request a static source
+or a separately prepared compatible file. Do not silently strip fields, remove
+content or change the format.
+
+A `file-deliver` preflight rejection returns HTTP 400 with `status: blocked` and
+a specific `code`, such as `file_format_unsupported`, `file_work_scope_mismatch` or
+`file_version_conflict`. This attempt did not send a file. Preserve the output
+and resolve the reported cause; scope/version conflicts require fresh context
+and identification of the intended work/artifact. HTTP 503 with
+`status: unavailable`, `code: file_outcome_unconfirmed` may follow a send whose
+receipt could not be persisted. Treat that outcome as unknown and recover status;
+never rename the file or retry delivery to bypass it.
+`file_delivery_requires_reconciliation` also blocks a new attempt while an earlier
+delivery is uncertain; recover that earlier status, never bypass it with a new name.
 
 Delivery states have different evidence:
 

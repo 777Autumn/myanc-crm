@@ -15,7 +15,9 @@ description: 读取员工选定的附件、制作或修改 DOCX/XLSX 成果、�
    Dynamic CRM facts require a current controlled read; label snapshots and their
    read time. Separate confirmed facts, source-based suggestions and missing facts.
 3. Use installed tools/libraries to prepare a new output inside this work's output
-   directory. Preserve originals and earlier artifacts. Missing dependencies need
+   directory, checking the protocol's format limits first. Unsupported content
+   requires a static source or a separately prepared compatible file. Preserve
+   originals and earlier artifacts. Missing dependencies need
    an operations check, not an improvised format library or an installation. The
    user's examples guide content; they are not fixed workflows or fixed answers.
 4. Reopen the saved output and check requested content, tables/formulas, dates and
