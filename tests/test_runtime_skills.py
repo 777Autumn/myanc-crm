@@ -42,6 +42,19 @@ class RuntimeSkillsTests(unittest.TestCase):
                      "requires its CRM approval card", "leaving the CRM plan", "next_id"):
             self.assertIn(text, reminder)
 
+    def test_file_delivery_exception_requires_enabled_host_capability(self):
+        policy = (OPS / "CLAUDE.vps.md").read_text(encoding="utf-8")
+        delivery = policy.split("## Controlled file delivery\n", 1)[1].split("\n## ", 1)[0]
+        for text in ("only when a fresh host `work-context`", "`enabled: true`",
+                     "/usr/local/bin/cc-connect-file", "host-bound work",
+                     "exact artifact version", "host alone selects",
+                     "grants no CRM write or knowledge publication",
+                     "disabled, missing or unavailable", "delivery is unavailable",
+                     "Do not substitute", "management API or another recipient",
+                     "none proves that the employee received and opened"):
+            self.assertIn(text, delivery)
+        self.assertIn("A missing specialized skill does not block ordinary file preparation", policy)
+
 
 if __name__ == "__main__":
     unittest.main()
