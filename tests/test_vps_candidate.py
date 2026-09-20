@@ -18,6 +18,18 @@ SPEC.loader.exec_module(builder)
 
 
 class CandidateTests(unittest.TestCase):
+    def test_old_gateway_has_no_file_runtime_and_partial_runtime_is_refused(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            gateway, bundle = root / "gateway", root / "bundle"
+            (gateway / "ops").mkdir(parents=True)
+            bundle.mkdir()
+            builder.copy_file_runtime_templates(gateway, bundle)
+            self.assertFalse((bundle / "gateway-ops").exists())
+            (gateway / "ops/file_tool.py").write_text("synthetic", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                builder.copy_file_runtime_templates(gateway, bundle)
+
     def test_build_packages_only_explicit_fresh_sources_with_all_hashes(self):
         for knowledge_sha in (None, "c" * 40):
             with self.subTest(knowledge=knowledge_sha), tempfile.TemporaryDirectory() as temp:
@@ -31,8 +43,11 @@ class CandidateTests(unittest.TestCase):
                                  "ops/CLAUDE.vps.md", "ops/skills/team-crm/SKILL.md",
                                  "ops/skills/team-crm/references/tools.md",
                                  "ops/skills/team-reminders/SKILL.md",
-                                 "ops/skills/team-reminders/references/tools.md"],
-                             "77AutumN/cc-connect-anc": ["web/pnpm-lock.yaml"],
+                                 "ops/skills/team-reminders/references/tools.md",
+                                 "ops/skills/team-files/SKILL.md",
+                                 "ops/skills/team-files/references/tools.md"],
+                             "77AutumN/cc-connect-anc": ["web/pnpm-lock.yaml", "ops/file_tool.py",
+                                 "ops/work_sandbox.py", "ops/config.local.json", "ops/private.sqlite"],
                              "77AutumN/myanc-team-brain": ["team_brain/tool.py", "team_brain/host.py",
                                  "skills/team-brain/SKILL.md", "skills/team-brain/references/tools.md",
                                  "ops/team-brain-host.example", "ops/host.example.json",
@@ -66,11 +81,16 @@ class CandidateTests(unittest.TestCase):
                     for name, digest in result["files"].items():
                         self.assertEqual(hashlib.sha256(archive.extractfile("candidate/" + name).read()).hexdigest(), digest)
                     self.assertEqual("candidate/knowledge/team_brain/tool.py" in names, bool(knowledge_sha))
-                    for skill in ("team-crm", "team-reminders"):
+                    for skill in ("team-crm", "team-reminders", "team-files"):
                         for name in ("SKILL.md", "references/tools.md"):
                             path = f"ops/skills/{skill}/{name}"
                             self.assertIn(path, result["files"])
                             self.assertEqual(archive.extractfile("candidate/" + path).read(), b"a" * 40)
+                    for name in ("file_tool.py", "work_sandbox.py"):
+                        path = f"gateway-ops/{name}"
+                        self.assertIn(path, result["files"])
+                        self.assertEqual(archive.extractfile("candidate/" + path).read(), b"b" * 40)
+                    self.assertFalse(any(name.endswith(("config.local.json", "private.sqlite")) for name in names))
                 if knowledge_sha:
                     knowledge_root = next(destination for repo, _, destination in exported if repo.endswith("team-brain"))
                     self.assertTrue(any(cwd == knowledge_root and args[:3] == ["python", "-m", "unittest"]

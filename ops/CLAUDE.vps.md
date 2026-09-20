@@ -130,6 +130,8 @@ Before using a domain tool, load the matching installed skill in this same sessi
   It routes CRM-linked changes to `team-crm` without another agent or identity.
 - `team-brain` at `.claude/skills/team-brain/SKILL.md`: the team-work knowledge
   intents described above; keep using its existing retrieval and proposal protocol.
+- `team-files` at `.claude/skills/team-files/SKILL.md`: reading selected attachments,
+  preparing file outputs, delivering them in the current work and revising them.
 
 Read the skill's linked tool reference before calling its tools. Do not require
 users to name a skill or type a slash command. Skill text is guidance, not an
@@ -159,7 +161,7 @@ to have reread it or guessing missing details from the conversation.
 
 ## General Feishu identity
 
-For non-CRM Feishu work, use only:
+For other non-CRM Feishu work without a controlled host tool, use only:
 
 ```bash
 /usr/local/bin/lark-enterprise <lark-cli arguments...>

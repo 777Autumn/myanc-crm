@@ -80,6 +80,18 @@ def export(repo, commit, destination):
             source.extractall(destination, filter="data")
 
 
+def copy_file_runtime_templates(gateway, bundle):
+    sources = [gateway / "ops" / name for name in ("file_tool.py", "work_sandbox.py")]
+    if not any(path.exists() for path in sources):
+        return  # Historical gateway commits have no file-work capability.
+    gate.require(all(path.is_file() and not path.is_symlink() for path in sources),
+                 "file runtime requires both static client and launcher")
+    destination = bundle / "gateway-ops"
+    destination.mkdir()
+    for path in sources:
+        shutil.copy2(path, destination / path.name)
+
+
 def build(crm_sha, gateway_sha, output, knowledge_sha=None):
     output = Path(output).resolve()
     gate.require(not output.exists(), "candidate output already exists")
@@ -130,6 +142,7 @@ def build(crm_sha, gateway_sha, output, knowledge_sha=None):
                         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         shutil.copytree(crm / "ops", bundle / "ops",
                         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        copy_file_runtime_templates(gateway, bundle)
         if knowledge is not None:
             for directory in ("team_brain", "skills"):
                 shutil.copytree(knowledge / directory, bundle / "knowledge" / directory,

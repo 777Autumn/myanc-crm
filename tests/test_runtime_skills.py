@@ -12,7 +12,8 @@ class RuntimeSkillsTests(unittest.TestCase):
         policy = (OPS / "CLAUDE.vps.md").read_text(encoding="utf-8")
         self.assertLess(len(policy.splitlines()), 200)
         for name, marker in (("team-crm", "CRM_HOST_TOOLS_V1"),
-                             ("team-reminders", "REMINDER_HOST_TOOLS_V1")):
+                             ("team-reminders", "REMINDER_HOST_TOOLS_V1"),
+                             ("team-files", "FILE_HOST_TOOLS_V1")):
             skill = (OPS / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
             reference = (OPS / "skills" / name / "references/tools.md").read_text(encoding="utf-8")
             self.assertIn(f".claude/skills/{name}/SKILL.md", policy)
