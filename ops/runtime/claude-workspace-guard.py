@@ -25,7 +25,8 @@ def block(message: str) -> None:
 
 try:
     import pwd
-    WORKSPACE = WORKSPACES[pwd.getpwuid(os.geteuid()).pw_name]
+    USER = pwd.getpwuid(os.geteuid()).pw_name
+    WORKSPACE = WORKSPACES[USER]
 except (ImportError, KeyError, OSError):
     block("unregistered runtime identity")
 if os.path.realpath(WORKSPACE) != WORKSPACE:
@@ -55,6 +56,15 @@ resolved = os.path.realpath(os.path.join(cwd, candidate))
 inside_workspace = os.path.commonpath((WORKSPACE, resolved)) == WORKSPACE
 
 if not inside_workspace:
+    # The first native file rollout is only for this existing test account.
+    # Same-employee works share its OS boundary; the host still binds delivery.
+    base = "/srv/cc-file-work/claude-test-private"
+    if USER == "claude-test-private" and resolved.startswith(base + os.sep):
+        parts = os.path.relpath(resolved, base).split(os.sep)
+        if (len(parts) >= 3 and len(parts[0]) == 64
+                and all(c in "0123456789abcdef" for c in parts[0])
+                and (parts[1] == "outputs" or (parts[1] == "inputs" and payload.get("tool_name") == "Read"))):
+            raise SystemExit(0)
     block(f"{resolved} is outside {WORKSPACE}")
 
 # Installed skills are data needed for normal tool use, not writable policy.
