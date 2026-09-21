@@ -1,0 +1,70 @@
+{
+  "artifacts": [
+    {
+      "file": "budget-v1.xlsx",
+      "tables": 18,
+      "revision": 1,
+      "host_delivery_version": 1,
+      "sha256": "94b5bcf2d7f024263cfe1b65b54dc6d887289430caae7ab98fd65eba255c443c",
+      "download_matches_accepted_receipt_and_snapshot": true,
+      "opened_in_feishu": true,
+      "targeted_content_checks": true
+    },
+    {
+      "file": "budget-v1.docx",
+      "tables": 18,
+      "revision": 1,
+      "host_delivery_version": 2,
+      "sha256": "e6fe8c1177b4084b13d60c540a677cc9705aa70cde30d10a0e7bd200e2cc185c",
+      "download_matches_accepted_receipt_and_snapshot": true,
+      "opened_in_feishu": true,
+      "targeted_content_checks": true
+    },
+    {
+      "file": "budget-v2.xlsx",
+      "tables": 22,
+      "revision": 2,
+      "host_delivery_version": 3,
+      "sha256": "3ca4dcda9f67a2ec59605716876677f12f51d984da2ac13d7922677979cb5ba3",
+      "download_matches_accepted_receipt_and_snapshot": true,
+      "opened_in_feishu": true,
+      "targeted_content_checks": true
+    },
+    {
+      "file": "budget-v2.docx",
+      "tables": 22,
+      "revision": 2,
+      "host_delivery_version": 4,
+      "sha256": "648161625a25cb9fb1330b26e8ab77ed77db6229c77434e3364c937c0f51ee9b",
+      "download_matches_accepted_receipt_and_snapshot": true,
+      "opened_in_feishu": true,
+      "targeted_content_checks": true
+    }
+  ],
+  "all_four_same_work": true,
+  "previous_versions_preserved": true,
+  "other_works_unchanged": true,
+  "tools": {
+    "AskUserQuestion": 1,
+    "Skill": 3,
+    "Read": 2,
+    "Bash": 18,
+    "Write": 2
+  },
+  "paired_tool_results": 26,
+  "tool_errors": 0,
+  "business_question_cards": 1,
+  "technical_permission_cards": 0,
+  "fictional_source_read_verified": true,
+  "new_live_company_knowledge_reads": 0,
+  "limits": [
+    "AI-operated acceptance in test-private only",
+    "XLSX: ten uncached formulas per version; Feishu recalculates",
+    "v1 retained redundant 18/20-table confirmation wording; v2 replaces it",
+    "real template and multi-employee compatibility unverified"
+  ],
+  "audit_window_utc": [
+    "2026-09-21T15:49:50Z",
+    "2026-09-21T16:04:30Z"
+  ]
+}
