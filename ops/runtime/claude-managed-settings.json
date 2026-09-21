@@ -2,7 +2,6 @@
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
     "defaultMode": "auto",
-    "disableBypassPermissionsMode": "disable",
     "blockReadsOutsideWorkingDirectories": true,
     "allow": [
       "Cd(//home/claude/ClaudeRemote/**)",
