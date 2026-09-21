@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-21",
+  "scope": "One authorized test account; three fictional wedding-business conversations; AI-operated Feishu acceptance",
+  "artifact_names": "Local aliases, not private host paths or recipient identifiers",
+  "delivery_version": "Monotonic per work across file types; distinct from a filename revision suffix",
+  "artifacts": [
+    {
+      "file": "execution-v1.docx",
+      "sha256": "b8572f2b33951000091f9324dce42299ddd46f8c141e2d6a4e7fefa673ce15cb",
+      "zip_valid": true,
+      "fictional_label": true,
+      "specific_content_checks": true,
+      "uncached_formulas": 0,
+      "formula_note": null,
+      "delivery_version": 1,
+      "snapshot_and_receipt_match": true,
+      "previous_outputs_preserved": true
+    },
+    {
+      "file": "execution-v2.docx",
+      "sha256": "725f668e05fac237873504b971711d116c9117c9006fd78d41ab0a5b8f32238d",
+      "zip_valid": true,
+      "fictional_label": true,
+      "specific_content_checks": true,
+      "uncached_formulas": 0,
+      "formula_note": null,
+      "delivery_version": 2,
+      "snapshot_and_receipt_match": true,
+      "previous_outputs_preserved": true
+    },
+    {
+      "file": "execution-v3.docx",
+      "sha256": "490aeb86c172d250b9b594f468497af82cd7ea81356261ce6115d7a8cd93fa86",
+      "zip_valid": true,
+      "fictional_label": true,
+      "specific_content_checks": true,
+      "uncached_formulas": 0,
+      "formula_note": null,
+      "delivery_version": 3,
+      "snapshot_and_receipt_match": true,
+      "previous_outputs_preserved": true
+    },
+    {
+      "file": "marketing-v2.docx",
+      "sha256": "a52da1d8dea97ace914369b98fde307ebdab43538a86e19816735b1003f0a194",
+      "zip_valid": true,
+      "fictional_label": true,
+      "specific_content_checks": false,
+      "uncached_formulas": 0,
+      "formula_note": null,
+      "delivery_version": 3,
+      "snapshot_and_receipt_match": true,
+      "previous_outputs_preserved": true
+    },
+    {
+      "file": "marketing.docx",
+      "sha256": "046e4c4b0e9a7133325fd5e8676f87dc95069ae8034b13491557493daff87449",
+      "zip_valid": true,
+      "fictional_label": true,
+      "specific_content_checks": false,
+      "uncached_formulas": 0,
+      "formula_note": null,
+      "delivery_version": 2,
+      "snapshot_and_receipt_match": true,
+      "previous_outputs_preserved": true
+    },
+    {
+      "file": "marketing.xlsx",
+      "sha256": "26e59d04cadd36a30e0df91abf39adfb9229e67b155fa99f68bffcf1ce5c7098",
+      "zip_valid": true,
+      "fictional_label": true,
+      "specific_content_checks": true,
+      "uncached_formulas": 38,
+      "formula_note": "Known SUM/IF/subtraction formulas checked; Feishu preview recalculated correctly; no data_only compatibility claim",
+      "delivery_version": 1,
+      "snapshot_and_receipt_match": true,
+      "previous_outputs_preserved": true
+    },
+    {
+      "file": "sales-v1.docx",
+      "sha256": "c61e1e6777e3de4f526c33432a259b684e82d96e3ec2e5968038f422dfc95c06",
+      "zip_valid": true,
+      "fictional_label": true,
+      "specific_content_checks": false,
+      "uncached_formulas": 0,
+      "formula_note": null,
+      "delivery_version": 2,
+      "snapshot_and_receipt_match": true,
+      "previous_outputs_preserved": true
+    },
+    {
+      "file": "sales-v1.xlsx",
+      "sha256": "d1bb01dbe64668adb5075c1130803c02bb8115114095365eafbff678e2ec24fd",
+      "zip_valid": true,
+      "fictional_label": true,
+      "specific_content_checks": true,
+      "uncached_formulas": 0,
+      "formula_note": null,
+      "delivery_version": 1,
+      "snapshot_and_receipt_match": true,
+      "previous_outputs_preserved": true
+    },
+    {
+      "file": "sales-v2.docx",
+      "sha256": "a0ee24e444c403455c30d11b087f11c050f64544012fe010e5932caec7bad032",
+      "zip_valid": true,
+      "fictional_label": true,
+      "specific_content_checks": false,
+      "uncached_formulas": 0,
+      "formula_note": null,
+      "delivery_version": 4,
+      "snapshot_and_receipt_match": true,
+      "previous_outputs_preserved": true
+    },
+    {
+      "file": "sales-v2.xlsx",
+      "sha256": "4f93b6ca0892e48dc2d29c15528d6516eac8d32f4ea00df21b8b89c5903b2d5a",
+      "zip_valid": true,
+      "fictional_label": true,
+      "specific_content_checks": true,
+      "uncached_formulas": 0,
+      "formula_note": null,
+      "delivery_version": 3,
+      "snapshot_and_receipt_match": true,
+      "previous_outputs_preserved": true
+    },
+    {
+      "file": "sales-v3.docx",
+      "sha256": "9de4776b5cfc7f672df027e638d029f8fb2cfc64749de1202c8f4d94a8459c07",
+      "zip_valid": true,
+      "fictional_label": true,
+      "specific_content_checks": true,
+      "uncached_formulas": 0,
+      "formula_note": null,
+      "delivery_version": 5,
+      "snapshot_and_receipt_match": true,
+      "previous_outputs_preserved": true
+    }
+  ]
+}

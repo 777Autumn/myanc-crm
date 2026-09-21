@@ -72,20 +72,44 @@ in protected local evidence, outside GitHub.
 | Sales | Word and Excel received and opened. 20-table totals 81,600 / 93,600; unquoted 22-table revision 89,560 / 102,760 with 2,760 over budget, no invented discount. Previous files retained. Word table pagination improved on request. | Three inline Python hash approvals required operator assistance during the revision. |
 | Execution | Explicit new-work phrase created a separate work. Busy supplement was acknowledged only after saving; private snapshots captured queued → started → completed. Initial and revised Word received and opened. Revision has 22 tables, one main table, 11:30 reception, 12:30 meal, 14:00 finish and the 1.5-hour meal risk. | Faults were not injected into the live service. |
 | Return to sales | Quoting the earlier Bot **text** reply selected the original sales work, preserving 22 tables / 100,000 budget. A third Word added a highlighted excluded-cost warning. Execution remained at its own two versions. | One additional inline Python hash approval required operator assistance. The document's internal heading still says v2; delivery filename/history distinguish v3. |
-| Channel operations | **Incomplete: live conversation in progress.** | Final artifact/content checks pending. |
+| Channel operations | Word and Excel received and opened. Totals: 10,500 spend / 110 leads / 58 valid / 26 visits / 6 bookings. Zero-denominator channel costs are not computable, not zero. Three draft advertisements and follow-up cohorts (20 visited-but-unbooked, 32 valid-but-unvisited) are grounded in the fictional input. An unquoted request changed only the first Word advertisement, preserving the workbook and old Word. | No permission card on either turn after PR #45. Suggestions were not executed or published. |
+| Return to execution | Quoting the earlier execution **file** returned to its original work and produced Word v3. The later reception start and unchanged one-hour reception duration were corrected; 22 tables and the 1.5-hour meal risk remained. The downloaded text diff contains only the title version and those two paragraphs. | No permission card. Two section headings still say v2, although the title and delivered filename say v3. |
 
 The four hash approval cards were inspected and individually approved; no
 session-wide permission was granted. PR #45 subsequently directs new file work
 to the already-installed `sha256sum` and avoids repeated inline Python hashes.
 This does not relax Claude permissions or bypass an outstanding approval.
-Live validation of that improvement is **pending**; earlier assisted turns must
-not be reported as entirely unattended.
+The subsequent operations task used `sha256sum` for both initial delivery and
+old-file verification / revision without approval cards. Earlier assisted turns
+must not be reported as entirely unattended; this does not guarantee that every
+future Claude tool call will avoid a legitimate approval.
 
-Downloaded files have ZIP/XML checks and SHA256 correspondence to host snapshots
-and accepted receipts. Through the quoted sales turn: five sales artifacts and
-two execution artifacts, all bound to their intended work, old originals and
-snapshots preserved. Detailed artifact hashes will be added after the final
-journey. The earlier PR #43 work and four artifacts remain intact.
+All 11 returned files (five sales, three execution, three operations) were opened
+in Feishu and downloaded through its UI. ZIP/XML checks and SHA256 matching to
+host snapshots and accepted, work-bound receipts passed; originals and previous
+versions remain. The [sanitized artifact manifest](2026-09-21-natural-file-artifacts.json)
+records every hash, delivery version and check scope. Seven files additionally
+have targeted value/text/formula assertions; this is not an automated assessment
+of every business statement. The earlier PR #43 work and four artifacts remain
+intact. Final session snapshots show the busy supplement completed, with no
+pending inputs for the three exercised works.
+
+Content review found an execution-v2 wording error: a one-hour reception shifted
+by 30 minutes was called "compressed", and one sentence called the later start
+"earlier". A reply to the actual old execution **file** corrected both in v3,
+which was received, opened and downloaded. This is a generated-draft quality
+issue, not evidence that the transport selected the wrong work. Four temporary
+directory Write attempts were denied and recovered within the normal workspace;
+one v3 text-replacement attempt found no match and was corrected before delivery.
+These failed attempts remain in the private trace; permissions were not widened.
+
+The operations workbook contains 38 uncached formulas and requests full
+recalculation on open. Feishu preview displayed correct totals, ratios and
+zero-denominator labels; the known SUM/IF/subtraction expressions were checked
+against the fixture. The initial blanket offline "all formulas cached" check
+failed: do not claim compatibility with readers that only consume cached
+values (for example `openpyxl` with `data_only=True`). No formula was removed to
+make the check pass.
 
 ## Regression evidence and remaining scope
 
@@ -110,7 +134,17 @@ Save failures, duplicate delivery, crashes/recovery, explicit stop, unknown send
 results and cross-work/account scope were tested offline. Linux suites are the
 required CI evidence; the full Windows suite is **not** claimed green (existing
 PTY/POSIX/symlink assumptions). No repeated live-service restarts were used for
-fault testing. Final bounded tool/business-write audit is **pending**.
+fault testing.
+
+The final bounded audit covers 2026-09-21 13:18:34–14:16:00 UTC, three native
+sessions and 121 tool calls with paired results. Independent AI inspection of
+the scripts, tool paths and deliveries found no out-of-scope write or alternate
+sender. A separate read-only comparison of six existing stores found only two
+new knowledge-read audit rows: earlier reads, business/publication tables,
+control files and policy directories matched their frozen or installed state.
+The same gateway process remained active with no additional restart. The AI
+reviewer inspected these receipts; it did not independently rerun the database
+comparison. Raw traces, store snapshots and identifiers stay outside GitHub.
 
 PPT/PDF/image generation, real template compatibility (including PAGE/TOC fields),
 multiple employees and independent employee acceptance are not verified here.
