@@ -1,0 +1,7 @@
+# Pinned document environment; installation needs separate runtime authorization.
+# These versions are also used by the offline fixture and CI.
+python-docx==1.2.0
+openpyxl==3.1.5
+lxml==5.4.0
+typing_extensions==4.15.0
+et_xmlfile==2.0.0

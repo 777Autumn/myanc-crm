@@ -44,7 +44,7 @@ class WorkspaceGuardTests(unittest.TestCase):
     def test_allows_installed_skill_and_reference_reads(self) -> None:
         users = ("claude", "claude-owner-group", "claude-partner-private", "claude-partner-group", "claude-test-private", "claude-test-group")
         for user in users:
-            for skill in ("team-crm", "team-reminders", "team-brain"):
+            for skill in ("team-crm", "team-reminders", "team-brain", "team-files"):
                 for name in ("SKILL.md", "references/tools.md"):
                     path = f".claude/skills/{skill}/{name}"
                     with self.subTest(user=user, path=path):
@@ -70,6 +70,18 @@ class WorkspaceGuardTests(unittest.TestCase):
 
     def test_allows_ordinary_workspace_file(self) -> None:
         self.assertEqual(0, invoke("notes.txt").returncode)
+
+    def test_test_employee_file_inputs_and_outputs_only(self) -> None:
+        base = '/srv/cc-file-work/claude-test-private/' + 'a' * 64
+        for user in ('claude-test-private', 'claude', 'claude-test-group'):
+            own = user == 'claude-test-private'
+            for tool in ('Read', 'Write', 'Edit', 'NotebookEdit'):
+                self.assertEqual(0 if own else 2, invoke(base + '/outputs/revised.docx', tool, user).returncode)
+                self.assertEqual(0 if own and tool == 'Read' else 2, invoke(base + '/inputs/source.xlsx', tool, user).returncode)
+            for path in (base + '/ledger.sqlite3', base + '/outputs/../../other/inputs/a',
+                         base + '/snapshots/a', '/run/cc-connect/api.sock',
+                         '/srv/cc-file-work/claude-test-private/not-a-work/outputs/a'):
+                self.assertEqual(2, invoke(path, user=user).returncode)
 
     def test_blocks_outside_workspace(self) -> None:
         self.assertEqual(2, invoke("/etc/passwd").returncode)
