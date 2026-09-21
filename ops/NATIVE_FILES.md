@@ -4,6 +4,28 @@ Pairs with gateway PR #18, `FILE_HOST_TOOLS_V1`, and the unchanged knowledge
 commit `88a60ba60a634fe3d6b0f68f91de326b19a39b30`. Only the existing test-private
 account is included. No new receiver, provider credentials or business writes.
 
+## Owner private-chat extension
+
+The subsequent owner rollout reuses this same native path for `claude-local`,
+whose existing runtime account is `claude`. Its separate work base is
+`/srv/cc-file-work/claude`. The managed hook allows only that account's inputs
+(Read) and outputs; neither private account can select the other's root through
+cwd or a tool argument. Group and partner accounts remain outside this extension.
+The hook change alone does not enable an entrypoint or change OS permissions.
+
+After reviewed merge, exact merge CI and the normal candidate build, install the
+candidate guard, workspace policy, `team-files` and `team-banquet` in the owner's
+existing workspace. Reuse the installed file client, document Python environment,
+knowledge/CRM tools, protected file ledger and snapshots. Enable native file work
+and `bypassPermissions` only for that private entrypoint, keeping the sandbox,
+managed denies and business approvals. Provision its work base using the same
+gateway-owner/model-primary-group 0750 contract; check the gateway's effective
+group access before enabling. Do not copy private conversations or credentials.
+Verify a fictional Word/Excel task and unquoted revision as the owner, with test
+as the existing regression account. This is rollout guidance, not live evidence.
+
+## Initial test-account installation
+
 After exact-source merge, merge CI and the normal candidate build, request a
 separate installation/maintenance authorization. Re-read the actual service,
 selected Bot/chat/account and protected settings first; old inventory is not a
