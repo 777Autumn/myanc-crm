@@ -1,0 +1,65 @@
+{
+  "artifacts": [
+    {
+      "file": "budget-v1.xlsx",
+      "revision": 1,
+      "tables": 20,
+      "sha256": "1f8a2af4585bea54517b9531e885f93933ea0d18fad5faccdc096e4bb55dd220",
+      "host_delivery_version": 1,
+      "download_matches_accepted_receipt_and_snapshot": true,
+      "opened_in_feishu": true,
+      "targeted_content_checks": true,
+      "uncached_formulas": 19
+    },
+    {
+      "file": "budget-v1.docx",
+      "revision": 1,
+      "tables": 20,
+      "sha256": "165744c860c00916bd9c5dc5f2f12c7ac600f2e6b583506c66ef18d997deeb3b",
+      "host_delivery_version": 2,
+      "download_matches_accepted_receipt_and_snapshot": true,
+      "opened_in_feishu": true,
+      "targeted_content_checks": true
+    },
+    {
+      "file": "budget-v2.xlsx",
+      "revision": 2,
+      "tables": 22,
+      "sha256": "cf597c381cdea5b1c328e804b05b88b81e93698d448158bde539fd61875e254c",
+      "host_delivery_version": 3,
+      "download_matches_accepted_receipt_and_snapshot": true,
+      "opened_in_feishu": true,
+      "targeted_content_checks": true,
+      "uncached_formulas": 21
+    },
+    {
+      "file": "budget-v2.docx",
+      "revision": 2,
+      "tables": 22,
+      "sha256": "a1cce2f2c38b54c6053e7da52dd6f319b9e16d24ce7c91f027d5794d19891ce6",
+      "host_delivery_version": 4,
+      "download_matches_accepted_receipt_and_snapshot": true,
+      "opened_in_feishu": true,
+      "targeted_content_checks": true
+    }
+  ],
+  "all_four_same_work": true,
+  "previous_versions_preserved": true,
+  "paired_tool_results": 44,
+  "tools": {
+    "Skill": 3,
+    "Read": 4,
+    "Bash": 30,
+    "Write": 5,
+    "Edit": 2
+  },
+  "recovered_tool_errors": 1,
+  "technical_permission_cards": 0,
+  "live_company_source_reads": 1,
+  "limits": [
+    "AI-operated acceptance, not human employee sign-off",
+    "v1 table/person cells used a currency display; natural v2 revision corrected them",
+    "formulas lack cached values; Feishu recalculated, desktop Excel not tested",
+    "PAGE/TOC and real templates remain unverified"
+  ]
+}
