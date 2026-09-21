@@ -1,0 +1,101 @@
+{
+  "artifacts": [
+    {
+      "file": "initial-attempt-v1.docx",
+      "bytes": 38275,
+      "sha256": "d488d928425fb1569090f9964ccee51d57d79d968417fffea34baa307f158d32",
+      "ui_opened_and_downloaded": true,
+      "accepted_receipt_and_snapshot_match": true,
+      "linked_source_verified": false,
+      "result": "not counted: selected old standalone source"
+    },
+    {
+      "file": "initial-attempt-v1.xlsx",
+      "bytes": 6155,
+      "sha256": "ec2294421a3ff5e23f6e05ca8a57d51effbfce8b38a483d7becabc7b5c3b8d99",
+      "ui_opened_and_downloaded": true,
+      "accepted_receipt_and_snapshot_match": true,
+      "linked_source_verified": false,
+      "result": "not counted: selected old standalone source"
+    },
+    {
+      "file": "owner-sales-v1.docx",
+      "bytes": 38472,
+      "sha256": "30f33630d676a45630d27b69963eec7ffc9fa0842b5b9e69d1c266060ecb257b",
+      "ui_opened_and_downloaded": true,
+      "accepted_receipt_and_snapshot_match": true,
+      "linked_source_verified": true,
+      "result": "verified"
+    },
+    {
+      "file": "owner-sales-v1.xlsx",
+      "bytes": 10476,
+      "sha256": "8d5b049d1070e203743ae95277f00cf5552637c55625db46ea2b69be5a4af822",
+      "ui_opened_and_downloaded": true,
+      "accepted_receipt_and_snapshot_match": true,
+      "linked_source_verified": true,
+      "result": "Source and arithmetic verified; detailed draft times missing, standalone handoff incomplete"
+    },
+    {
+      "file": "owner-sales-v2.docx",
+      "bytes": 38690,
+      "sha256": "62066da04b5ca32fc1cd607d36cbe29c7ef94942f7d29c58ca6858eef13b61f6",
+      "ui_opened_and_downloaded": true,
+      "accepted_receipt_and_snapshot_match": true,
+      "linked_source_verified": true,
+      "result": "verified"
+    },
+    {
+      "file": "owner-sales-v2.xlsx",
+      "bytes": 11362,
+      "sha256": "abe43a5721f67e9733613e5b1c932561037ec7a2fc4d0099b981f4087800994b",
+      "ui_opened_and_downloaded": true,
+      "accepted_receipt_and_snapshot_match": true,
+      "linked_source_verified": true,
+      "result": "Source and arithmetic verified; detailed draft times missing, standalone handoff incomplete"
+    },
+    {
+      "file": "test-complete-handoff-v1.xlsx",
+      "bytes": 17842,
+      "sha256": "63e2fbc01f6e042b71d6de7ce0843997e5703904a2b5da31c6ed896bf1a58cfb",
+      "ui_opened_and_downloaded": true,
+      "accepted_receipt_and_snapshot_match": true,
+      "linked_source_verified": true,
+      "result": "verified"
+    },
+    {
+      "file": "test-execution-v1.xlsx",
+      "bytes": 11832,
+      "sha256": "870a0d47a516570c5a25be27d4e18af80779449de617837473ca5a559c4c44aa",
+      "ui_opened_and_downloaded": true,
+      "accepted_receipt_and_snapshot_match": true,
+      "linked_source_verified": true,
+      "result": "verified"
+    },
+    {
+      "file": "test-execution-v2.xlsx",
+      "bytes": 13911,
+      "sha256": "c37f64ab694fa6d38f8837cda1a05a30fb294967ad75e1752bf30113c3a039a2",
+      "ui_opened_and_downloaded": true,
+      "accepted_receipt_and_snapshot_match": true,
+      "linked_source_verified": true,
+      "result": "verified"
+    }
+  ],
+  "owner_latest_sales_to_test_source_verified": true,
+  "originals_and_versions_preserved": true,
+  "fixed_group_receipts_verified": true,
+  "sales_arithmetic_checked": true,
+  "execution_current_times_and_risks_checked": true,
+  "complete_handoff_after_explicit_followup_checked": true,
+  "sales_initial_handoff_limitation": "Sales v1/v2 contain event date and lunch, but refer to Word for detailed draft times; do not count them as fully self-contained handoffs.",
+  "overall": "Scoped journey completed after one explicit completeness follow-up; initial sales handoffs were incomplete.",
+  "limits": [
+    "AI-operated accounts; no independent employee sign-off",
+    "Sales Word v2 predates later execution time changes; final combined workbook contains current conditions",
+    "First-draft standalone handoff completeness remains a quality limitation",
+    "Feishu previews opened all files; desktop Excel not tested",
+    "PAGE/TOC rejected; desensitized real-template compatibility unverified",
+    "All banquet data fictional; no live hotel/SaaS integration"
+  ]
+}
