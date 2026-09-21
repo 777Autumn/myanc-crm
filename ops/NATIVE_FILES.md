@@ -14,7 +14,9 @@ The authorized installation would add only:
 - The candidate gateway and `/usr/local/bin/cc-connect-file` client, plus this
   workspace guard at its existing managed location. Keep the managed sandbox.
 - Root-owned/read-only `team-files` Skill and its reference in the test employee's
-  existing workspace. Keep existing team-brain/CRM Skills and authentication.
+  existing workspace, together with the already-merged `ops/CLAUDE.vps.md` policy
+  as that workspace's `CLAUDE.md` (includes the file-return approval exception).
+  Keep existing team-brain/CRM Skills and authentication.
 - A root-owned `/opt/team-files` virtual environment, using system Python and
   the exact packages in `runtime/team-files-requirements.txt`. Do not upgrade
   system Python or Claude. No automatic package installation by the model.
