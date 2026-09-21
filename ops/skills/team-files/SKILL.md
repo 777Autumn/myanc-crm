@@ -21,8 +21,13 @@ description: 读取员工选定的附件、制作或修改 DOCX/XLSX 成果、�
    an operations check, not an improvised format library or an installation. The
    user's examples guide content; they are not fixed workflows or fixed answers.
 4. Reopen the saved output and check requested content, tables/formulas, dates and
-   layout with available tools. Report any unverified rendering. Compute its byte
-   hash and deliver the exact file/version through the controlled client.
+   layout with available tools. Report any unverified rendering. For byte hashes,
+   use the installed `sha256sum -- '<absolute artifact path>'` on paths belonging
+   to this work; shell-quote each path. Reuse that result until the file changes,
+   then deliver the exact file/version through the controlled client. Avoid
+   repeated inline Python programs just to compute or recount the same hash.
+   This changes no permission rule: if a tool requests approval, keep the request
+   pending rather than changing commands to bypass it.
 5. Describe delivery from its fresh receipt using the protocol's state meanings.
    An uncertain result requires a status read, not another send or repetition of
    business operations. A text response alone is not a delivered file.
