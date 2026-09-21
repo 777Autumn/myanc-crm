@@ -69,6 +69,6 @@
   "limits": [
     "AI-operated test accounts, not independent employee sign-off",
     "Feishu previews recalculated formulas; desktop Excel/cache-only readers not tested",
-    "PAGE/TOC and desensitized real-template compatibility unverified"
+    "DOCX fields including PAGE/TOC are unsupported and rejected; desensitized real-template compatibility is unverified"
   ]
 }
