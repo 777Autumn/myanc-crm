@@ -56,10 +56,10 @@ resolved = os.path.realpath(os.path.join(cwd, candidate))
 inside_workspace = os.path.commonpath((WORKSPACE, resolved)) == WORKSPACE
 
 if not inside_workspace:
-    # Only the two approved private identities have native file work. Derive
+    # Only the approved Owner/test identities have native file work. Derive
     # their separate roots from the OS identity, never the message or cwd.
     base = f"/srv/cc-file-work/{USER}"
-    if USER in ("claude", "claude-test-private") and resolved.startswith(base + os.sep):
+    if USER in ("claude", "claude-test-private", "claude-owner-group", "claude-test-group") and resolved.startswith(base + os.sep):
         parts = os.path.relpath(resolved, base).split(os.sep)
         if (len(parts) >= 3 and len(parts[0]) == 64
                 and all(c in "0123456789abcdef" for c in parts[0])

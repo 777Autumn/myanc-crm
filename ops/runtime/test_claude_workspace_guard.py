@@ -71,10 +71,10 @@ class WorkspaceGuardTests(unittest.TestCase):
     def test_allows_ordinary_workspace_file(self) -> None:
         self.assertEqual(0, invoke("notes.txt").returncode)
 
-    def test_private_employee_file_inputs_and_outputs_only(self) -> None:
+    def test_approved_employee_file_inputs_and_outputs_only(self) -> None:
         users = ('claude', 'claude-test-private', 'claude-owner-group',
                  'claude-test-group', 'claude-partner-private', 'claude-partner-group')
-        for owner in ('claude', 'claude-test-private'):
+        for owner in ('claude', 'claude-test-private', 'claude-owner-group', 'claude-test-group'):
             base = f'/srv/cc-file-work/{owner}/' + 'a' * 64
             for user in users:
                 with self.subTest(owner=owner, user=user):

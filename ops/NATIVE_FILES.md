@@ -4,6 +4,31 @@ Pairs with gateway PR #18, `FILE_HOST_TOOLS_V1`, and the unchanged knowledge
 commit `88a60ba60a634fe3d6b0f68f91de326b19a39b30`. Only the existing test-private
 account is included. No new receiver, provider credentials or business writes.
 
+## Owner/test group extension
+
+The subsequent group candidate pairs with gateway PR #23. It permits the same
+native input/output rules for the existing `claude-owner-group` and
+`claude-test-group` identities, each under `/srv/cc-file-work/<OS account>`.
+All six accounts remain separated; partner routes are unchanged. The gateway's
+default-off `group_references` option copies only explicitly quoted, accepted
+files in the same Bot/group into the current actor's inputs. Each copy retains
+source version/receipt information without exposing the source private session.
+
+Normal merge/CI/build and controlled maintenance gates still apply. Reuse the
+installed file client, document environment, knowledge/CRM tools and existing
+ledger. Install the existing `team-files`/`team-banquet` Skills and workspace
+instructions in these two group workspaces. Their work bases need the existing
+gateway-owner/model-primary-group 0750 contract and service supplementary-group
+access; do not share model accounts or change memberships. Enable native file
+work, `group_references` and the same managed file-only bypass experience only
+on the two fixed group routes. This document and guard do not enable them.
+
+Verify A→B→A explicit file replies in the existing group with an unrelated work
+between revisions. Other actors' task/text replies request the exact artifact;
+group background ingestion and a shared global version counter are not included.
+Private-route evidence remains valid; group real-file acceptance is incomplete
+until a separately recorded live journey. Preserve files and ledgers on rollback.
+
 ## Owner private-chat extension
 
 The subsequent owner rollout reuses this same native path for `claude-local`,
