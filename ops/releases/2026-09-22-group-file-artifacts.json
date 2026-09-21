@@ -1,0 +1,74 @@
+{
+  "artifacts": [
+    {
+      "file": "owner-initial.xlsx",
+      "sha256": "3372c3cc28cc6d670e03a16cc3f559d41d29ea52a40a8c1cc00fc5069ca21297",
+      "receipt_and_snapshot_match": true,
+      "ui_opened_and_downloaded": true,
+      "tables": 12,
+      "people": 120,
+      "total": 44400,
+      "budget_remaining": 5600,
+      "editable_formulas": 8,
+      "formula_checks_passed": true,
+      "formulas_without_cached_values": 8
+    },
+    {
+      "file": "test-revision-1.xlsx",
+      "sha256": "414902357f0485b64801b9037ab6b00eec95130920d24323c6867a261a15c578",
+      "receipt_and_snapshot_match": true,
+      "ui_opened_and_downloaded": true,
+      "tables": 14,
+      "people": 140,
+      "total": 51500,
+      "budget_remaining": -1500,
+      "editable_formulas": 8,
+      "formula_checks_passed": true,
+      "formulas_without_cached_values": 8
+    },
+    {
+      "file": "test-revision-2.xlsx",
+      "sha256": "f73bb7b8589c045587528b061442f98e27539b740d6b8118c7092f5e45ceea83",
+      "receipt_and_snapshot_match": true,
+      "ui_opened_and_downloaded": true,
+      "tables": 14,
+      "people": 140,
+      "total": 50500,
+      "budget_remaining": -500,
+      "editable_formulas": 8,
+      "formula_checks_passed": true,
+      "formulas_without_cached_values": 8
+    },
+    {
+      "file": "owner-final.xlsx",
+      "sha256": "9ef394642bbfd902e99f1dfad45374ff1ca35a7fb83f0a471c2dabee4d165a27",
+      "receipt_and_snapshot_match": true,
+      "ui_opened_and_downloaded": true,
+      "tables": 15,
+      "people": 150,
+      "total": 53750,
+      "budget_remaining": -3750,
+      "editable_formulas": 8,
+      "formula_checks_passed": true,
+      "formulas_without_cached_values": 8
+    },
+    {
+      "file": "owner-initial.docx",
+      "sha256": "dc0659a8f50aeb97b0943a137ac7527b7785e96f5e222c1ce07f7e572d7d3669",
+      "receipt_and_snapshot_match": true,
+      "ui_opened_and_downloaded": true,
+      "pages_observed": 1,
+      "content_checks_passed": true
+    }
+  ],
+  "source_chain_owner_test_owner_verified": true,
+  "test_budget_resumed_after_separate_text_work": true,
+  "all_originals_and_versions_preserved": true,
+  "all_deliveries_accepted_at_fixed_group": true,
+  "technical_permission_cards_observed": 0,
+  "limits": [
+    "AI-operated test accounts, not independent employee sign-off",
+    "Feishu previews recalculated formulas; desktop Excel/cache-only readers not tested",
+    "DOCX fields including PAGE/TOC are unsupported and rejected; desensitized real-template compatibility is unverified"
+  ]
+}
