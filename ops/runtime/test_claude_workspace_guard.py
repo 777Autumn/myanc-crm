@@ -71,17 +71,21 @@ class WorkspaceGuardTests(unittest.TestCase):
     def test_allows_ordinary_workspace_file(self) -> None:
         self.assertEqual(0, invoke("notes.txt").returncode)
 
-    def test_test_employee_file_inputs_and_outputs_only(self) -> None:
-        base = '/srv/cc-file-work/claude-test-private/' + 'a' * 64
-        for user in ('claude-test-private', 'claude', 'claude-test-group'):
-            own = user == 'claude-test-private'
-            for tool in ('Read', 'Write', 'Edit', 'NotebookEdit'):
-                self.assertEqual(0 if own else 2, invoke(base + '/outputs/revised.docx', tool, user).returncode)
-                self.assertEqual(0 if own and tool == 'Read' else 2, invoke(base + '/inputs/source.xlsx', tool, user).returncode)
-            for path in (base + '/ledger.sqlite3', base + '/outputs/../../other/inputs/a',
-                         base + '/snapshots/a', '/run/cc-connect/api.sock',
-                         '/srv/cc-file-work/claude-test-private/not-a-work/outputs/a'):
-                self.assertEqual(2, invoke(path, user=user).returncode)
+    def test_private_employee_file_inputs_and_outputs_only(self) -> None:
+        users = ('claude', 'claude-test-private', 'claude-owner-group',
+                 'claude-test-group', 'claude-partner-private', 'claude-partner-group')
+        for owner in ('claude', 'claude-test-private'):
+            base = f'/srv/cc-file-work/{owner}/' + 'a' * 64
+            for user in users:
+                with self.subTest(owner=owner, user=user):
+                    own = user == owner
+                    for tool in ('Read', 'Write', 'Edit', 'NotebookEdit'):
+                        self.assertEqual(0 if own else 2, invoke(base + '/outputs/revised.docx', tool, user).returncode)
+                        self.assertEqual(0 if own and tool == 'Read' else 2, invoke(base + '/inputs/source.xlsx', tool, user).returncode)
+                    for path in (base + '/ledger.sqlite3', base + '/outputs/../../other/inputs/a',
+                                 base + '/snapshots/a', '/run/cc-connect/api.sock',
+                                 f'/srv/cc-file-work/{owner}/not-a-work/outputs/a'):
+                        self.assertEqual(2, invoke(path, user=user).returncode)
 
     def test_blocks_outside_workspace(self) -> None:
         self.assertEqual(2, invoke("/etc/passwd").returncode)
