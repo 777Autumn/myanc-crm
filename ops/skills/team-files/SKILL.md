@@ -30,6 +30,11 @@ description: 读取员工选定的附件、制作或修改 DOCX/XLSX 成果、�
    and artifact into a new output. First verify the prior artifact's returned path
    and byte hash. A missing or changed file is not that prior version; request the
    matching file or clarify its location. On an ambiguous customer/work, missing input or
-   new conversation without a valid association, ask the user to identify the work
-   or resend the selected file. Continue safe preparation when delivery is disabled;
+   new conversation without a valid association, clarify the intended work in
+   ordinary language. In a private conversation, the host's current work also
+   applies to unquoted follow-ups; quoting an earlier task or response is optional.
+   After an interruption, reconcile the current artifacts and receipts before
+   continuing unfinished requirements. An unknown receipt remains unknown until
+   evidence resolves it; a status read alone does not prove non-delivery.
+   Continue safe preparation when delivery is disabled;
    explain the missing delivery capability without claiming completion.
