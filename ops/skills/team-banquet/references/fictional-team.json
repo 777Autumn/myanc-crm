@@ -1,0 +1,51 @@
+{
+  "source_id": "DEMO-TEAM-001",
+  "version": "1.0",
+  "compiled_on": "2026-09-22",
+  "data_scope": "虚构演练",
+  "venue": {
+    "id": "DEMO-VENUE-001",
+    "name": "云杉婚宴馆·云杉厅",
+    "max_tables": 24,
+    "people_per_table": 10,
+    "availability": "待确认",
+    "fixed_service_fee_yuan": 2000,
+    "tax_included": true,
+    "other_service_fees_yuan": 0,
+    "packages": [
+      {"id": "A", "name": "清雅", "price_per_table_yuan": 3980},
+      {"id": "B", "name": "丰盛", "price_per_table_yuan": 4580}
+    ],
+    "included": ["餐食", "桌椅", "基础音响", "基础布场"],
+    "package_difference": "B 比 A 增加演练菜单的两道菜；未提供具体菜名",
+    "excluded_unpriced": ["酒水", "摄影", "主持"],
+    "discount_rules": null,
+    "deposit_and_cancellation_rules": null
+  },
+  "customer": {
+    "id": "DEMO-CUSTOMER-A",
+    "name": "虚构客户甲",
+    "preference": "简洁布置",
+    "budget_yuan": 100000,
+    "budget_scope": "餐食及固定服务费用，其余另行确认"
+  },
+  "event": {
+    "id": "DEMO-EVENT-A",
+    "customer_id": "DEMO-CUSTOMER-A",
+    "venue_id": "DEMO-VENUE-001",
+    "date": "2026-12-12",
+    "timezone": "Asia/Shanghai",
+    "initial_tables": 20,
+    "initial_people": 200,
+    "main_tables_included": 1,
+    "selected_package": null,
+    "status": "准备草稿，未订场、未签约、未收款",
+    "draft_schedule": {
+      "setup": "09:00",
+      "check": "10:30",
+      "reception": "11:00",
+      "meal": "12:00",
+      "finish": "14:00"
+    }
+  }
+}
