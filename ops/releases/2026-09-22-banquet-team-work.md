@@ -136,7 +136,10 @@ requiring formula caches were not tested. PAGE/TOC and other DOCX fields remain
 rejected, never silently removed; desensitized real-template compatibility remains
 unverified. PPT/PDF, acquisition workflows and broader rollout were not retested.
 
-Rollback is a scoped restoration of the changed Skill/references from protected
-maintenance backups. Keep the schema-2-aware gateway, ledgers, original materials,
-snapshots and all versions; never rewind business records. This evidence-only
-commit changes no runtime and requires no additional candidate or installation.
+For a future authorized rollback of #54, restore only the two prior Skill
+entrypoints from their protected backups and retain all four linked reference
+files. To withdraw #53's routing too, restore the two pre-#53 entrypoints; the four
+new references have no previous backup and can remain unused. Keep the
+schema-2-aware gateway, ledgers, original materials, snapshots and all versions;
+never rewind business records. This evidence-only commit changes no runtime and
+requires no additional candidate or installation.
