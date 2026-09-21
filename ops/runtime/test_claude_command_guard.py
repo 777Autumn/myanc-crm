@@ -24,6 +24,18 @@ def guard(command: str) -> subprocess.CompletedProcess[str]:
 
 
 class CommandGuardTests(unittest.TestCase):
+    def test_bypass_availability_keeps_auto_default_and_native_boundaries(self) -> None:
+        settings = json.loads(SCRIPT.with_name("claude-managed-settings.json").read_text())
+        self.assertNotEqual(settings["permissions"].get("disableBypassPermissionsMode"), "disable")
+        self.assertEqual(settings["permissions"]["defaultMode"], "auto")
+        self.assertTrue(settings["allowManagedPermissionRulesOnly"])
+        self.assertTrue(settings["allowManagedHooksOnly"])
+        self.assertTrue(settings["sandbox"]["enabled"])
+        self.assertTrue(settings["sandbox"]["failIfUnavailable"])
+        self.assertFalse(settings["sandbox"]["allowUnsandboxedCommands"])
+        self.assertIn("Read(//etc/myanc-crm/**)", settings["permissions"]["deny"])
+        self.assertIn("/etc/myanc-crm", settings["sandbox"]["filesystem"]["denyRead"])
+
     def test_native_base_operations_through_pinned_general_entry_are_allowed(self) -> None:
         # Feishu resource ACLs, not the presence of a Base URL, separate CRM
         # from ordinary assistant work. These commands are input only.
