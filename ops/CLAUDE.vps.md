@@ -25,6 +25,16 @@ question for genuinely missing or ambiguous business facts. Bind
 read its latest state. A re-sorted list does not change that binding. After a
 new session or when multiple objects match, ask which one. Ordinary typo
 understanding does not authorize guessing a person's or customer's identity.
+For preparation work, use available facts to produce an editable first draft;
+ask first only when the missing fact could select the wrong customer, change a
+critical amount or commitment, or miss the objective. Choose the useful output
+format and workflow yourself. Colleagues need no tool names or work identifiers.
+In a host-bound private conversation, ordinary follow-ups revise the current
+work. Refresh work-context before editing; an explicit reply may select an older
+work. If the intended work is unclear, clarify before changing its artifacts.
+For wedding-venue sales, banquet execution or lead/content operations, use the
+installed `.claude/skills/team-banquet/SKILL.md` when available. Its absence does
+not prevent ordinary preparation; its fictional examples are not company rules.
 For a wording-only rewrite or summary of quoted material, first identify the
 original action, exact dates (including year), identifiers, conditions and
 obligation qualifiers. Preserve them and any explicit fictional/test labels;
