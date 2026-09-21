@@ -1,5 +1,6 @@
 """Fictional rehearsal consistency and packaging, not model acceptance."""
 import csv
+import json
 from pathlib import Path
 import re
 import unittest
@@ -33,6 +34,30 @@ class BanquetSkillTests(unittest.TestCase):
             totals = [a + b for a, b in zip(totals, (cost, leads, valid, visits, orders))]
         self.assertEqual([10500, 110, 58, 26, 6], totals)
         self.assertTrue(any(row["有效线索"] == "0" for row in rows))
+
+    def test_linked_team_identity_budget_and_capacity(self):
+        data = json.loads((SKILL / "references/fictional-team.json").read_text(encoding="utf-8"))
+        venue, customer, event = data["venue"], data["customer"], data["event"]
+        self.assertEqual(("DEMO-TEAM-001", "1.0", "虚构演练"),
+                         (data["source_id"], data["version"], data["data_scope"]))
+        self.assertEqual((customer["id"], venue["id"]),
+                         (event["customer_id"], event["venue_id"]))
+        self.assertIsNone(event["selected_package"])
+        self.assertEqual("待确认", venue["availability"])
+        self.assertIsNone(venue["discount_rules"])
+        self.assertIsNone(venue["deposit_and_cancellation_rules"])
+        self.assertEqual(event["initial_people"], event["initial_tables"] * venue["people_per_table"])
+        self.assertLessEqual(event["initial_tables"], venue["max_tables"])
+        prices = {package["id"]: package["price_per_table_yuan"] for package in venue["packages"]}
+        self.assertEqual({"A", "B"}, set(prices))
+        for tables, expected in ((20, {"A": 81600, "B": 93600}),
+                                 (22, {"A": 89560, "B": 102760})):
+            totals = {key: tables * price + venue["fixed_service_fee_yuan"] for key, price in prices.items()}
+            self.assertEqual(expected, totals)
+        self.assertLess(89560, customer["budget_yuan"])
+        self.assertEqual(2760, 102760 - customer["budget_yuan"])
+        self.assertEqual(24, venue["max_tables"])
+        self.assertGreater(26, venue["max_tables"])
 
 
 if __name__ == "__main__":
