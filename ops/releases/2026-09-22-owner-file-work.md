@@ -88,9 +88,11 @@ The first Excel used currency formatting for table/person counts; the natural
 revision corrected these to tables/people. Per-person figures display rounded
 whole currency units. Excel formulas have no cached values (19 in v1, 21 in v2);
 Feishu recalculated them, but desktop Excel/cache-only readers were not tested.
-PAGE/TOC and real-template compatibility remain unverified. Raw chats, source
+DOCX fields, including PAGE/TOC, remain unsupported and are rejected, not removed.
+Compatibility with a desensitized real template remains unverified. Raw chats, source
 bodies, actual files and private maintenance records are not committed.
 
-Rollback requires controlled restoration of the ten backed-up code/config
-targets and startup checks; preserve all work files and business ledgers. This
+Rollback requires controlled restoration of the three backed-up existing files
+and removal of the seven newly installed integration files, followed by startup
+checks; preserve all work files and business ledgers. This
 evidence-only commit changes no runtime and requires no new installation.

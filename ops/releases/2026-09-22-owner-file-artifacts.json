@@ -60,6 +60,6 @@
     "AI-operated acceptance, not human employee sign-off",
     "v1 table/person cells used a currency display; natural v2 revision corrected them",
     "formulas lack cached values; Feishu recalculated, desktop Excel not tested",
-    "PAGE/TOC and real templates remain unverified"
+    "DOCX fields including PAGE/TOC are unsupported and rejected; real template compatibility is unverified"
   ]
 }
