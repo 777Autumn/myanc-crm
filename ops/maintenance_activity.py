@@ -81,6 +81,7 @@ def activity(journal, now):
         elif event == 'file work intake rejected':
             turn = active.get(message_id)
             if (turn and not turn['started'] and fields.get('reason')
+                    and fields['reason'] != 'file_recovery_unknown'
                     and fields.get('session') and fields['session'] == turn['session']
                     and fields.get('platform') and fields['platform'] == turn['platform']):
                 rejected.add(message_id)

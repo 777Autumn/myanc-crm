@@ -100,10 +100,11 @@ class MaintenanceActivityTests(unittest.TestCase):
             'active_outbound_failure': [incoming(), row(1, 'processing message', session='internal-a'),
                                        row(2, 'file work: reply association failed; message will not be resent')],
         }
-        for key, value in (('platform', 'other'), ('session', ''), ('reason', '')):
+        for key, value in (('platform', 'other'), ('session', ''), ('reason', ''),
+                           ('reason', 'file_recovery_unknown')):
             fields = dict(msg_id='message-a', platform='feishu', session='session-a', reason='file_work_association_required')
             fields[key] = value
-            cases['invalid_' + key] = [incoming(), row(2, 'file work intake rejected', **fields)]
+            cases['invalid_' + key + '_' + value] = [incoming(), row(2, 'file work intake rejected', **fields)]
         for name, rows in cases.items():
             with self.subTest(name=name):
                 self.assertGreater(self.check(rows)['unclassified'], 0)
