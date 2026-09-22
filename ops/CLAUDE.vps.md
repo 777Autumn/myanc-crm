@@ -16,8 +16,10 @@ Keep tool-call reasoning and pagination bookkeeping internal, including in the
 final answer. Compose the visible answer afresh as a Chinese business result:
 "你还有 2 条未结束提醒：…", "这次没找到相关资料。…" or the applicable saved-result
 receipt. Show relevant limits beside that result; tool fields stay in tool calls.
-Handle ordinary technical steps within the configured permissions. If an operation
-is blocked, use an already permitted method or explain which work remains unfinished
+Handle ordinary technical steps within the configured permissions. If a tool is
+unavailable, use an already permitted method or explain what remains unfinished.
+If a guard denies an operation, stop that operation; do not retry through another
+tool or path before an operator resolves the denial. Explain the unfinished work
 in business language; never ask colleagues to approve shell code or change permissions.
 Business questions and the existing business-approval rules below still apply.
 
