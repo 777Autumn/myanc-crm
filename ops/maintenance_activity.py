@@ -42,11 +42,12 @@ def activity(journal, now):
         message_id = fields.get('msg_id')
         if event == 'message received':
             if message_id:
-                if message_id in active:
+                if message_id in received:
                     unknown += 1  # A redelivery is not proof the first intake finished.
                 received.add(message_id)
                 active[message_id] = dict(session=fields.get('session'),
-                                          platform=fields.get('platform'), completed=None)
+                                          platform=fields.get('platform'), model_session=None,
+                                          completed=None)
                 continue
             # ponytail: this log lacks per-question session/index metadata. Only
             # one active turn/question is attributable; concurrency stays blocked.
@@ -64,11 +65,23 @@ def activity(journal, now):
                 callbacks.append(candidate)
             else:
                 unknown += 1
+        elif event in {'processing message', 'message queued for busy session', 'processing queued message'}:
+            session = fields.get('session')
+            matches = [t for t in active.values() if session and session in
+                       (t['session'], t['model_session'])]
+            if event == 'processing message' and not matches:
+                matches = [t for t in active.values() if t['model_session'] is None]
+            if not session or len(matches) != 1:
+                unknown += 1
+            elif event == 'processing message':
+                matches[0]['model_session'] = session
         elif event == 'permission request':
             request = fields.get('request_id')
             if not request or request in questions:
                 unknown += 1
                 continue
+            if len(active) != 1:
+                unknown += 1
             questions[request] = dict(tool=fields.get('tool'),
                                       turn=next(iter(active.values())) if len(active) == 1 else None,
                                       resolved=None, callbacks=[])
@@ -83,6 +96,8 @@ def activity(journal, now):
             if not message_id or turn is None:
                 unknown += 1
             else:
+                if turn['model_session'] and fields.get('session') != turn['model_session']:
+                    unknown += 1
                 turn['completed'] = stamp
                 completed.add(message_id)
 

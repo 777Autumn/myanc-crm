@@ -48,6 +48,13 @@ class MaintenanceActivityTests(unittest.TestCase):
             'concurrent_turn': [incoming(), incoming(1, 'message-b', 'session-b')] + good[1:] +
                                [row(6, 'turn complete', msg_id='message-b')],
             'orphan_complete': [good[-1]],
+            'redelivery_after_completion': good + [incoming(6), row(7, 'turn complete', msg_id='message-a')],
+            'orphan_processing': [row(1, 'processing message', session='internal-a')],
+            'orphan_queue': [row(1, 'message queued for busy session', session='session-a')],
+            'orphan_processing_queue': [row(1, 'processing queued message', session='session-a')],
+            'orphan_question_resolved': [good[1], good[3]],
+            'cross_session_queue': [incoming(), row(2, 'processing queued message', session='session-b'), good[-1]],
+            'cross_session_complete': [incoming(), row(2, 'processing message', session='internal-a'), good[-1]],
         }
         for name, rows in cases.items():
             with self.subTest(name=name):
@@ -60,6 +67,9 @@ class MaintenanceActivityTests(unittest.TestCase):
         after = self.check(rows + [row(190, 'hosted card feedback')])
         self.assertEqual(10, after['quiet_seconds'])
         self.assertNotEqual(before['fingerprint'], after['fingerprint'])
+        normal = [incoming(), row(2, 'processing message', session='internal-a'),
+                  row(3, 'turn complete', msg_id='message-a', session='internal-a')]
+        self.assertEqual(0, self.check(normal)['unclassified'])
 
     def test_invalid_or_truncated_journal_is_not_idle(self):
         for text in ('not-json', row(201, 'message received', msg_id='future'),
