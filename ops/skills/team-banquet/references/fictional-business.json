@@ -1,0 +1,51 @@
+{
+  "source_id": "DEMO-BUSINESS-002",
+  "version": "1.0",
+  "compiled_on": "2026-09-22",
+  "data_scope": "虚构演练",
+  "currency": "CNY",
+  "venue": {
+    "id": "DEMO-VENUE-001",
+    "name": "云杉婚宴馆·云杉厅",
+    "max_tables": 24,
+    "people_per_table": 10,
+    "availability": "由当前阶段材料确认",
+    "earliest_access": "09:00",
+    "setup_minutes": 90,
+    "inspection_minutes": 30,
+    "inspection_after_setup": true,
+    "inspection_buffer_before_reception_minutes": 30,
+    "earlier_access_rule": "仅在收到本宴会明确批准的更早入场材料后更新"
+  },
+  "prices": {
+    "tax_included": true,
+    "packages_per_table_yuan": {"A": 3980, "B": 4580},
+    "package_names": {"A": "清雅", "B": "丰盛"},
+    "fixed_service_fee_yuan": 2000,
+    "wine_bottles_per_table": 6,
+    "wine_price_per_bottle_yuan": 30,
+    "host_yuan": 3000,
+    "decoration_yuan": {"basic": 5000, "upgraded": 11000},
+    "led_optional_yuan": 2500,
+    "included": ["套餐餐食", "桌椅", "基础音响", "基础布场"],
+    "decoration_scope": "简洁主题布置另计，基础布场不重复收费；basic 与 upgraded 二选一",
+    "photography_scope": "摄影摄像由客户另行安排，不在本案预算及酒店收费中",
+    "wine_return_rule": "按实际核验的未开封退回瓶数，使用本订单购入单价冲减酒水；不表示现金退款已执行",
+    "unconfirmed_optional_rule": "未确认项目单列，不计入已确认总额；可另示确认后的金额",
+    "discount_rules": null,
+    "deposit_and_cancellation_rules": null
+  },
+  "roles": {
+    "销售": "核对客户需求、订单条件和变更确认；岗位不代替客户或场馆批准",
+    "宴会经理": "组织交接、时间与岗位安排，确认场地资源和执行记录",
+    "餐饮": "按已确认桌数与套餐核对菜单、酒水数量及退回记录",
+    "工程": "按确认的入场时间完成布场、音响与检查；加项先确认",
+    "财务": "按演练凭证核对收款及应收差异；口述转款保留待核实"
+  },
+  "status_meanings": {
+    "提出要求": "尚未形成双方确认或实际发生记录",
+    "已确认": "本轮材料中有明确确认依据，仍不等于已执行",
+    "已发生": "本轮材料记录实际执行或收付款事实",
+    "待核实": "只有口述或记录之间存在差异，缺少足够凭证"
+  }
+}
