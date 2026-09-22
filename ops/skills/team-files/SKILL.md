@@ -20,14 +20,23 @@ description: 读取员工选定的附件、制作或修改 DOCX/XLSX 成果、�
    originals and earlier artifacts. Missing dependencies need
    an operations check, not an improvised format library or an installation. The
    user's examples guide content; they are not fixed workflows or fixed answers.
+   Prefer running generation code through Python stdin; do not create scripts at
+   guessed temporary paths. If a helper file is needed, keep it in the current
+   allowed workspace, separate from delivered artifacts.
 4. Reopen the saved output and check requested content, tables/formulas, dates and
-   layout with available tools. Report any unverified rendering. For byte hashes,
+   layout with available tools. Read all relevant sheets/cells and Word sections,
+   including changed rows, totals, statuses and sources; file dimensions, a hash
+   or a first-rows preview cannot establish content correctness. Fix omissions
+   and reread the saved revision before delivery. Report any unverified rendering. For byte hashes,
    use the installed `sha256sum -- '<absolute artifact path>'` on paths belonging
    to this work; shell-quote each path. Reuse that result until the file changes,
    then deliver the exact file/version through the controlled client. Avoid
    repeated inline Python programs just to compute or recount the same hash.
    This changes no permission rule: if a tool requests approval, keep the request
    pending rather than changing commands to bypass it.
+   If a guard denies an operation, stop the affected operation and report the
+   unfinished result in ordinary language. Do not retry it through another tool
+   or path; an operator must resolve the denial before that operation continues.
 5. Describe delivery from its fresh receipt using the protocol's state meanings.
    An uncertain result requires a status read, not another send or repetition of
    business operations. A text response alone is not a delivered file.
