@@ -78,6 +78,36 @@ class MaintenanceActivityTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     activity(text, 200)
 
+    def test_rejected_intake_is_terminal_but_not_a_completed_model_turn(self):
+        reject = row(2, 'file work intake rejected', msg_id='message-a',
+                     platform='feishu', session='session-a', reason='file_work_association_required')
+        result = self.check([incoming(), reject, incoming(3, 'message-b'),
+                             row(4, 'turn complete', msg_id='message-b')])
+        self.assertEqual(0, result['unclassified'])
+        self.assertEqual((2, 1, 1, 0), tuple(result[k] for k in
+                         ('received', 'completed', 'rejected', 'unclassified')))
+        self.assertEqual(198, self.check([incoming(), reject])['quiet_seconds'])
+        cases = {
+            'no_intake': [reject],
+            'duplicate_terminal': [incoming(), reject, reject],
+            'already_started': [incoming(), row(1, 'processing message', session='internal-a'), reject],
+            'queued': [incoming(), row(1, 'message queued for busy session', session='session-a'), reject],
+            'pending_question': [incoming(), journey()[1], reject],
+            'wrong_message': [incoming(message='message-b'), reject],
+            'wrong_session': [incoming(session='session-b'), reject],
+            'completed_then_rejected': [incoming(), row(1, 'turn complete', msg_id='message-a'), reject],
+            'outbound_binding_failure': [incoming(), row(2, 'file work: reply association failed; message will not be resent')],
+            'active_outbound_failure': [incoming(), row(1, 'processing message', session='internal-a'),
+                                       row(2, 'file work: reply association failed; message will not be resent')],
+        }
+        for key, value in (('platform', 'other'), ('session', ''), ('reason', '')):
+            fields = dict(msg_id='message-a', platform='feishu', session='session-a', reason='file_work_association_required')
+            fields[key] = value
+            cases['invalid_' + key] = [incoming(), row(2, 'file work intake rejected', **fields)]
+        for name, rows in cases.items():
+            with self.subTest(name=name):
+                self.assertGreater(self.check(rows)['unclassified'], 0)
+
 
 if __name__ == '__main__':
     unittest.main()

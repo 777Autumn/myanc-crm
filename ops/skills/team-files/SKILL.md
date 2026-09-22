@@ -34,9 +34,7 @@ description: 读取员工选定的附件、制作或修改 DOCX/XLSX 成果、�
    repeated inline Python programs just to compute or recount the same hash.
    This changes no permission rule: if a tool requests approval, keep the request
    pending rather than changing commands to bypass it.
-   If a guard denies an operation, stop the affected operation and report the
-   unfinished result in ordinary language. Do not retry it through another tool
-   or path; an operator must resolve the denial before that operation continues.
+   Guard denials follow the managed workspace stop rule.
 5. Describe delivery from its fresh receipt using the protocol's state meanings.
    An uncertain result requires a status read, not another send or repetition of
    business operations. A text response alone is not a delivered file.

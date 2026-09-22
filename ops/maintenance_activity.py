@@ -11,7 +11,8 @@ import shlex
 
 EVENTS = {'message received', 'turn complete', 'processing message',
           'message queued for busy session', 'processing queued message',
-          'hosted card feedback', 'permission request', 'permission resolved'}
+          'hosted card feedback', 'permission request', 'permission resolved',
+          'file work intake rejected'}
 
 
 def activity(journal, now):
@@ -34,7 +35,7 @@ def activity(journal, now):
         rows.append((stamp, fields))
 
     active, questions = {}, {}
-    received, completed = set(), set()
+    received, completed, rejected = set(), set(), set()
     unknown = 0
     callbacks = []
     for stamp, fields in rows:
@@ -47,7 +48,7 @@ def activity(journal, now):
                 received.add(message_id)
                 active[message_id] = dict(session=fields.get('session'),
                                           platform=fields.get('platform'), model_session=None,
-                                          completed=None)
+                                          started=False, completed=None)
                 continue
             # ponytail: this log lacks per-question session/index metadata. Only
             # one active turn/question is attributable; concurrency stays blocked.
@@ -73,8 +74,19 @@ def activity(journal, now):
                 matches = [t for t in active.values() if t['model_session'] is None]
             if not session or len(matches) != 1:
                 unknown += 1
-            elif event == 'processing message':
-                matches[0]['model_session'] = session
+            else:
+                matches[0]['started'] = True
+                if event == 'processing message':
+                    matches[0]['model_session'] = session
+        elif event == 'file work intake rejected':
+            turn = active.get(message_id)
+            if (turn and not turn['started'] and fields.get('reason')
+                    and fields.get('session') and fields['session'] == turn['session']
+                    and fields.get('platform') and fields['platform'] == turn['platform']):
+                rejected.add(message_id)
+                del active[message_id]
+            else:
+                unknown += 1
         elif event == 'permission request':
             request = fields.get('request_id')
             if not request or request in questions:
@@ -82,6 +94,8 @@ def activity(journal, now):
                 continue
             if len(active) != 1:
                 unknown += 1
+            else:
+                next(iter(active.values()))['started'] = True
             questions[request] = dict(tool=fields.get('tool'),
                                       turn=next(iter(active.values())) if len(active) == 1 else None,
                                       resolved=None, callbacks=[])
@@ -107,7 +121,7 @@ def activity(journal, now):
     unresolved = sum(q['resolved'] is None for q in questions.values())
     latest = rows[-1][0] if rows else now * 1000000
     return dict(quiet_seconds=round(now - latest / 1000000),
-                received=len(received), completed=len(completed),
+                received=len(received), completed=len(completed), rejected=len(rejected),
                 reconciled_callbacks=reconciled,
                 unclassified=len(active) + unknown + unresolved + len(callbacks) - reconciled,
                 fingerprint=hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest())
