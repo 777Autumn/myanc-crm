@@ -13,8 +13,6 @@ import signal
 import subprocess
 import sys
 import tempfile
-import time
-import uuid
 
 MAX_BYTES = 20 << 20
 
@@ -134,18 +132,29 @@ def preview_worker(pdf, prefix):
 
 def office_worker(source, destination, stem, scratch):
     worker_limits()
+    import ctypes as c
+
+    # The installed LibreOfficeKit initializes Office in this worker. Claude's
+    # Linux sandbox blocks AF_UNIX, including soffice's startup and UNO pipes.
+    # Use the public stable ABI prefix; keep the existing in-process UNO methods.
+    class OfficeClass(c.Structure):
+        _fields_ = [('size', c.c_size_t), ('destroy', c.CFUNCTYPE(None, c.c_void_p))]
+
+    class Office(c.Structure):
+        _fields_ = [('methods', c.POINTER(OfficeClass))]
+
+    source, target, scratch = Path(source), Path(destination), Path(scratch)
+    library = c.CDLL('/usr/lib/libreoffice/program/libmergedlo.so')
+    library.libreofficekit_hook_2.argtypes = [c.c_char_p, c.c_char_p]
+    library.libreofficekit_hook_2.restype = c.POINTER(Office)
+    office = library.libreofficekit_hook_2(b'/usr/lib/libreoffice/program', (scratch / 'profile').as_uri().encode())
+    if not office or office.contents.methods.contents.size < c.sizeof(OfficeClass):
+        raise RuntimeError('LibreOffice initialization failed')
+
     import uno
     from com.sun.star.beans import PropertyValue
     from com.sun.star.document.MacroExecMode import NEVER_EXECUTE
     from com.sun.star.document.UpdateDocMode import NO_UPDATE
-
-    source, target, scratch = Path(source), Path(destination), Path(scratch)
-    pipe = 'teamfiles_' + uuid.uuid4().hex
-    profile = (scratch / 'profile').as_uri()
-    process = subprocess.Popen(['/usr/bin/soffice', '-env:UserInstallation=' + profile,
-                                '--headless', '--invisible', '--nodefault', '--norestore', '--nofirststartwizard',
-                                '--accept=pipe,name=' + pipe + ';urp;StarOffice.ComponentContext'],
-                               stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def props(**values):
         result = []
@@ -157,18 +166,7 @@ def office_worker(source, destination, stem, scratch):
 
     doc = None
     try:
-        local = uno.getComponentContext()
-        resolver = local.ServiceManager.createInstanceWithContext('com.sun.star.bridge.UnoUrlResolver', local)
-        for _ in range(100):
-            if process.poll() is not None:
-                raise RuntimeError('LibreOffice exited during startup')
-            try:
-                context = resolver.resolve('uno:pipe,name=' + pipe + ';urp;StarOffice.ComponentContext')
-                break
-            except Exception:
-                time.sleep(.1)
-        else:
-            raise RuntimeError('LibreOffice startup timeout')
+        context = uno.getComponentContext()
         desktop = context.ServiceManager.createInstanceWithContext('com.sun.star.frame.Desktop', context)
         doc = desktop.loadComponentFromURL(source.as_uri(), '_blank', 0,
                                           props(Hidden=True, ReadOnly=False, MacroExecutionMode=NEVER_EXECUTE, UpdateDocMode=NO_UPDATE))
@@ -190,14 +188,12 @@ def office_worker(source, destination, stem, scratch):
         doc.storeToURL((target / (stem + '.pdf')).as_uri(), props(FilterName=pdf_filter, Overwrite=False))
         doc.close(True)
         doc = None
-        desktop.terminate()
-        process.wait(timeout=10)
     finally:
-        if doc is not None:
-            doc.dispose()
-        if process.poll() is None:
-            process.kill()
-        process.wait()
+        try:
+            if doc is not None:
+                doc.dispose()
+        finally:
+            office.contents.methods.contents.destroy(office)
 
 
 def main():

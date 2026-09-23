@@ -24,6 +24,36 @@ from pypdf import PdfReader
 from team_file_render import office_check, prepare_paths, render, run
 
 
+def deny_unix_sockets():
+    """Match the deployed Linux sandbox's AF_UNIX denial in the actual worker."""
+    import ctypes as c
+    import socket
+    assert os.geteuid() != 0
+    class Arg(c.Structure):
+        _fields_ = [('arg', c.c_uint), ('op', c.c_uint), ('a', c.c_uint64), ('b', c.c_uint64)]
+    lib = c.CDLL('libseccomp.so.2')
+    lib.seccomp_init.restype = c.c_void_p
+    lib.seccomp_rule_add_array.argtypes = [c.c_void_p, c.c_uint32, c.c_int, c.c_uint, c.POINTER(Arg)]
+    lib.seccomp_load.argtypes = [c.c_void_p]
+    lib.seccomp_release.argtypes = [c.c_void_p]
+    lib.seccomp_syscall_resolve_name.argtypes = [c.c_char_p]
+    context = lib.seccomp_init(0x7fff0000)  # SCMP_ACT_ALLOW
+    assert context
+    try:
+        # SCMP_ACT_ERRNO(EPERM), argument 0 == AF_UNIX (SCMP_CMP_EQ).
+        syscall = lib.seccomp_syscall_resolve_name(b'socket')
+        assert syscall >= 0
+        assert lib.seccomp_rule_add_array(context, 0x50001, syscall, 1, c.byref(Arg(0, 4, socket.AF_UNIX, 0))) == 0
+        assert lib.seccomp_load(context) == 0
+    finally:
+        lib.seccomp_release(context)
+    try:
+        with socket.socket(socket.AF_UNIX):
+            raise AssertionError('AF_UNIX unexpectedly allowed')
+    except PermissionError:
+        pass
+
+
 def add_field(paragraph, code):
     field = OxmlElement('w:fldSimple')
     field.set(qn('w:instr'), code)
@@ -128,6 +158,7 @@ with patch('team_file_render.os.execv') as execute:
 class ActualRenderTests(unittest.TestCase):
     def test_chinese_slides_and_word_toc_revision(self):
         self.assertNotEqual(os.geteuid(), 0, 'acceptance must use an ordinary identity')
+        deny_unix_sockets()
         gateway = os.environ['TEAM_FILES_TEST_GATEWAY']
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -208,10 +239,11 @@ class HandoffRenderTests(unittest.TestCase):
             made = as_user(model_uid, '''
 import json, os, sys
 from pathlib import Path
-from test_team_file_render import fictional_template
+from test_team_file_render import fictional_template, deny_unix_sockets
 from team_file_render import render
 assert os.geteuid() == 61001
 assert 'CapEff:\t0000000000000000' in Path('/proc/self/status').read_text()
+deny_unix_sockets()
 root = Path(sys.argv[1])
 legacy = root / 'outputs' / 'legacy-private'
 legacy.mkdir(mode=0o700)
