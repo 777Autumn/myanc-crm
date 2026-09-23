@@ -38,8 +38,9 @@ with the current work root, selected input and a new output subdirectory; its
 `--help` describes the arguments. The default paired binary is
 `/usr/local/bin/cc-connect-anc`; the optional `--gateway` selects a candidate
 binary for offline checks, not a sending endpoint. The script first invokes the
-gateway's read-only `file-check`, then uses a private profile and a transient UNO
-pipe, refreshes Word fields/indexes, exports PDF and renders every page. The worker
+gateway's read-only `file-check`, then uses a private profile and the installed
+LibreOfficeKit inside the worker, refreshes Word fields/indexes through UNO,
+exports PDF and renders every page. No Unix socket or sandbox exception is needed. The worker
 uses `/usr/bin/python3` with distro UNO; the caller uses the locked virtualenv.
 Timeout cleanup targets only the spawned process group. It rejects root execution.
 Office and preview workers share memory/CPU/file-size limits. Completed output
@@ -47,6 +48,8 @@ files use `0640` inside a `2750` directory, inheriting the existing outputs
 handoff group; scratch and profiles stay private even with service umask `0077`.
 
 Offline actual rendering is enabled by `TEAM_FILES_TEST_GATEWAY=<paired binary>`:
+the ordinary renderer tests apply the existing Linux `libseccomp.so.2` filter
+to deny `socket(AF_UNIX)` before rendering, matching the managed Claude sandbox.
 run the runtime unit tests as an ordinary account with the listed dependencies.
 Without that explicit binary the actual rendering case reports **skipped**, not
 passed. Source tests can independently check paths/protocols; only the paired run
