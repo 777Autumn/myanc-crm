@@ -99,7 +99,11 @@ class RenderBoundaryTests(unittest.TestCase):
             self.assertLess(time.monotonic() - started, 3)
             status = Path('/proc') / pid_file.read_text().strip() / 'stat'
             for _ in range(100):
-                if not status.exists() or status.read_text().split(') ')[1].startswith('Z'):
+                try:
+                    state = status.read_text().split(') ')[1]
+                except (FileNotFoundError, ProcessLookupError):
+                    break  # Reaping can race opening/reading the proc entry.
+                if state.startswith('Z'):
                     break
                 time.sleep(.01)
             else:
