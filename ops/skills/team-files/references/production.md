@@ -15,6 +15,9 @@ Native Feishu images appear in `work-context.inputs`, with saved paths and hashe
 An attachment mentioned inside a document is not an attachment you have read.
 If its original is absent, cite it as that document's reference, not as inspected
 or reused material. Label a newly drawn illustration as your own concept drawing.
+Keep cited source IDs and versions unchanged when revising an output; the new
+artifact revision is separate. A changed table count does not create a new
+version of the source price list or a missing source image.
 
 ## Make the editable originals
 
