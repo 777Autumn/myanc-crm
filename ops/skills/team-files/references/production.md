@@ -12,6 +12,9 @@ the installed tool below, then read the resulting page images. State which
 figures remain illegible and need verification. Preserve the original PDF;
 extracted text does not preserve its layout and is not an editable replacement.
 Native Feishu images appear in `work-context.inputs`, with saved paths and hashes.
+An attachment mentioned inside a document is not an attachment you have read.
+If its original is absent, cite it as that document's reference, not as inspected
+or reused material. Label a newly drawn illustration as your own concept drawing.
 
 ## Make the editable originals
 
@@ -32,7 +35,9 @@ Native Feishu images appear in `work-context.inputs`, with saved paths and hashe
 
 ## Update, render, inspect
 
-Run the installed helper with paths returned by the current work context:
+Keep the managed workspace as the shell's working directory. Use absolute paths
+from the current work context; file preparation needs no `cd` or temporary
+extraction directory. Run the installed helper as one command:
 
 ```sh
 /opt/team-files/bin/python /usr/local/libexec/team_file_render.py \
@@ -40,6 +45,12 @@ Run the installed helper with paths returned by the current work context:
   --input '<selected DOCX, PPTX or PDF path>' \
   --output-dir '<output_dir/new unique render directory>'
 ```
+
+Inspect its returned files in separate permitted read calls. Do not append
+directory switches, relative `ls` probes or other shell diagnostics to this
+command: compound commands can require a native permission exception even when
+the renderer itself is permitted. This guidance grants no additional permission;
+if an operation is denied, preserve the stop rule and report the unfinished step.
 
 Let the helper create the new render directory; pass a path that does not yet
 exist. If it reports an existing output directory, preserve that directory and
