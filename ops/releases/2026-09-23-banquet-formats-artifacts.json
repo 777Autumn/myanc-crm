@@ -1,6 +1,6 @@
 {
   "scope": "fictional test artifacts only; hashes do not establish content acceptance",
-  "recorded_at": "2026-09-23T21:46:00+08:00",
+  "recorded_at": "2026-09-23T22:13:32.390308+08:00",
   "overall": "incomplete",
   "artifacts": [
     {
@@ -134,6 +134,30 @@
       "name": "poster_v1.pptx",
       "bytes": 30591,
       "sha256": "13f763340648422b0954794b157ccb8a07a1908b9123de4cf79eb1c576ca6761"
+    },
+    {
+      "stage": "source-readback-returned",
+      "name": "B套餐暖金海报_v1.png",
+      "bytes": 223756,
+      "sha256": "9f66086d3b3d12be0b1f104df1b9548365e1c7995c78edba33c5876ccfd69063"
+    },
+    {
+      "stage": "source-readback-returned",
+      "name": "B套餐暖金海报母版_v1.pptx",
+      "bytes": 30588,
+      "sha256": "be13e08c64c6c464fae7d5eb76de708af1c92934d85e87f3d63c4c7217937e0a"
+    },
+    {
+      "stage": "source-readback-returned",
+      "name": "B套餐预算表_v1.xlsx",
+      "bytes": 8317,
+      "sha256": "fa7c76831feab276ac1142121c7f18fffa2c879b77b5772e29d25aee34161ea6"
+    },
+    {
+      "stage": "test-excel-handoff",
+      "name": "婚宴谈单包-虚构演练-预算测算-v3-交接排版版.xlsx",
+      "bytes": 7090,
+      "sha256": "996797e812edd431e5f6feed6e76de129baf9f7507c45154ce941cdd60ea7d64"
     }
   ]
 }
