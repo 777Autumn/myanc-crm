@@ -12,12 +12,6 @@ the installed tool below, then read the resulting page images. State which
 figures remain illegible and need verification. Preserve the original PDF;
 extracted text does not preserve its layout and is not an editable replacement.
 Native Feishu images appear in `work-context.inputs`, with saved paths and hashes.
-An attachment mentioned inside a document is not an attachment you have read.
-If its original is absent, cite it as that document's reference, not as inspected
-or reused material. Label a newly drawn illustration as your own concept drawing.
-Keep cited source IDs and versions unchanged when revising an output; the new
-artifact revision is separate. A changed table count does not create a new
-version of the source price list or a missing source image.
 
 ## Make the editable originals
 
@@ -73,6 +67,14 @@ confirm editability. For Word, compare the saved DOCX's TOC entries, page fields
 and total pages with the exported PDF after added content moves headings. A
 successful export alone is not proof of correct pagination. Inspect the reopened
 Excel's formulas, rows and totals as well as the slide/Word/PDF summary amounts.
+
+Before delivery and the final reply, reopen the saved outputs and enumerate their
+cited source names, IDs and versions. Match each against materials actually read
+in this work. For an absent attachment only mentioned in another document, write
+“据<已读材料>转述，原件未提供／未读取”. Label your new drawing “根据本次需求新绘”;
+an unread image cannot be its production source. Keep original source IDs and
+versions separate from the output revision. Correct mismatches in the files and
+reply, then reread before delivery; citing an ID alone does not verify its source.
 
 If installed tools or fonts are missing, preserve the prepared originals and
 report the missing runtime capability. Do not install packages or substitute a

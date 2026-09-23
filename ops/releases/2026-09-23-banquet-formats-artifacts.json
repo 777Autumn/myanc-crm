@@ -1,6 +1,6 @@
 {
   "scope": "fictional test artifacts only; hashes do not establish content acceptance",
-  "recorded_at": "2026-09-23T21:20:00+08:00",
+  "recorded_at": "2026-09-23T21:46:00+08:00",
   "overall": "incomplete",
   "artifacts": [
     {
@@ -86,6 +86,54 @@
       "name": "婚宴A套餐预算_v1.xlsx",
       "bytes": 8307,
       "sha256": "de4d2f9a5e3634a35da16c3cb3cdde6ce07a24b8b02fb84ba776573bfe7a0de5"
+    },
+    {
+      "stage": "fresh-handoff-returned",
+      "name": "婚宴A套餐海报_清雅绿风_v3.png",
+      "bytes": 214189,
+      "sha256": "9c7e8dd8d663b48a97d4e14dd0445bd1f180b109874f564fc26a435e3c76f4f7"
+    },
+    {
+      "stage": "fresh-handoff-returned",
+      "name": "婚宴A套餐海报_清雅绿风_v3.pptx",
+      "bytes": 30505,
+      "sha256": "e41cdcd97a0676e88ce1b99c50c424532d61fc8765a503ea4a9b12e73897dd14"
+    },
+    {
+      "stage": "fresh-handoff-returned",
+      "name": "婚宴A套餐预算表_v3.xlsx",
+      "bytes": 6457,
+      "sha256": "083e8bb5381f5916e1ab14ea6a958b1e02dc878c63a5426ec6c277f4533633a2"
+    },
+    {
+      "stage": "poster-resumed",
+      "name": "婚宴谈单包-虚构演练-海报-v4.png",
+      "bytes": 218261,
+      "sha256": "57f7baa0dcf693d6fdf5de4a900234def17a12a4cdef1d8d5f9e2987c08c4698"
+    },
+    {
+      "stage": "poster-resumed",
+      "name": "婚宴谈单包-虚构演练-海报母版-v4.pptx",
+      "bytes": 30699,
+      "sha256": "fe9cafd3a27ed9bb331c9221ce102d58479f1da2cc434c9d3a2f1590275841df"
+    },
+    {
+      "stage": "source-regression-v1",
+      "name": "budget_v1.xlsx",
+      "bytes": 7856,
+      "sha256": "0ed9cf45449e53ab1e1a407f0db65559f9e3ef51daa97fc684cf058a4d945f1d"
+    },
+    {
+      "stage": "source-regression-v1",
+      "name": "poster_v1.png",
+      "bytes": 276592,
+      "sha256": "e2915038ca47eeb4be31b30fe605ea41935f575442c9e3ab805bf3d560911cf1"
+    },
+    {
+      "stage": "source-regression-v1",
+      "name": "poster_v1.pptx",
+      "bytes": 30591,
+      "sha256": "13f763340648422b0954794b157ccb8a07a1908b9123de4cf79eb1c576ca6761"
     }
   ]
 }
