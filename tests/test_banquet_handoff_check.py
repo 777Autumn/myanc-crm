@@ -26,6 +26,18 @@ class HandoffCheckTests(unittest.TestCase):
                 ['LED', '未确认', '等待客户确认']]
         self.assertEqual(list(check.conflicts(rows)), [])
 
+    def test_quotes_negation_and_specific_confirmation_are_not_downgraded(self):
+        self.assertEqual(list(check.conflicts([
+            ['旧版“已确认（经营基础规则：90分钟）”无依据，本版改计划'],
+            ['不能写为已确认（经营基础规则：90分钟）'],
+            ['已确认（本场确认单V3明确批准该时段；经营基础规则：90分钟）'],
+        ])), [])
+        # Mixed evidence with a rule first asks for review; it never rewrites or
+        # decides that an explicit confirmation later in the cell is invalid.
+        self.assertEqual(list(check.conflicts([
+            ['已确认（经营基础规则：90分钟；另有本场确认单V3批准该时段）'],
+        ])), [(1, 1)])
+
     def test_saved_excel_and_word_tables_are_read_and_originals_unchanged(self):
         from openpyxl import Workbook
         from docx import Document
@@ -37,12 +49,16 @@ class HandoffCheckTests(unittest.TestCase):
             doc = Document(); table = doc.add_table(rows=2, cols=2)
             table.cell(0, 0).text = '环节'; table.cell(0, 1).text = '状态/依据'
             table.cell(1, 0).text = '检查'; table.cell(1, 1).text = '已确认（推算：30分钟）'
+            key_value = doc.add_table(rows=2, cols=2)
+            key_value.cell(0, 0).text = '事项'; key_value.cell(0, 1).text = '布场'
+            key_value.cell(1, 0).text = '状态'; key_value.cell(1, 1).text = '已确认（经营基础规则：90分钟）'
             doc.save(docx)
             before = [p.read_bytes() for p in (xlsx, docx)]
             self.assertEqual(len(list(check.inspect(xlsx))), 1)
-            self.assertEqual(len(list(check.inspect(docx))), 1)
+            self.assertEqual(len(list(check.inspect(docx))), 2)
             self.assertEqual([p.read_bytes() for p in (xlsx, docx)], before)
-            table.cell(1, 1).text = '计划／待执行（推算：30分钟）'; doc.save(docx)
+            table.cell(1, 1).text = '计划／待执行（推算：30分钟）'
+            key_value.cell(1, 1).text = '计划／待执行（经营基础规则：90分钟）'; doc.save(docx)
             sheet.cell(2, 2).value = '计划／待执行（经营基础规则：90分钟）'; book.save(xlsx)
             self.assertEqual(list(check.inspect(xlsx)) + list(check.inspect(docx)), [])
 

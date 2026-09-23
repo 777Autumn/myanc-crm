@@ -1,4 +1,4 @@
-"""Read saved handoffs and report rule-only confirmation labels; never edit them.
+"""Read saved handoffs and flag rule-first confirmation labels; never edit them.
 
 This narrow lint catches a reproduced copying error. Zero findings are not proof
 of business confirmation: sources, missing statuses and cross-file consistency
@@ -10,15 +10,21 @@ from pathlib import Path
 
 RULE = r'(?:经营基础规则|耗时规则|推算|计算得出)'
 # ponytail: catches explicit rule-first labels; other wording needs source review.
-COPIED_CONFIRMATION = re.compile(r'已确认\s*[（(:：]\s*' + RULE)
+COPIED_CONFIRMATION = re.compile(r'^已确认\s*[（(:：]\s*' + RULE)
 
 
 def conflicts(rows):
-    """Yield row/cell locations, excluding ordinary task text and real approvals."""
+    """Locate current labels needing evidence review, not quoted/negated examples."""
     status_cols, basis_cols = [], []
     for number, row in enumerate(rows, 1):
         cells = [str(value or '').strip() for value in row]
         headers = [i for i, value in enumerate(cells) if value in ('状态', '状态/依据', '确认状态', '确认状态/依据')]
+        # Word handoffs also use two-column label/value rows, not column headers.
+        if len(cells) == 2 and headers == [0] and cells[1].startswith(
+                ('已确认', '未确认', '待确认', '计划', '待执行', '已发生', '待核实')):
+            if COPIED_CONFIRMATION.match(cells[1]):
+                yield number, 2
+            continue
         if headers:
             status_cols = headers
             basis_cols = [i for i, value in enumerate(cells) if value in ('依据', '来源', '确认依据', '状态/依据', '确认状态/依据')]
@@ -61,9 +67,9 @@ def main(paths):
         raise ValueError('provide the saved handoff Excel and Word paths')
     findings = [finding for path in paths for finding in inspect(Path(path))]
     for finding in findings:
-        print(f'{finding}: rule-derived arrangement labelled confirmed; check its evidence before delivery')
+        print(f'{finding}: confirmation basis starts with a rule/calculation; review any specific confirmation source before delivery')
     if not findings:
-        print('No rule-only confirmation labels found. Full source/status/content readback is still required.')
+        print('No rule-first confirmation labels found. Full source/status/content readback is still required.')
     return bool(findings)
 
 
