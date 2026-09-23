@@ -1,7 +1,7 @@
 {
   "scope": "fictional test artifacts only; hashes do not establish content acceptance",
-  "recorded_at": "2026-09-23T22:13:32.390308+08:00",
-  "overall": "incomplete",
+  "recorded_at": "2026-09-23T22:35:40.311659+08:00",
+  "overall": "core_journey_passed_after_employee_corrections; unprompted_first_draft_model_target_and_real_templates_incomplete",
   "artifacts": [
     {
       "stage": "acceptance-inputs",
@@ -158,6 +158,48 @@
       "name": "婚宴谈单包-虚构演练-预算测算-v3-交接排版版.xlsx",
       "bytes": 7090,
       "sha256": "996797e812edd431e5f6feed6e76de129baf9f7507c45154ce941cdd60ea7d64"
+    },
+    {
+      "stage": "source-readback-handoff",
+      "name": "B套餐蓝白海报_v2.png",
+      "bytes": 268104,
+      "sha256": "a82ed1930db191da3de172cb1f5144260e7ee8770279c3f6eb003d322f05cb25"
+    },
+    {
+      "stage": "source-readback-handoff",
+      "name": "B套餐蓝白海报母版_v2.pptx",
+      "bytes": 30751,
+      "sha256": "dcc96cf6c81bd20e950f859aeaf9db5d179415cc1caf01f6a37d2b31d3480e8d"
+    },
+    {
+      "stage": "source-readback-handoff",
+      "name": "B套餐预算_v2.xlsx",
+      "bytes": 7558,
+      "sha256": "411a927beaab1921ad466a585ea9af6d1847aeb3ade09562b4ab857327c33158"
+    },
+    {
+      "stage": "source-readback-corrected",
+      "name": "B套餐蓝白海报_v2订正.png",
+      "bytes": 300576,
+      "sha256": "0c29bfc075bd29ea63197e8de0c25bc4f146cfa9b1ec215f2c21c7b364bc5fef"
+    },
+    {
+      "stage": "source-readback-corrected",
+      "name": "B套餐蓝白海报母版_v2订正.pptx",
+      "bytes": 30925,
+      "sha256": "2fb98f305b66b49ec954642d8a3c8b27c9cd547ca02df30103d936b48bb468c1"
+    },
+    {
+      "stage": "source-readback-corrected",
+      "name": "B套餐预算_v2订正.xlsx",
+      "bytes": 7809,
+      "sha256": "2f1930179a628d42c189398ec0fab4315444f0baa66957853367c0d76c38eed6"
+    },
+    {
+      "stage": "source-readback-layout",
+      "name": "B套餐预算_v2订正排版.xlsx",
+      "bytes": 7849,
+      "sha256": "b7623dc611dc682fc11a98c760aca4cd9fab7f53e61b7196e691404019c5f487"
     }
   ]
 }
