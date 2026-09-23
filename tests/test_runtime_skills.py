@@ -43,6 +43,13 @@ class RuntimeSkillsTests(unittest.TestCase):
                      "requires its CRM approval card", "leaving the CRM plan", "next_id"):
             self.assertIn(text, reminder)
 
+    def test_banquet_files_route_to_the_existing_business_skill(self):
+        files = (OPS / "skills/team-files/SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("`team-banquet` Skill before interpreting or revising business content", files)
+        self.assertIn("when only reorganizing a colleague's file", files)
+        self.assertIn("without claiming business validation", files)
+        self.assertTrue((OPS / "skills/team-banquet/check_handoff.py").is_file())
+
     def test_file_delivery_exception_requires_enabled_host_capability(self):
         policy = (OPS / "CLAUDE.vps.md").read_text(encoding="utf-8")
         delivery = policy.split("## Controlled file delivery\n", 1)[1].split("\n## ", 1)[0]
