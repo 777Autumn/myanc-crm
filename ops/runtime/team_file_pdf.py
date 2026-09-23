@@ -12,7 +12,7 @@ MAX_BYTES = 20 << 20
 MAX_EXPANDED = 100 << 20
 MAX_PAGES = 200
 FORBIDDEN = frozenset({
-    '/AA', '/OpenAction', '/JS', '/JavaScript', '/EmbeddedFiles', '/EF',
+    '/AA', '/JS', '/JavaScript', '/EmbeddedFiles', '/EF',
     '/AcroForm', '/XFA', '/RichMedia', '/RichMediaContent', '/Launch',
     '/GoToR', '/GoToE', '/SubmitForm', '/ImportData', '/Rendition',
     '/Sound', '/Movie', '/3D', '/Filespec', '/URI',
@@ -21,13 +21,14 @@ FORBIDDEN = frozenset({
 
 def validate_pdf(data):
     from pypdf import PdfReader
-    from pypdf.generic import ArrayObject, DictionaryObject, IndirectObject, NameObject, StreamObject
+    from pypdf.generic import ArrayObject, DictionaryObject, IndirectObject, NameObject, StreamObject, NullObject, NumberObject, FloatObject
 
     if not 0 < len(data) <= MAX_BYTES or not data.startswith(b'%PDF-'):
         raise ValueError('invalid PDF size/header')
     reader = PdfReader(io.BytesIO(data), strict=True)
     if reader.is_encrypted or not 0 < len(reader.pages) <= MAX_PAGES:
         raise ValueError('encrypted or unsupported page count')
+    page_ids = {(page.indirect_reference.idnum, page.indirect_reference.generation) for page in reader.pages}
     pending, seen = [(reader.trailer, 0)], set()
     expanded = nodes = 0
     while pending:
@@ -48,6 +49,20 @@ def validate_pdf(data):
         if isinstance(obj, DictionaryObject):
             if FORBIDDEN.intersection(obj):
                 raise ValueError('active or external PDF content')
+            if '/OpenAction' in obj:
+                # LibreOffice uses an opening view of a page, not executable
+                # JavaScript. Permit only an explicit destination in this PDF.
+                destination = obj['/OpenAction']
+                if isinstance(destination, DictionaryObject):
+                    if destination.get('/S') != '/GoTo' or set(destination) - {'/S', '/D', '/Type'}:
+                        raise ValueError('unsupported PDF opening action')
+                    destination = destination.get('/D')
+                if (not isinstance(destination, ArrayObject) or not 2 <= len(destination) <= 6
+                        or not isinstance(destination[0], IndirectObject)
+                        or (destination[0].idnum, destination[0].generation) not in page_ids
+                        or destination[1] not in ('/XYZ', '/Fit', '/FitH', '/FitV', '/FitR', '/FitB', '/FitBH', '/FitBV')
+                        or any(not isinstance(value, (NullObject, NumberObject, FloatObject)) for value in destination[2:])):
+                    raise ValueError('opening view must point to a local page')
             if '/S' in obj and obj['/S'] in ('/GoToR', '/GoToE', '/Launch', '/JavaScript', '/URI', '/SubmitForm', '/ImportData', '/Rendition'):
                 raise ValueError('unsupported PDF action')
             if isinstance(obj, StreamObject):
@@ -78,6 +93,10 @@ def main():
     resource.setrlimit(resource.RLIMIT_FSIZE, (0, 0))
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     if len(sys.argv) != 1:
+        return 2
+    try:
+        import pypdf  # noqa: F401 -- distinguish missing runtime from invalid input
+    except ImportError:
         return 2
     try:
         validate_pdf(sys.stdin.buffer.read(MAX_BYTES + 1))

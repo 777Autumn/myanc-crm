@@ -10,7 +10,7 @@ from PIL import Image
 from pptx import Presentation
 from pptx.util import Inches
 from pypdf import PdfWriter
-from pypdf.generic import DictionaryObject, NameObject, TextStringObject
+from pypdf.generic import ArrayObject, DictionaryObject, NameObject, TextStringObject
 
 from team_file_pdf import validate_pdf
 
@@ -45,6 +45,8 @@ class FileFormatsTests(unittest.TestCase):
 
     def test_pdf_structure_and_active_content(self):
         self.assertEqual(validate_pdf(pdf_bytes()), 1)
+        self.assertEqual(validate_pdf(pdf_bytes(lambda w: w._root_object.update({
+            NameObject('/OpenAction'): ArrayObject([w.pages[0].indirect_reference, NameObject('/Fit')])}))), 1)
         attacks = [
             lambda w: w.add_js('app.alert("fictional")'),
             lambda w: w.add_attachment('fictional.txt', b'fictional'),

@@ -16,3 +16,36 @@ The supported future candidate entrance is described in [../RELEASE.md](../RELEA
 The unpublished business-display and operations-alert templates are described in
 [../OPS-ALERTS.md](../OPS-ALERTS.md). They require separate approved maintenance;
 adding a template to git does not enable it on any of the six live environments.
+
+## Proposal document runtime
+
+`team-files-requirements.txt` pins the existing Python packages plus presentation,
+image and PDF libraries. `team-files-system-packages.txt` records the Debian 12
+Writer/Impress, UNO, Poppler and CJK-font versions actually tested. Preserve the
+existing package versions; resolve and record the installation transaction before
+the authorized maintenance window. These files do not run an installer.
+
+Install `team_file_pdf.py` as a gateway-owned executable in a protected directory
+and point only the approved file-work projects' `document_validator` setting at
+it. Its Python shebang is `/opt/team-files/bin/python -I`. The executable accepts
+stdin bytes and emits only `PDF_OK_V1` on acceptance; its detailed protocol is in
+the paired gateway `ops/FILE_FORMATS.md`. No employee-controlled path is a host
+validation command. No management socket is used.
+
+Install the root-owned, employee-readable `team_file_render.py` at
+`/usr/local/libexec/team_file_render.py`. Run it as the existing employee account
+with the current work root, selected input and a new output subdirectory; its
+`--help` describes the arguments. The default paired binary is
+`/usr/local/bin/cc-connect-anc`; the optional `--gateway` selects a candidate
+binary for offline checks, not a sending endpoint. The script first invokes the
+gateway's read-only `file-check`, then uses a private profile and a transient UNO
+pipe, refreshes Word fields/indexes, exports PDF and renders every page. The worker
+uses `/usr/bin/python3` with distro UNO; the caller uses the locked virtualenv.
+Timeout cleanup targets only the spawned process group. It rejects root execution.
+
+Offline actual rendering is enabled by `TEAM_FILES_TEST_GATEWAY=<paired binary>`:
+run the runtime unit tests as an ordinary account with the listed dependencies.
+Without that explicit binary the actual rendering case reports **skipped**, not
+passed. Source tests can independently check paths/protocols; only the paired run
+establishes Go/Python/LibreOffice interoperability. Render success does not assert
+visual or employee acceptance. Original files and previous outputs are retained.

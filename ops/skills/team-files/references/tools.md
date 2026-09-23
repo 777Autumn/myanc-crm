@@ -29,7 +29,7 @@ not a guessed path or a different recipient.
 
 Read each selected input from its returned path. A missing original is a real
 input gap: request that file again rather than reconstructing it from memory.
-Retain DOCX/XLSX originals; extracted Markdown/text is a working aid. Material
+Retain original documents and images; extracted Markdown/text is a working aid. Material
 selected for this work is not authorization to publish a knowledge proposal.
 
 For delivery, `path` is relative to the returned `output_dir`; absolute paths,
@@ -45,14 +45,20 @@ verify its `sha256` before editing. Missing or changed bytes require locating th
 matching file or requesting it again; memory does not establish the prior version.
 The host's immutable snapshots remain private and are not a model file browser.
 
-First-version limits: up to 4 selected input files, 20 MiB each and 40 MiB per
+File limits: up to 4 selected input files, 20 MiB each and 40 MiB per
 batch; each output is at most 20 MiB, with at most 100 MiB expanded OOXML content.
-Only valid DOCX/XLSX packages are accepted. Macros, embedded active objects,
-external relationships (including external hyperlinks), and active external/DDE
-formulas are rejected. All DOCX fields (`fldSimple`, `fldChar`, `instrText`) are
-unsupported, including ordinary PAGE and TOC fields; static text and tables remain
-supported. XLSX formulas such as SUM remain supported when they have no external
-references. Report the specific unsupported content and request a static source
+DOCX/XLSX remain available under the original configuration. The separately
+enabled proposal formats add PPTX, PDF, PNG and JPEG, including directly posted
+Feishu pictures saved as current work inputs. PNG/JPEG are limited to 25 million
+pixels; PDF is limited to 200 pages and rejects encryption, scripts, attachments,
+forms and external actions. PPTX supports editable text/shapes/tables and embedded
+PNG/JPEG; charts with embedded workbooks and audio/video are unsupported.
+Macros, embedded active objects, external relationships (including external
+hyperlinks), and active external/DDE formulas are rejected. With proposal formats
+enabled, Word fields are limited to PAGE, NUMPAGES, TOC and internal PAGEREF with
+supported switches; other fields are rejected. Headers/footers and tables remain
+supported. XLSX formulas such as SUM remain supported without external references.
+Report the specific unsupported content and request a static source
 or a separately prepared compatible file. Do not silently strip fields, remove
 content or change the format.
 
