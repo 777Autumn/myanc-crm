@@ -47,20 +47,27 @@ class MockWikiRoutingTests(unittest.TestCase):
     def test_published_candidate_links_facts_and_calculations(self):
         root = ROOT / 'ops' / wiki.RELATIVE_ROOT
         metadata = json.loads((root / 'metadata.json').read_text(encoding='utf-8'))
-        self.assertEqual(metadata['source_materials'], ['DEMO-WIKI-001-SOURCE-01 v1'])
+        self.assertEqual(metadata['version'], 2)
+        self.assertEqual(metadata['source_materials'], ['DEMO-WIKI-001-SOURCE-01 v1', 'DEMO-WIKI-001-SOURCE-02 v1'])
         self.assertEqual(len(metadata['draft_sha256']), 7)
         for page in root.glob('*.md'):
             content = page.read_text(encoding='utf-8')
             for target in re.findall(r'\]\(\./([^\)]+)\)', content):
                 self.assertTrue((root / target).is_file(), f'{page.name}: {target}')
-            self.assertNotIn('4,080', content)
+        original = (root / '00-原材料.md').read_text(encoding='utf-8')
+        self.assertIn('3,980', original)
+        self.assertNotIn('4,080', original)
+        update = (root / '01-价格调整依据.md').read_text(encoding='utf-8')
+        for scope in ('DEMO-WIKI-001-SOURCE-02', '员工要求修订旧草稿', '历史成果不自动改写', '内部演练'):
+            self.assertIn(scope, update)
         prices = (root / '03-套餐与报价.md').read_text(encoding='utf-8')
         rows = {label.strip(): int(price.replace(',', '')) for label, price in re.findall(
             r'^\|\s*([^|]+?)\s*\|\s*([\d,]+)(?: 元(?:/瓶)?)?\s*\|', prices, re.M)}
         def total(package, decoration):
             return 22 * (rows[package] + 6 * rows['酒水']) + rows['固定服务费'] + rows['主持'] + rows[decoration]
-        self.assertEqual(total('A 清雅', '主题布置 · 基础'), 101520)
-        self.assertEqual(total('A 清雅', '主题布置 · 升级'), 107520)
+        self.assertEqual(total('A 清雅', '主题布置 · 基础'), 103720)
+        self.assertEqual(total('A 清雅', '主题布置 · 基础') - 101520, 22 * 100)
+        self.assertEqual(total('A 清雅', '主题布置 · 升级'), 109720)
         self.assertEqual(total('B 丰盛', '主题布置 · 基础'), 114720)
         flow = (root / '05-流程与状态口径.md').read_text(encoding='utf-8')
         for fact in ('09:00', '90 分钟', '30 分钟', '明确批准材料'):
