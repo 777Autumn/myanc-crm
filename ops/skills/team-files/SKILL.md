@@ -24,9 +24,9 @@ description: 读取员工选定的附件、制作或修改 DOCX/XLSX 成果、�
    guessed temporary paths. If a helper file is needed, keep it in the current
    allowed workspace, separate from delivered artifacts.
 4. Reopen the saved output and check requested content, tables/formulas, dates and
-   layout with available tools. Read all relevant sheets/cells and Word sections,
-   including changed rows, totals, statuses and sources; file dimensions, a hash
-   or a first-rows preview cannot establish content correctness. Fix omissions
+   layout with available tools. Read all relevant sheets/cells, Word paragraphs
+   and table cells, including changed rows, totals, statuses and sources. File
+   dimensions, a hash or a first-rows preview cannot establish content correctness. Fix omissions
    and reread the saved revision before delivery. Report any unverified rendering. For byte hashes,
    use the installed `sha256sum -- '<absolute artifact path>'` on paths belonging
    to this work; shell-quote each path. Reuse that result until the file changes,
