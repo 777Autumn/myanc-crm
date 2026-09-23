@@ -56,6 +56,12 @@ class CandidateTests(unittest.TestCase):
                         path = destination / name
                         path.parent.mkdir(parents=True, exist_ok=True)
                         path.write_text(commit, encoding="utf-8")
+                    if repo == '77AutumN/myanc-crm' and knowledge_sha:
+                        wiki = destination / 'ops' / builder.mock_wiki.RELATIVE_ROOT
+                        wiki.mkdir(parents=True)
+                        (wiki / 'index.md').write_text('fictional source', encoding='utf-8')
+                        (wiki / 'metadata.json').write_text(json.dumps(dict(
+                            company_id='DEMO-WIKI-001', data_scope='虚构演练', version=1)), encoding='utf-8')
                 def run(args, cwd, env=None):
                     commands.append((args, cwd, env))
                     if args[:2] == ["go", "build"]:
@@ -81,6 +87,13 @@ class CandidateTests(unittest.TestCase):
                     for name, digest in result["files"].items():
                         self.assertEqual(hashlib.sha256(archive.extractfile("candidate/" + name).read()).hexdigest(), digest)
                     self.assertEqual("candidate/knowledge/team_brain/tool.py" in names, bool(knowledge_sha))
+                    wiki_source = 'ops/' + builder.mock_wiki.RELATIVE_ROOT.as_posix() + '/SOURCE.json'
+                    self.assertEqual(wiki_source in result['files'], bool(knowledge_sha))
+                    if knowledge_sha:
+                        source = json.load(archive.extractfile('candidate/' + wiki_source))
+                        self.assertEqual(source['source_commit'], 'a' * 40)
+                        self.assertEqual(source['knowledge_version'], 1)
+                        self.assertEqual(source['files']['index.md'], hashlib.sha256(b'fictional source').hexdigest())
                     for skill in ("team-crm", "team-reminders", "team-files"):
                         for name in ("SKILL.md", "references/tools.md"):
                             path = f"ops/skills/{skill}/{name}"

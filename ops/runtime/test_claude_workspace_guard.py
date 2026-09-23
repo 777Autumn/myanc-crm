@@ -71,6 +71,20 @@ class WorkspaceGuardTests(unittest.TestCase):
     def test_allows_ordinary_workspace_file(self) -> None:
         self.assertEqual(0, invoke("notes.txt").returncode)
 
+    def test_mock_wiki_stays_readonly_and_drafts_stay_personal(self) -> None:
+        for user in ('claude', 'claude-owner-group', 'claude-test-group'):
+            cwd = f'/home/{user}/ClaudeRemote'
+            for name in ('mock-wiki/index.md', 'mock-wiki/SOURCE.json', 'workspace-role.md'):
+                path = '.claude/skills/team-banquet/references/' + name
+                self.assertEqual(0, invoke(path, user=user, cwd=cwd).returncode)
+                for tool in ('Write', 'Edit', 'NotebookEdit'):
+                    self.assertEqual(2, invoke(path, tool, user, cwd).returncode)
+            self.assertEqual(0, invoke('knowledge-draft/index.md', 'Write', user, cwd).returncode)
+            for other in ('claude', 'claude-owner-group', 'claude-test-group'):
+                if other != user:
+                    path = f'/home/{other}/ClaudeRemote/knowledge-draft/index.md'
+                    self.assertEqual(2, invoke(path, user=user, cwd=cwd).returncode)
+
     def test_approved_employee_file_inputs_and_outputs_only(self) -> None:
         users = ('claude', 'claude-test-private', 'claude-owner-group',
                  'claude-test-group', 'claude-partner-private', 'claude-partner-group')

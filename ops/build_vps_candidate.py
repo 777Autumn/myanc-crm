@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import release_gate as gate
+import mock_wiki
 
 
 def run(args, cwd, env=None):
@@ -142,6 +143,12 @@ def build(crm_sha, gateway_sha, output, knowledge_sha=None):
                         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         shutil.copytree(crm / "ops", bundle / "ops",
                         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        wiki_root = bundle / 'ops' / mock_wiki.RELATIVE_ROOT
+        if wiki_root.exists():
+            # The frozen source commit is known only after merge, not in its own tree.
+            wiki_source = mock_wiki.manifest(wiki_root, crm_sha)
+            (wiki_root / 'SOURCE.json').write_text(
+                json.dumps(wiki_source, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
         copy_file_runtime_templates(gateway, bundle)
         if knowledge is not None:
             for directory in ("team_brain", "skills"):

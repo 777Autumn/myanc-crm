@@ -1,0 +1,19 @@
+{
+  "company_id": "DEMO-WIKI-001",
+  "data_scope": "虚构演练",
+  "version": 1,
+  "source_materials": [
+    "DEMO-WIKI-001-SOURCE-01 v1"
+  ],
+  "draft_version": "v0.1",
+  "draft_sha256": {
+    "00-原材料.md": "6da627712985b89cf4678a5677033329f48c04f9b7498641f4f2b65e96adc1e3",
+    "01-目录.md": "767704c008f63d1b32b9b4f72386729d2045a147c4f8a952fb1f252baa94ba18",
+    "02-场馆.md": "17167f77fac6c43567e28e05ed59c63d97dd8a11938ef8be7214d1695f54c2d9",
+    "03-套餐与报价.md": "3d98ba7d686549b1815e40f9bbf106fd60b1de42e6b1e1b61837987db8f3c434",
+    "04-职责分工.md": "7590abe136eba8f23a0357aec7eb20b3d774b12e79f7bbb2e60bd5253236f39e",
+    "05-流程与状态口径.md": "ffff91c9ba658b56e7dcd512091b0e909ad67b29e1f1b5e733b92ef2f4adedeb",
+    "06-经验建议.md": "c59a103ab1d5f7b345e1e7391ca1fabb56ddddd39ea88ed02cd5f6db8e72f563"
+  },
+  "provenance": "VPS Claude 经既有飞书维护私聊生成7页草稿；维护校订后进入 GitHub 审查。不是已发布证明。"
+}
