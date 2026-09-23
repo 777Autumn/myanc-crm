@@ -1,9 +1,10 @@
 {
   "company_id": "DEMO-WIKI-001",
   "data_scope": "虚构演练",
-  "version": 1,
+  "version": 2,
   "source_materials": [
-    "DEMO-WIKI-001-SOURCE-01 v1"
+    "DEMO-WIKI-001-SOURCE-01 v1",
+    "DEMO-WIKI-001-SOURCE-02 v1"
   ],
   "draft_version": "v0.1",
   "draft_sha256": {
@@ -15,5 +16,21 @@
     "05-流程与状态口径.md": "ffff91c9ba658b56e7dcd512091b0e909ad67b29e1f1b5e733b92ef2f4adedeb",
     "06-经验建议.md": "c59a103ab1d5f7b345e1e7391ca1fabb56ddddd39ea88ed02cd5f6db8e72f563"
   },
-  "provenance": "VPS Claude 经既有飞书维护私聊生成7页草稿；维护校订后进入 GitHub 审查。不是已发布证明。"
+  "provenance": "VPS Claude 经既有飞书维护私聊生成7页草稿；维护校订后进入 GitHub 审查。不是已发布证明。",
+  "updates": [
+    {
+      "version": 2,
+      "base_source_commit": "5fa2aa79e0b2f2a05928cb4f2d4201ee77f9edec",
+      "draft_version": "v2-draft-01",
+      "draft_sha256": {
+        "01-新依据.md": "277ee415235dabeb8c1e6d8bae0e3a9f319bb519fa4ddf32ef84f3d7b92cf716",
+        "03-套餐与报价.md": "49f3e77254854257663b1fe7ac4614e21d3002b20ca352a54a2e8201318d2bbf",
+        "changes.md": "7af6bdf73d41bf2f7ebd53997cac8f4e35cbe0914b5f004f0a4cf5e97ff7ca29",
+        "index.md": "2496b9078f97d7be31252b4d4ef0dd9bcc081ad60f7e8a1cd9f63feb7342cf3e",
+        "metadata.json": "e777861a6b64fe4d1b38ccdda4c21014cbf1a9b29e88bdfd56328b73eebe1d8a",
+        "README.md": "710d52a88fe272fe15feaa8a0c8eee76afb584f2c4caf4d3a8dcc9e81233cb64"
+      },
+      "provenance": "VPS Claude 新维护工作读取已发布 v1 后生成6文件草稿；选择性承接调价并由维护者补回按请求修订的适用范围、修正发布链接。未导入旧会话初稿。不是已发布证明。"
+    }
+  ]
 }
