@@ -1,5 +1,6 @@
 """Offline rendering only: fictional sources, no models or external messages."""
 import hashlib
+import io
 import json
 import os
 import re
@@ -11,6 +12,7 @@ import time
 import unittest
 import zipfile
 import xml.etree.ElementTree as ET
+from contextlib import redirect_stderr
 from unittest.mock import patch
 
 from docx import Document
@@ -21,7 +23,7 @@ from pptx import Presentation
 from pptx.util import Inches
 from pypdf import PdfReader
 
-from team_file_render import office_check, prepare_paths, render, run
+from team_file_render import main, office_check, prepare_paths, render, run
 
 
 def deny_unix_sockets():
@@ -98,6 +100,35 @@ def fictional_template(path, extra=False):
 
 
 class RenderBoundaryTests(unittest.TestCase):
+    def test_existing_render_directory_reports_safe_recovery_without_conversion(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / 'inputs').mkdir()
+            (root / 'outputs').mkdir()
+            source = root / 'inputs' / 'fictional.pptx'
+            source.write_bytes(b'original')
+            target = root / 'outputs' / 'existing'
+            target.mkdir()
+            for populated in (False, True):
+                if populated:
+                    (target / 'previous.pdf').write_bytes(b'previous result')
+                error = io.StringIO()
+                args = ['render', '--work-root', str(root), '--input', str(source), '--output-dir', str(target)]
+                with patch('sys.argv', args), patch('team_file_render.os') as identity, \
+                        patch('team_file_render.run') as convert, redirect_stderr(error):
+                    identity.name = 'posix'
+                    identity.geteuid.return_value = 1001
+                    with self.assertRaises(SystemExit) as stopped:
+                        main()
+                self.assertEqual(stopped.exception.code, 1)
+                self.assertIn('Output directory already exists', error.getvalue())
+                self.assertIn('do not create it beforehand', error.getvalue())
+                self.assertNotIn(str(root), error.getvalue())
+                convert.assert_not_called()
+                self.assertEqual(source.read_bytes(), b'original')
+                if populated:
+                    self.assertEqual((target / 'previous.pdf').read_bytes(), b'previous result')
+
     def test_paths_preserve_originals_and_reject_wrong_work_or_overwrite(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

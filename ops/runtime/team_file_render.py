@@ -59,8 +59,10 @@ def prepare_paths(work_root, source, destination):
     if not any(source.is_relative_to(root / name) for name in ('inputs', 'outputs')):
         raise ValueError('input is outside current work')
     target = Path(destination).resolve()
-    if not target.is_relative_to(outputs) or target == outputs or target.exists():
+    if not target.is_relative_to(outputs) or target == outputs:
         raise ValueError('output must be a new directory inside current work outputs')
+    if target.exists():
+        raise FileExistsError('render destination already exists')
     if source.suffix.lower() not in ('.docx', '.pptx', '.pdf') or not source.is_file() or not 0 < source.stat().st_size <= MAX_BYTES:
         raise ValueError('unsupported input format/size')
     return source, target, outputs
@@ -211,6 +213,9 @@ def main():
     args = parser.parse_args()
     try:
         result = render(args.work_root, args.input, args.output_dir, args.gateway)
+    except FileExistsError:
+        parser.exit(1, 'Output directory already exists; preserve it and choose a new directory name '
+                    'inside this work outputs; do not create it beforehand. No delivery was attempted.\n')
     except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired):
         parser.exit(1, 'Document preparation failed; originals retained. No delivery was attempted.\n')
     print(json.dumps(result, ensure_ascii=False))

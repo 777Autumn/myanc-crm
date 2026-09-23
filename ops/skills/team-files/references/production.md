@@ -41,6 +41,10 @@ Run the installed helper with paths returned by the current work context:
   --output-dir '<output_dir/new unique render directory>'
 ```
 
+Let the helper create the new render directory; pass a path that does not yet
+exist. If it reports an existing output directory, preserve that directory and
+choose a new name; this input error does not require broader permissions.
+
 The helper validates Office content through the existing gateway binary before
 conversion. For DOCX it refreshes fields and indexes, saves a new editable DOCX,
 then exports PDF. PPTX exports PDF without flattening or replacing its editable

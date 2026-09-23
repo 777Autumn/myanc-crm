@@ -34,7 +34,9 @@ description: 读取员工选定的文档、表格、PDF和图片，制作或修�
 4. Reopen the saved output and check requested content, tables/formulas, dates and
    layout with available tools. Read all relevant sheets/cells, Word paragraphs
    and table cells, including changed rows, totals, statuses and sources. File
-   dimensions, a hash or a first-rows preview cannot establish content correctness. Fix omissions
+   dimensions, a hash or a first-rows preview cannot establish content correctness.
+   For Excel, check long titles/notes against merged widths, wrapping and row heights;
+   inspect an actual preview when available, and state when display remains unverified. Fix omissions
    and reread the saved revision before delivery. Report any unverified rendering. For byte hashes,
    use the installed `sha256sum -- '<absolute artifact path>'` on paths belonging
    to this work; shell-quote each path. Reuse that result until the file changes,
