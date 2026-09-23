@@ -1,0 +1,91 @@
+{
+  "scope": "fictional test artifacts only; hashes do not establish content acceptance",
+  "recorded_at": "2026-09-23T21:20:00+08:00",
+  "overall": "incomplete",
+  "artifacts": [
+    {
+      "stage": "acceptance-inputs",
+      "name": "虚构套餐资料-v1.pdf",
+      "bytes": 90677,
+      "sha256": "d93d1d4dec97f6fd2e57ca33206a5bc4265c4fb027a3bf5afb532cdc1ac36a4c"
+    },
+    {
+      "stage": "acceptance-inputs",
+      "name": "虚构页眉目录模板-v1.docx",
+      "bytes": 38549,
+      "sha256": "3dabbf3f4d2e9d8c4a576d0c41e21479e31469a877b7af5e471f0c59a4f160b6"
+    },
+    {
+      "stage": "acceptance-inputs",
+      "name": "虚构风格素材-v1.png",
+      "bytes": 79639,
+      "sha256": "d65e5f74af9c3d217cbd7cfad8f742b5aa555fa64d962bf4dd29d76692b34816"
+    },
+    {
+      "stage": "v3-returned",
+      "name": "婚宴谈单包-虚构演练-方案PPT-v3.pdf",
+      "bytes": 174639,
+      "sha256": "842d84c1f9071bb2688da0175d73bc74815f76e460d65e12f57ccb26f3539742"
+    },
+    {
+      "stage": "v3-returned",
+      "name": "婚宴谈单包-虚构演练-方案PPT-v3.pptx",
+      "bytes": 35816,
+      "sha256": "54a8c6a7903313e7a36d1ec598feea3d5e3127803de0ba3e3f73d1e7bb93f449"
+    },
+    {
+      "stage": "v3-returned",
+      "name": "婚宴谈单包-虚构演练-海报-v3.png",
+      "bytes": 219605,
+      "sha256": "976adf2598c0ed024c32d6ef4935a9073cdde9ea5060db7896979d9b1335734b"
+    },
+    {
+      "stage": "v3-returned",
+      "name": "婚宴谈单包-虚构演练-海报母版-v3.pptx",
+      "bytes": 30770,
+      "sha256": "9f881d3dcf809abd4b3b582b3c2e2ffbf583e8dfef0e6e42c78b02e80add6454"
+    },
+    {
+      "stage": "v3-returned",
+      "name": "婚宴谈单包-虚构演练-预算测算-v3.xlsx",
+      "bytes": 7059,
+      "sha256": "61f61a1b71a9127efcfc6ddd7260e7d452e7de5343365c9749d560544f540087"
+    },
+    {
+      "stage": "word-returned",
+      "name": "虚构页眉目录模板-v1-修改前.pdf",
+      "bytes": 36859,
+      "sha256": "6cea2034c42f6fd9bc135ed2e41d301fd6c15afa1c544874ef303df6bd43c0af"
+    },
+    {
+      "stage": "word-returned",
+      "name": "虚构页眉目录模板-v2-雨天预案.docx",
+      "bytes": 26762,
+      "sha256": "ac7c8bf4d1eeeb85e9984539ffa5f4e5e3a9bf3ad2450e58d779bb2807a4a399"
+    },
+    {
+      "stage": "word-returned",
+      "name": "虚构页眉目录模板-v2-雨天预案.pdf",
+      "bytes": 189486,
+      "sha256": "ba255ba638630e2711d95fd6829c3f4e5b13dd142b882b699b0d960ce74a038b"
+    },
+    {
+      "stage": "fresh-returned",
+      "name": "婚宴A套餐海报_蓝白风_v2.png",
+      "bytes": 189470,
+      "sha256": "d5a05274191e1912dc7dd0a26c66de85df7a5196e2acfb2547eda7cd35c4d09a"
+    },
+    {
+      "stage": "fresh-returned",
+      "name": "婚宴A套餐海报_蓝白风_v2.pptx",
+      "bytes": 30425,
+      "sha256": "ddcd590bfc6732182008ce52ad0cac2c53cd9ca83ae01ba7bfb450c2f96b8012"
+    },
+    {
+      "stage": "fresh-returned",
+      "name": "婚宴A套餐预算_v1.xlsx",
+      "bytes": 8307,
+      "sha256": "de4d2f9a5e3634a35da16c3cb3cdde6ce07a24b8b02fb84ba776573bfe7a0de5"
+    }
+  ]
+}
