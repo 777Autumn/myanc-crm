@@ -42,6 +42,9 @@ gateway's read-only `file-check`, then uses a private profile and a transient UN
 pipe, refreshes Word fields/indexes, exports PDF and renders every page. The worker
 uses `/usr/bin/python3` with distro UNO; the caller uses the locked virtualenv.
 Timeout cleanup targets only the spawned process group. It rejects root execution.
+Office and preview workers share memory/CPU/file-size limits. Completed output
+files use `0640` inside a `2750` directory, inheriting the existing outputs
+handoff group; scratch and profiles stay private even with service umask `0077`.
 
 Offline actual rendering is enabled by `TEAM_FILES_TEST_GATEWAY=<paired binary>`:
 run the runtime unit tests as an ordinary account with the listed dependencies.
@@ -49,3 +52,8 @@ Without that explicit binary the actual rendering case reports **skipped**, not
 passed. Source tests can independently check paths/protocols; only the paired run
 establishes Go/Python/LibreOffice interoperability. Render success does not assert
 visual or employee acceptance. Original files and previous outputs are retained.
+In a disposable Linux environment only, run `HandoffRenderTests` with the same
+binary setting as a privileged fixture initializer. It creates temporary numeric
+identities, renders/revises as the ordinary model UID and reads every completed
+artifact as a different ordinary gateway UID. It also checks that the legacy
+private directory and an unrelated UID are denied. No accounts or services change.

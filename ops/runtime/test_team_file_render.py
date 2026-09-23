@@ -1,10 +1,13 @@
 """Offline rendering only: fictional sources, no models or external messages."""
 import hashlib
+import json
 import os
 import re
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
+import time
 import unittest
 import zipfile
 import xml.etree.ElementTree as ET
@@ -88,8 +91,33 @@ class RenderBoundaryTests(unittest.TestCase):
 
     @unittest.skipUnless(os.name == 'posix', 'process-group cleanup is Linux runtime behavior')
     def test_timeout_kills_transient_process_group(self):
-        with self.assertRaises(subprocess.TimeoutExpired):
-            run(['/bin/sh', '-c', 'sleep 30 & wait'], timeout=.1)
+        with tempfile.TemporaryDirectory() as temp:
+            pid_file = Path(temp) / 'child.pid'
+            started = time.monotonic()
+            with self.assertRaises(subprocess.TimeoutExpired):
+                run(['/bin/sh', '-c', 'sleep 30 & echo $! > "$1"; wait', 'fixture', str(pid_file)], timeout=.5)
+            self.assertLess(time.monotonic() - started, 3)
+            status = Path('/proc') / pid_file.read_text().strip() / 'stat'
+            for _ in range(100):
+                if not status.exists() or status.read_text().split(') ')[1].startswith('Z'):
+                    break
+                time.sleep(.01)
+            else:
+                self.fail('spawned child remains alive after timeout')
+
+    @unittest.skipUnless(os.name == 'posix' and os.geteuid() != 0, 'ordinary Linux worker limits')
+    def test_poppler_inherits_limits_before_exec(self):
+        probe = '''
+import json, resource
+from unittest.mock import patch
+from team_file_render import preview_worker
+with patch('team_file_render.os.execv') as execute:
+    preview_worker('/fixture/input.pdf', '/fixture/page')
+    assert execute.call_args.args[0] == '/usr/bin/pdftoppm'
+    print(json.dumps([resource.getrlimit(key) for key in (resource.RLIMIT_AS, resource.RLIMIT_CPU, resource.RLIMIT_FSIZE, resource.RLIMIT_CORE)]))
+'''
+        output = subprocess.check_output([sys.executable, '-B', '-c', probe], cwd=Path(__file__).parent)
+        self.assertEqual(json.loads(output), [[2 << 30] * 2, [90] * 2, [128 << 20] * 2, [0, 0]])
 
 
 @unittest.skipUnless(os.environ.get('TEAM_FILES_TEST_GATEWAY'), 'requires matching candidate binary and Linux Office packages')
@@ -146,6 +174,80 @@ class ActualRenderTests(unittest.TestCase):
             self.assertIn('虚构婚宴', text)
             self.assertIn('101,520', text)
             self.assertEqual(Presentation(source).slides[0].shapes[0].text, shape.text)
+
+
+@unittest.skipUnless(os.name == 'posix' and os.geteuid() == 0 and os.environ.get('TEAM_FILES_TEST_GATEWAY'),
+                     'requires disposable Linux numeric-UID initializer and document packages')
+class HandoffRenderTests(unittest.TestCase):
+    def test_model_render_and_revision_readable_by_ordinary_gateway_only(self):
+        # Root only provisions the fixture; rendering and reading drop all groups
+        # except the same restricted handoff group used by the deployed accounts.
+        gateway_uid, model_uid, shared_gid = 61000, 61001, 61002
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            root.chmod(0o755)
+            work = root / 'work'
+            work.mkdir()
+            os.chown(work, gateway_uid, shared_gid)
+            work.chmod(0o2750)
+            for name, mode in (('inputs', 0o2750), ('outputs', 0o2770)):
+                path = work / name
+                path.mkdir()
+                os.chown(path, gateway_uid, shared_gid)
+                path.chmod(mode)
+
+            def as_user(uid, script, *args, group=shared_gid):
+                return subprocess.run([sys.executable, '-B', '-c', script, str(work), *args],
+                                      user=uid, group=group, extra_groups=[], umask=0o077,
+                                      cwd=Path(__file__).parent, capture_output=True, text=True, timeout=120)
+
+            made = as_user(model_uid, '''
+import json, os, sys
+from pathlib import Path
+from test_team_file_render import fictional_template
+from team_file_render import render
+assert os.geteuid() == 61001
+assert 'CapEff:\t0000000000000000' in Path('/proc/self/status').read_text()
+root = Path(sys.argv[1])
+legacy = root / 'outputs' / 'legacy-private'
+legacy.mkdir(mode=0o700)
+(legacy / 'result').write_text('fictional')
+for version in (1, 2):
+    source = root / 'outputs' / f'source-v{version}.docx'
+    fictional_template(source, extra=version == 2)
+    render(root, source, root / 'outputs' / f'v{version}', os.environ['TEAM_FILES_TEST_GATEWAY'])
+''')
+            self.assertEqual(made.returncode, 0, made.stderr)
+            checked = as_user(gateway_uid, '''
+import hashlib, json, os, sys
+from pathlib import Path
+assert os.geteuid() == 61000
+assert 'CapEff:\t0000000000000000' in Path('/proc/self/status').read_text()
+root = Path(sys.argv[1]) / 'outputs'
+try:
+    (root / 'legacy-private' / 'result').read_bytes()
+except PermissionError:
+    pass
+else:
+    raise AssertionError('ordinary host bypassed old private output')
+pages = []
+for version in (1, 2):
+    target = root / f'v{version}'
+    record = json.loads((target / 'render.json').read_text())
+    for name, digest in record['files'].items():
+        path = target / name
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == digest
+        assert path.stat().st_uid == 61001 and path.stat().st_gid == 61002
+        assert path.stat().st_mode & 0o777 == 0o640
+    pages.append(record['pages'])
+assert pages[1] > pages[0]
+print(json.dumps(pages))
+''')
+            self.assertEqual(checked.returncode, 0, checked.stderr)
+            self.assertGreater(json.loads(checked.stdout)[1], json.loads(checked.stdout)[0])
+            denied = as_user(61003, 'from pathlib import Path; import sys; (Path(sys.argv[1]) / "outputs/v1/render.json").read_bytes()', group=61003)
+            self.assertNotEqual(denied.returncode, 0)
+            self.assertIn('PermissionError', denied.stderr)
 
 
 if __name__ == '__main__':

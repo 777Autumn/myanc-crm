@@ -98,7 +98,8 @@ def render(work_root, source, destination, gateway):
         else:
             pdf.write_bytes(data)
         pdf_check(pdf.read_bytes())
-        run(['/usr/bin/pdftoppm', '-png', '-r', '100', '-scale-to', '1800', str(pdf), str(target / 'page')], timeout=120)
+        run(['/usr/bin/python3', '-I', str(Path(__file__).resolve()), '--preview-worker',
+             str(pdf), str(target / 'page')], timeout=120)
     from pypdf import PdfReader
     page_count = len(PdfReader(pdf).pages)
     previews = sorted(target.glob('page-*.png'))
@@ -108,22 +109,36 @@ def render(work_root, source, destination, gateway):
               'pages': page_count, 'files': {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
                                            for p in sorted(target.iterdir()) if p.is_file()}}
     (target / 'render.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+    # The setgid outputs directory supplies the existing model/host handoff
+    # group. Override service umask only on completed artifacts, never scratch.
+    for path in target.iterdir():
+        path.chmod(0o640)
+    target.chmod(0o2750)
     return result
 
 
-def office_worker(source, destination, stem, scratch):
+def worker_limits():
     import resource
-    import uno
-    from com.sun.star.beans import PropertyValue
-    from com.sun.star.document.MacroExecMode import NEVER_EXECUTE
-    from com.sun.star.document.UpdateDocMode import NO_UPDATE
-
     if os.geteuid() == 0:
         raise ValueError('ordinary identity required')
     resource.setrlimit(resource.RLIMIT_AS, (2 << 30, 2 << 30))
     resource.setrlimit(resource.RLIMIT_CPU, (90, 90))
     resource.setrlimit(resource.RLIMIT_FSIZE, (128 << 20, 128 << 20))
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+
+
+def preview_worker(pdf, prefix):
+    worker_limits()
+    os.execv('/usr/bin/pdftoppm', ['pdftoppm', '-png', '-r', '100', '-scale-to', '1800', pdf, prefix])
+
+
+def office_worker(source, destination, stem, scratch):
+    worker_limits()
+    import uno
+    from com.sun.star.beans import PropertyValue
+    from com.sun.star.document.MacroExecMode import NEVER_EXECUTE
+    from com.sun.star.document.UpdateDocMode import NO_UPDATE
+
     source, target, scratch = Path(source), Path(destination), Path(scratch)
     pipe = 'teamfiles_' + uuid.uuid4().hex
     profile = (scratch / 'profile').as_uri()
@@ -188,6 +203,9 @@ def office_worker(source, destination, stem, scratch):
 def main():
     if len(sys.argv) == 6 and sys.argv[1] == '--office-worker':
         office_worker(*sys.argv[2:])
+        return
+    if len(sys.argv) == 4 and sys.argv[1] == '--preview-worker':
+        preview_worker(*sys.argv[2:])
         return
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--work-root', required=True)
