@@ -71,7 +71,8 @@ class BanquetSkillTests(unittest.TestCase):
         self.assertEqual(sorted(m["as_of"] for m in materials), [m["as_of"] for m in materials])
         self.assertTrue(all(m["as_of"] < case["event_date"] for m in materials[:-1]))
         self.assertGreater(materials[-1]["as_of"], case["event_date"])
-        runtime = "\n".join(p.read_text(encoding="utf-8") for p in SKILL.rglob("*") if p.is_file())
+        runtime = "\n".join(p.read_text(encoding="utf-8") for p in SKILL.rglob("*")
+                            if p.is_file() and "__pycache__" not in p.parts and p.suffix != ".pyc")
         for private_future_fact in ("DEMO-ORDER-B", "DEMO-RECEIPT-B-01", "DEMO-ACCESS-B", "DEMO-WINE-B"):
             self.assertNotIn(private_future_fact, runtime)
         self.assertEqual({"提出要求", "已确认", "已发生", "待核实"}, set(rules["status_meanings"]))
