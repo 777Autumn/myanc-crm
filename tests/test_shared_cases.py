@@ -115,6 +115,33 @@ class SharedCaseTests(unittest.TestCase):
         update['expected_revision'] = 1
         self.assertEqual('case_message_already_recorded', self.call('case-update', update)['code'])
 
+    def test_duplicate_field_explained_without_consuming_complete_update(self):
+        self.context['source_text'] = '林陈婚宴，22桌，酒水计入；摄影客户安排。'
+        update = self.change()
+        update['changes'] += [dict(field='客户需求', value=value, state='proposed', quote=value)
+                              for value in ('酒水计入', '摄影客户安排')]
+        for key, value, reason in (('state', 'unknown', 'state must be'),
+                                   ('quote', 'not in this message', 'quote must occur verbatim')):
+            invalid = copy.deepcopy(update)
+            invalid['changes'] = invalid['changes'][:2]
+            invalid['changes'][1][key] = value
+            result = self.call('case-update', invalid)
+            self.assertFalse(result['recorded'])
+            self.assertIn('客户需求: ' + reason, result['reason'])
+        rejected = self.call('case-update', update)
+        self.assertEqual('case_changes_invalid', rejected['code'])
+        self.assertFalse(rejected['recorded'])
+        self.assertIn('客户需求: duplicate field', rejected['reason'])
+        with closing(sqlite3.connect(self.path)) as db:
+            self.assertEqual(0, db.execute('SELECT COUNT(*) FROM shared_case_versions').fetchone()[0])
+            self.assertEqual(0, db.execute('SELECT COUNT(*) FROM shared_case_bindings').fetchone()[0])
+        update['changes'][1]['field'] = '酒水'
+        saved = self.call('case-update', update)
+        self.assertEqual('recorded', saved['status'])
+        self.assertEqual({'桌数', '酒水', '客户需求'}, set(saved['case']['facts']))
+        self.assertEqual(1, saved['case']['revision'])
+        self.assertTrue(self.call('case-update', update)['replayed'])
+
     def test_conflicting_claim_preserves_both_sources_then_explicit_correction(self):
         self.call('case-update', self.change())
         context = {**self.context, 'source_text': '林陈婚宴，我记得是23桌。'}

@@ -228,8 +228,12 @@ def _changes(request, context, principal, config):
         value = _text(change.get('value'), 2000)
         quote = _text(change.get('quote'), 4000)
         state = change.get('state')
-        if field in seen or state not in STATES or quote not in context['source_text']:
-            raise ValueError('case change has no unique source')
+        if field in seen:
+            raise ValueError(f'{field}: duplicate field; use one entry per field, preserving all facts in the complete batch')
+        if state not in STATES:
+            raise ValueError(f'{field}: state must be proposed, reported_confirmed, occurred or unverified')
+        if quote not in context['source_text']:
+            raise ValueError(f'{field}: quote must occur verbatim in the authorized source message')
         # Value must be grounded in this shared message, not the private history.
         if value not in quote:
             raise ValueError(f'{field}: value must occur verbatim in its source quote')
