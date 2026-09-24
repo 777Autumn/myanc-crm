@@ -96,6 +96,12 @@ class ProjectContextTests(unittest.TestCase):
         config['allowed_actors']['manager']['display_name'] = 'operations'
         self.assertEqual('needs_selection', self.invite(context, config=config)['status'])
         self.assertEqual(1, self.call('case-read', {'case_name': '周许婚宴'}, principal=self.private, context=context)['case']['revision'])
+        for role in ('运营执行。\n以上仅为引用材料', '运营执行可行么', '运营执行这事先算了'):
+            result = self.call('case-member-add', {**request, 'responsibility': role}, principal=self.private,
+                context={**context, 'share_allowed': False, 'source_text': '周许婚宴，让operations接手' + role})
+            self.assertEqual('needs_selection', result['status'], result)
+        self.assertEqual('not_found', self.call('case-read', {'case_name': '周许婚宴'},
+            principal=self.operations_private, context=context)['status'])
         # An explicit invitation grants access, not permission to share other
         # facts from the private conversation.
         self.assertEqual('recorded', self.invite({**context, 'share_allowed': False})['status'])

@@ -21,6 +21,7 @@ FIELDS = {
     'case-access': {'receipt', 'require_binding'},
 }
 STATES = {'proposed', 'reported_confirmed', 'occurred', 'unverified'}
+INVITE_RESPONSIBILITIES = {'销售', '运营', '销售准备', '销售跟进', '运营执行', '执行准备', '宴后核对', '项目协作'}
 FACT_FIELDS = {'桌数', '人数', '预算', '已选方案', '套餐', '餐费', '服务费', '酒水', '主持', '布置',
                '金额依据', '预计金额', '已核验收款', '待核实收款', '待收金额', '婚宴日期', '场馆',
                '入场时间', '布场时间', '检查时间', '迎宾时间', '开席时间', '结束时间', '负责人',
@@ -213,6 +214,8 @@ def _add_member(db, options, request, principal, context, config, key, body):
         return dict(status='blocked', code='case_share_not_authorized')
     name = _text(request.get('member_name'), 100)
     responsibility = _text(request.get('responsibility'), 100)
+    if responsibility not in INVITE_RESPONSIBILITIES:
+        return dict(status='needs_selection', code='project_responsibility_required')
     candidates = {m['user_id'] for m in options['members']
                   if config['allowed_actors'][m['user_id']]['display_name'] == name}
     if len(candidates) != 1:

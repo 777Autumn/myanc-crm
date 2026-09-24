@@ -35,6 +35,8 @@ Existing `case-list/read/update` retain their payloads. `case-member-add` accept
 the original `source_message_id`. The owner or configured manager must explicitly
 request the named colleague's participation in the authorized original message;
 ambiguous names, quoted instructions and hypothetical invitations fail closed.
+This mock rollout accepts only the documented sales/operations duty phrases,
+so a model-supplied responsibility cannot absorb a quoted or negated suffix.
 Member changes reuse the same atomic version history, separately deduplicated
 from business changes in the same incoming message.
 
