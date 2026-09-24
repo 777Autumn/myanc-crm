@@ -19,7 +19,7 @@ readiness. Formal CRM tables, published Wiki v2 and knowledge source are unchang
 
 Every changed head received separate Spec and Standards AI reviews, release-gate
 checks and exact merge-SHA push CI. AI reviews are not human GitHub approvals.
-The candidate source combination is CRM `3048915c6e0699cc8cb2525c14bca8d37512e262`,
+The final installed/tested runtime source combination is CRM `3048915c6e0699cc8cb2525c14bca8d37512e262`,
 gateway `02ea0a9e629ffcfa04b52cd569ac73c548461a31`, knowledge
 `88a60ba60a634fe3d6b0f68f91de326b19a39b30`.
 
@@ -57,6 +57,13 @@ file matched its frozen baseline; resulting bytes and metadata were verified.
 Service, Wiki, configuration, business and session state were unchanged during
 that idle update. Routing installation receipt SHA256:
 `6422fa2566cda30c6d7f029549867ef52bf8baaf8c580d9286c142026f40c827`.
+The final conflict-recording patch also changed only three references. Its final
+check failed on one new journal notice; a separately reviewed read-only
+reconciliation used two identical full snapshots at least 120 seconds apart and
+checked the entire journal against the exact old prefix plus that single notice.
+It passed without retrying installation, changing runtime, or overwriting the
+failure. Reconciliation receipt SHA256:
+`d706e73c5a10d763f75138443abc01751f5b80c28aed28ba7c2a0878f78d7274`.
 Private manifests, backups, target paths and operational receipts remain in the
 restricted evidence store; this document contains no raw logs, chat identifiers,
 credentials, protected configuration or business originals.
@@ -80,9 +87,15 @@ were actually opened in the client, not inferred from delivery receipts alone.
 | 13:21–13:23 | In the same work, operations reported an unverified recollection of 24 tables and asked to record the discrepancy without executing it. | Claude routed through CRM/customer and Wiki checks, skipped the shared-case protocol and incorrectly claimed no case record. No shared update. **FAIL**, requiring project-level routing repair in PR77. |
 | 13:37–13:38 | After PR77, the same conversation continued naturally. | Shared protocol read and actual `case-read` revision 4 restored the 23-table basis and differentiated the venue's 24-table capacity. Routing retest **PASS**; no conflict save claimed. |
 | 13:40 | The original explicit request to record an unverified 24-table discrepancy was repeated. | Correct record read, but reply said it was tentatively noted without any `case-update`. Persistence **FAIL**; PR78 clarifies saving an authorized new unverified report before clarification. |
+| 14:01 | After PR78 and its read-only installation reconciliation, the same original natural request was repeated. | Actual `case-read` revision 4 followed by `case-update` **recorded**, revision 5. Read-only store assertions verify original 23 tables retained as a conflict with a 24-table unverified alternative and distinct sources. Other facts stayed unchanged; no files or execution arrangement created. Reply truthfully reported the saved discrepancy and requested clarification. **PASS**. |
+| 14:08 | Operations started another work and asked only for 顾唐婚宴's progress by name, without a file reference. | Actual `case-read` revision 1, zero artifacts/imports and no update. Reply correctly gives 16 tables / 160 people, provisional B/basic decor, budget 80000 and date pending. No 韩周 conditions, conflict or files entered this work. **PASS**. |
 
-Conflict and final cross-case checks are pending; overall acceptance remains
-incomplete until their actual results are recorded.
+The scoped two-account fictional collaboration journey passes after the recorded
+fixes and affected retests. This does not erase the earlier failures or establish
+universal model reliability. The intentional 23/24-table conflict remains pending
+clarification; no operator edited the database to make the result pass.
+This evidence-only change does not rebuild or reinstall runtime: the tested source
+combination and candidate above remain the deployed basis.
 
 ### Opened artifact hashes
 
@@ -125,7 +138,9 @@ older-basis markers. Recording progress does not silently revise those files.
   service, activity, business-store and session snapshots were unchanged. The old
   journal prefix matched exactly, with one new unsolicited-event notice from the
   test entry. Its underlying event type was not recorded. Installation was not
-  retried and the failure receipt remains; read-only reconciliation is pending.
+  retried and the failure receipt remains. The scoped read-only reconciliation
+  above passed. This is not a retroactive pass of the original check, proof of
+  the notification's cause, or proof that it had no unobserved platform effects.
 - Targeted offline tests cover duplicate/retry, concurrent CAS, save failure,
   denial/hypothesis/forged permission, ambiguous cases, queue/recovery source
   persistence, cross-account import, unknown receipts and late stale delivery.
@@ -133,6 +148,9 @@ older-basis markers. Recording progress does not silently revise those files.
 - New capability remains default-off outside explicitly configured test entries.
   No department lookup, automatic colleague notification, automatic file rebuild,
   production contract/collection/booking write, or customer communication was added.
+- Some model replies still expose technical status labels such as `revision` or
+  `proposed`. Plain-language consistency is a remaining presentation limitation;
+  the scoped business/state checks above do not claim that all wording is polished.
 
 Rollback disables the added shared-case entrances and restores the prior runtime
 under the normal maintenance gate. Preserve mock-case history, delivery receipts,
