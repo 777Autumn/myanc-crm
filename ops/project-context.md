@@ -77,3 +77,13 @@ No upstream tests or live journey have been executed merely by adding this doc.
 
 Deployment is incomplete until exact-head AI reviews, existing CI, merge-SHA CI,
 the normal paired candidate, scoped maintenance and actual acceptance are recorded.
+
+## Disablement and binary rollback
+
+Before the first private import, record that its file ledger advances to version 3.
+The previous version-2-only gateway cannot read it; disabling `project_context`
+does not change that. Safe disablement keeps a compatible gateway while disabling
+new shared-case entry points. A required binary replacement pauses file processing
+until a compatible build is available. Do not downgrade, clear or restore an older
+ledger; preserve project versions, private provenance, receipts and artifacts.
+Include this limitation in the frozen deployment/rollback checklist.

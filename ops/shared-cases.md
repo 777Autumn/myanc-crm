@@ -61,6 +61,10 @@ states the limit. A stale file remains historical even if it was delivered later
 
 Enablement evidence must include initialization, config/client/Skill versions,
 one-service maintenance check and the two-account Feishu journey. Source CI does
-not prove these. Roll back by disabling shared cases and restoring the previous
-runtime files/configuration through the same gate, preserving all mock tables,
-versions and existing file snapshots. Never reset the formal business ledger.
+not prove these. Disable shared cases through the same gate, preserving all mock
+tables, versions and file snapshots. Restore previous runtime files only if they
+can read the recorded file-ledger version: project-group to private imports mark
+version 3 and older gateways refuse that whole ledger. Keep a compatible gateway
+with the new entry points off; if a binary replacement is necessary, pause file
+processing until a compatible build is available. Never downgrade or restore old
+business snapshots to make a binary start. See `project-context.md` for this opt-in.
