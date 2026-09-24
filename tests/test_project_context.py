@@ -72,6 +72,26 @@ class ProjectContextTests(unittest.TestCase):
         self.assertEqual('sales', saved['case']['project']['owner'])
         self.assertTrue(self.call('case-update', request, principal=self.private, context=context)['replayed'])
 
+    def test_natural_private_handoff_and_preview_select_only_the_named_project(self):
+        self.call('case-update', self.change())
+        for i, text in enumerate((
+            '换个事，请接手林陈婚宴的运营准备，看看销售已经交出的预算和建议。',
+            '换个事，我想私下先看林陈婚宴的销售预算和建议。暂时不要同步给执行。',
+        )):
+            context = {**self.context, 'work_id': f'private-preview-{i}',
+                       'source_text': text, 'share_allowed': False}
+            for principal in (self.private, self.operations_private):
+                read = self.call('case-read', {'case_name': '林陈婚宴'},
+                                 principal=principal, context=context)
+                self.assertEqual('found', read['status'], (text, read))
+                self.assertEqual('22桌', read['case']['facts']['桌数']['value'])
+                self.assertEqual('case_share_not_authorized', self.call('case-update',
+                    self.change(), principal=principal, context=context)['code'])
+        _, context, _ = self.private_project()
+        context.update(work_id='outsider-preview', source_text='请接手周许婚宴的运营准备')
+        self.assertEqual('not_found', self.call('case-read', {'case_name': '周许婚宴'},
+            principal=self.operations_private, context=context)['status'])
+
     def test_owner_adds_registered_colleague_across_entries_without_transferring_owner(self):
         _, context, _ = self.private_project()
         saved = self.invite(context)
