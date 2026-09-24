@@ -2,7 +2,8 @@
 
 This record covers the existing two test accounts and one fictional banquet.
 It is not evidence of real hotel integration or company-wide permission governance.
-Acceptance is still in progress; unresolved checks below are not passes.
+The bounded journey below passed after the recorded rewording and file correction.
+The initial natural-language and first-draft quality failures remain limitations.
 
 ## Installed source combination
 
@@ -40,7 +41,10 @@ classifier reconciliation; this is not a reusable activity-gate exemption.
   remain distinct; unknown date/times remain pending. Word distinguishes general
   timing rules from confirmed arrangements.
 - An owner-only second fictional project was saved after rewording its explicit
-  private save request. Its non-member read check is pending.
+  private save request. The second account's actual private query returned
+  `not_found` at revision 0; name-filtered listing was empty and general listing
+  contained only its authorized project. The private project's needs and owner
+  were not disclosed. This was an access check, not a name-parser rejection.
 
 ## Retained failures and limitations
 
@@ -53,15 +57,24 @@ classifier reconciliation; this is not a reusable activity-gate exemption.
   model also initially chose the wrong CRM workflow and later incorrectly
   suggested an internal new-work command. A new direct sharing sentence saved
   the fictional project; the original employee experience remains a limitation.
-- Budget v2's change-description sheet contains a `#NAME?` display error in one
-  explanatory cell. Numeric totals are correct. A targeted Bot revision has
-  been requested; its actual returned file has not yet been checked.
+- Budget v2's change-description sheet displayed `#NAME?`: two explanatory
+  cells were incorrectly saved as formulas. After an employee-side correction
+  request, the Bot returned a separate corrected workbook. It was actually
+  opened: both explanations display as text, total 107980 and surplus 2020 are
+  unchanged. The original faulty version is retained; delivery-time self-check
+  did not catch this error and is not claimed reliable.
 - Word tables cross page boundaries. Perfect layout, real complex templates,
   and the old deferred model/format quality items are not claimed passed.
-- Final receipt/snapshot provenance and non-member denial audit are pending.
+- Read-only provenance checks match accepted receipts, snapshot hashes, source
+  work/version, project binding and membership for both private imports. Original
+  artifacts remain present. No unknown/submitted delivery remained at the audit.
+  The corrected workbook differs only in the two explanation cells and document
+  metadata; all other ZIP parts are byte-identical to the retained faulty v2.
 
 Raw chats, account identifiers, protected configuration, ledgers and customer
 material are excluded from this record. No real booking, payment, contract or
-customer notification was requested. Rollback disables the new entries and
+customer notification was requested. Reviewed tool traces show no formal CRM
+write, but a complete before/after reconciliation of formal CRM state was not
+performed. Rollback disables the new entries and
 restores the compatible runtime/configuration while retaining project records
 and artifacts; do not downgrade the file ledger schema or restore business data.
