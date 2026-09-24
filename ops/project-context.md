@@ -37,6 +37,9 @@ request the named colleague's participation in the authorized original message;
 ambiguous names, quoted instructions and hypothetical invitations fail closed.
 This mock rollout accepts only the documented sales/operations duty phrases,
 so a model-supplied responsibility cannot absorb a quoted or negated suffix.
+The gateway persists the complete `original_text` separately from a selected
+sharing paragraph. Member grants require that complete text; older queued sources
+without it are refused. Business updates still use only the selected paragraph.
 Member changes reuse the same atomic version history, separately deduplicated
 from business changes in the same incoming message.
 

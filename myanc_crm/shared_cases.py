@@ -137,7 +137,7 @@ def _scope(config, principal, context):
         raise ValueError('case member unavailable')
     _project_policy(options, config)
     required = {'work_id', 'source_text', 'share_allowed'}
-    if not isinstance(context, dict) or not required <= set(context) or set(context) - required - {'source_receipt','selected_case'}:
+    if not isinstance(context, dict) or not required <= set(context) or set(context) - required - {'source_receipt','selected_case','original_text'}:
         raise ValueError('trusted case context required')
     if context.get('selected_case'):
         _text(context['selected_case'],120)
@@ -148,6 +148,8 @@ def _scope(config, principal, context):
     _text(context['work_id'])
     if not isinstance(context['source_text'], str) or len(context['source_text']) > 16000:
         raise ValueError('invalid case source')
+    if 'original_text' in context and (not isinstance(context['original_text'], str) or len(context['original_text']) > 16000):
+        raise ValueError('invalid original case source')
     if type(context['share_allowed']) is not bool:
         raise ValueError('invalid sharing permission')
     _text(principal['message_id'])
@@ -220,7 +222,7 @@ def _add_member(db, options, request, principal, context, config, key, body):
                   if config['allowed_actors'][m['user_id']]['display_name'] == name}
     if len(candidates) != 1:
         return dict(status='needs_selection', code='project_member_name_not_unique')
-    source = context['source_text']
+    source = context.get('original_text', '')
     # A membership grant must be the complete original request, never a
     # matching line extracted from a quotation, question or mixed message.
     # ponytail: deliberately narrow grammar; unsupported phrasing asks the
@@ -505,7 +507,9 @@ def tool(command, request, principal, context, config):
                 # Inspect the message, never hidden database names, so a newly
                 # named wedding cannot silently update the bound group case.
                 mentioned = re.findall(r'[^\s，,。；;：:]{1,40}婚宴(?!团队)', context['source_text'])
-                if any(not other.endswith((name, '这场婚宴', '当前婚宴', '本场婚宴', '这次婚宴', '该婚宴', '模拟婚宴')) for other in mentioned):
+                target = (r'(?:(?:请|帮我|处理|准备|根据|为|关于|针对|另一个|另一场|新建|新增|创建|登记|记录|接下来|继续|核对|读取|查看|整理))*'
+                          r'(?:' + re.escape(name) + r'|这场婚宴|当前婚宴|本场婚宴|这次婚宴|该婚宴|模拟婚宴)')
+                if any(not re.fullmatch(target, other) for other in mentioned):
                     return dict(status='needs_selection', code='case_target_requires_clarification')
             body = _current(db, options['namespace'], name)
             visible = body is not None and _can_read(options, body, principal)

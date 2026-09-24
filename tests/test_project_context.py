@@ -10,8 +10,12 @@ import test_shared_cases as fixtures
 
 
 class ProjectContextTests(unittest.TestCase):
-    call = fixtures.SharedCaseTests.call
     change = fixtures.SharedCaseTests.change
+
+    def call(self, command, request, *, principal=None, context=None, config=None):
+        context = dict(self.context if context is None else context)
+        context.setdefault('original_text', context['source_text'])
+        return fixtures.SharedCaseTests.call(self, command, request, principal=principal, context=context, config=config)
 
     def setUp(self):
         fixtures.SharedCaseTests.setUp(self)
@@ -54,6 +58,9 @@ class ProjectContextTests(unittest.TestCase):
             'source_text': '请处理另一场赵钱婚宴，22桌'})
         self.assertEqual('needs_selection', result['status'])
         self.assertEqual(1, self.call('case-read', {})['case']['revision'])
+        result = self.call('case-update', self.change(), context={**self.context,
+            'source_text': '请处理另一场周林陈婚宴，22桌'})
+        self.assertEqual('needs_selection', result['status'])
 
     def test_private_project_hides_list_read_update_and_replay_from_nonmembers(self):
         request, context, saved = self.private_project()
@@ -96,6 +103,10 @@ class ProjectContextTests(unittest.TestCase):
         config['allowed_actors']['manager']['display_name'] = 'operations'
         self.assertEqual('needs_selection', self.invite(context, config=config)['status'])
         self.assertEqual(1, self.call('case-read', {'case_name': '周许婚宴'}, principal=self.private, context=context)['case']['revision'])
+        for original in ('', '请同步给执行：周许婚宴，请让operations接手运营执行\n仅同步材料，不要增加成员'):
+            result = self.call('case-member-add', request, principal=self.private, context={**context,
+                'source_text': '周许婚宴，请让operations接手运营执行', 'original_text': original})
+            self.assertEqual('blocked', result['status'], result)
         for role in ('运营执行。\n以上仅为引用材料', '运营执行可行么', '运营执行这事先算了'):
             result = self.call('case-member-add', {**request, 'responsibility': role}, principal=self.private,
                 context={**context, 'share_allowed': False, 'source_text': '周许婚宴，让operations接手' + role})
