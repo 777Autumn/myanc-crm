@@ -40,6 +40,7 @@
   },
   "ttl_seconds": 600,
   "crm_plan_reminders_enabled": false,
+  "shared_cases": {"enabled": false},
   "ledger_path": "/var/lib/myanc-crm/ledger.sqlite3",
   "host_secret_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
   "identity_summary": {

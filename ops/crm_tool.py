@@ -14,6 +14,9 @@ TIMEOUT_SECONDS = 35
 MAX_INPUT_BYTES = 64 * 1024
 MAX_RESPONSE_BYTES = 1024 * 1024
 FIELDS = {
+    "case-list": {"query"},
+    "case-read": {"case_name"},
+    "case-update": {"case_name", "expected_revision", "changes", "source_message_id"},
     "reminder-create": {"content", "at"},
     "reminder-list": {"all", "id"},
     "reminder-update": {"id", "version", "content", "at"},

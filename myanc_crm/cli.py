@@ -220,22 +220,25 @@ def _host_prepare_payload(
 
 def _host_tool_payload(value, config):
     from .queries import CUSTOMER_FIELDS
+    from .shared_cases import FIELDS as CASE_FIELDS
     required = {"command", "request", "principal"}
-    if not required <= set(value) or set(value) - required - PLAN_HOST_FIELDS:
+    case_tool = value.get("command") in CASE_FIELDS
+    extra = {"case_context"} if case_tool else PLAN_HOST_FIELDS
+    if not required <= set(value) or set(value) - required - extra:
         raise ValueError("host-tool requires command, request, principal and supported host options.")
     fields = {"open": frozenset({"target"}), "customer": frozenset({"customer_query", "history_offset"}),
               "customers": CUSTOMER_FIELDS,
               "stage": BUSINESS_FIELDS, "result": frozenset({"change_id"}),
               "assignee": frozenset({"query"}),
               "stage-customer-create": CREATE_FIELDS,
-              "stage-customer-update": UPDATE_FIELDS}
+              "stage-customer-update": UPDATE_FIELDS, **CASE_FIELDS}
     command = value.get("command")
     if not isinstance(command, str) or command not in fields:
         raise ValueError("Unsupported controlled tool.")
     if set(value) & PLAN_HOST_FIELDS and command not in {"stage", "stage-customer-create", "stage-customer-update"}:
         raise ValueError("Host plan options require a staging command.")
     request, principal = _host_prepare_payload(
-        {key: item for key, item in value.items() if key != "command"}, config, fields[command]
+        {key: item for key, item in value.items() if key not in {"command", "case_context"}}, config, fields[command]
     )
     if command == "customer":
         core._required_text(request.get("customer_query"), "customer_query", 256)
@@ -466,6 +469,12 @@ def main(
         if tool_command == "open":
             # A host-configured navigation link needs neither CRM IO nor a ledger.
             _write(target, _open_result(prepare_request, config, prepare_principal))
+            return 0
+        if tool_command in {"case-list", "case-read", "case-update", "case-artifact"}:
+            from .shared_cases import tool
+            # Shared simulation state never opens the formal CRM backend/ledger.
+            _write(target, tool(tool_command, prepare_request, prepare_principal,
+                                request.get("case_context"), config))
             return 0
         backend, ledger = _runtime(config, path)
     except (CliConfigurationError, LarkBackendError, OSError, TypeError, ValueError):

@@ -45,6 +45,8 @@ def paired_tests(gateway, env):
                 "TestCUJ_CRMDaily1_ListAndPlanApproval"}
     if "MYANC_TEAM_BRAIN_ROOT" in env:
         required.add("TestCUJ_KNOWLEDGEIPC2_CatalogReadFollowupAndScope")
+    if (gateway / 'actionhost/crmfollowup/shared_case_journey_test.go').is_file():
+        required.add('TestCUJ_CASEIPC_SharedProgressPrivateGrantAndRevision')
     passed = {item.get("Test") for item in events if item.get("Action") == "pass"}
     gate.require(required <= passed, "required cross-repo journeys did not execute successfully")
     gate.require(any(item.get("Action") == "pass" and item.get("Test", "").startswith("TestCUJ")

@@ -94,6 +94,22 @@ class CliBoundaryTests(unittest.TestCase):
 
         self.assertNotEqual(attacker_path.resolve(), selected)
 
+    def test_case_tools_require_host_and_never_open_formal_crm(self):
+        principal = dict(platform="feishu", user_id="sender-test", chat_id="chat-test",
+                         session_key="session-test", project="project-test", message_id="message-test")
+        payload = dict(command="case-list", request={}, principal=principal,
+                       case_context=dict(work_id="work", source_text="fixture", share_allowed=False))
+        with mock.patch.object(cli, "_runtime") as runtime:
+            code, result = self.run_cli(["host-tool"], json.dumps(payload), host=True)
+            self.assertEqual((0, "disabled"), (code, result['status']))
+            code, _ = self.run_cli(["host-tool"], json.dumps(payload))
+            self.assertEqual(2, code)
+            payload['command'] = 'customer'
+            payload['request'] = {'customer_query': 'fictional'}
+            code, _ = self.run_cli(["host-tool"], json.dumps(payload), host=True)
+            self.assertEqual(2, code)
+            runtime.assert_not_called()
+
     def test_open_returns_current_configured_link_without_backend_or_ledger(self):
         principal = dict(platform="feishu", user_id="sender-test", chat_id="chat-test",
                          session_key="session-test", project="project-test", message_id="message-test")
