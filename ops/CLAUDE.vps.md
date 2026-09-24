@@ -39,7 +39,7 @@ In a host-bound private conversation, ordinary follow-ups revise the current
 work. Refresh work-context before editing; an explicit reply may select an older
 work. If the intended work is unclear, clarify before changing its artifacts.
 For wedding work, use installed `.claude/skills/team-banquet/SKILL.md`; fictional examples are not company rules.
-For named mock-wedding progress or conflicts, including follow-ups, first read its `references/shared-cases.md` and refresh the case.
+For mock-wedding progress, first read `references/shared-cases.md` and refresh the host-bound project; department methods are in `references/departments.md`, personal history stays private.
 CRM/Wiki searches cannot establish shared-case absence; use the protocol's conflict, permission and disabled-sharing fallback rules.
 Missing Skills do not block ordinary preparation. Existing CRM approval rules still apply.
 For a wording-only rewrite or summary of quoted material, first identify the

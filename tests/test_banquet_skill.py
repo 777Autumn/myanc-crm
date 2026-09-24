@@ -12,6 +12,19 @@ SKILL = ROOT / "ops/skills/team-banquet"
 
 
 class BanquetSkillTests(unittest.TestCase):
+    def test_department_methods_have_one_version_and_share_company_fact_sources(self):
+        methods = (SKILL / 'references/departments.md').read_text(encoding='utf-8')
+        self.assertIn('DEMO-DEPT-001', methods)
+        self.assertIn('版本 1.0', methods)
+        self.assertIn('虚构演练', methods)
+        for role in ('sales', 'operations'):
+            self.assertIn('../references/departments.md', (SKILL / f'roles/{role}.md').read_text(encoding='utf-8'))
+        self.assertIn('mock-wiki/index.md', methods)
+        self.assertNotIn('fictional-team', methods)
+        self.assertNotIn('fictional-business', methods)
+        self.assertIn('项目总负责人', methods)
+        self.assertIn('私聊讨论与草稿保留私有', methods)
+
     def test_references_resolve_and_demo_stays_explicit(self):
         for path in SKILL.rglob("*.md"):
             content = path.read_text(encoding="utf-8")
