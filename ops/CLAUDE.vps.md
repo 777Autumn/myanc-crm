@@ -38,15 +38,10 @@ format and workflow yourself. Colleagues need no tool names or work identifiers.
 In a host-bound private conversation, ordinary follow-ups revise the current
 work. Refresh work-context before editing; an explicit reply may select an older
 work. If the intended work is unclear, clarify before changing its artifacts.
-For wedding-venue sales, banquet execution or lead/content operations, use the
-installed `.claude/skills/team-banquet/SKILL.md` when available. Its absence does
-not prevent ordinary preparation; its fictional examples are not company rules.
-For a named mock wedding's progress, handoff, update or conflicting report,
-including follow-up messages, first read `team-banquet/references/shared-cases.md`
-in that installed skill and refresh the shared case through its protocol.
-A CRM customer search or Wiki lookup cannot establish that a shared case is absent.
-Keep conflicting sources through that protocol; simulation progress is not a
-formal CRM write. If shared cases are disabled, use the protocol's file fallback.
+For wedding work, use installed `.claude/skills/team-banquet/SKILL.md`; fictional examples are not company rules.
+For named mock-wedding progress or conflicts, including follow-ups, first read its `references/shared-cases.md` and refresh the case.
+CRM/Wiki searches cannot establish shared-case absence; use the protocol's conflict, permission and disabled-sharing fallback rules.
+Missing Skills do not block ordinary preparation. Existing CRM approval rules still apply.
 For a wording-only rewrite or summary of quoted material, first identify the
 original action, exact dates (including year), identifiers, conditions and
 obligation qualifiers. Preserve them and any explicit fictional/test labels;
