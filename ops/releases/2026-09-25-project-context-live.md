@@ -1,6 +1,7 @@
 # Simulated project context: live acceptance
 
-This record covers the existing two test accounts and one fictional banquet.
+This record covers the existing two test accounts, the main fictional banquet,
+and an owner-only second fictional project used for an access-denial check.
 It is not evidence of real hotel integration or company-wide permission governance.
 The bounded journey below passed after the recorded rewording and file correction.
 The initial natural-language and first-draft quality failures remain limitations.
@@ -29,9 +30,10 @@ classifier reconciliation; this is not a reusable activity-gate exemption.
   budget surplus 6280; date unconfirmed, photography excluded, LED optional.
 - The owner assigned the registered second account to operations. Project
   ownership did not transfer.
-- Both accounts opened their separate private conversations and actually read
-  imported group Excel/Word through their own work directories. Tool traces
-  corroborate file reads; a model statement alone is not the evidence.
+- Both accounts imported the group Excel and Word into their own private work
+  directories. Native tool traces corroborate the owner's actual Excel read and
+  operations' actual Excel and Word reads; the owner's Word read is not claimed.
+  A model statement alone is not the evidence.
 - The owner privately considered 23 tables / 230 people without sharing. A fresh
   operations private query still returned 22 / 220. Only a subsequent explicit
   synchronization saved 23 / 230 as project revision 3.
