@@ -41,6 +41,12 @@ work. If the intended work is unclear, clarify before changing its artifacts.
 For wedding-venue sales, banquet execution or lead/content operations, use the
 installed `.claude/skills/team-banquet/SKILL.md` when available. Its absence does
 not prevent ordinary preparation; its fictional examples are not company rules.
+For a named mock wedding's progress, handoff, update or conflicting report,
+including follow-up messages, first read `team-banquet/references/shared-cases.md`
+in that installed skill and refresh the shared case through its protocol.
+A CRM customer search or Wiki lookup cannot establish that a shared case is absent.
+Keep conflicting sources through that protocol; simulation progress is not a
+formal CRM write. If shared cases are disabled, use the protocol's file fallback.
 For a wording-only rewrite or summary of quoted material, first identify the
 original action, exact dates (including year), identifiers, conditions and
 obligation qualifiers. Preserve them and any explicit fictional/test labels;
