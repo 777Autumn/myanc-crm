@@ -39,12 +39,18 @@ def _source_clause(source, quote, value):
     left = max(source.rfind(c,0,start) for c in separators) + 1
     right = min((position for c in separators if (position := source.find(c,start)) >= 0), default=len(source))
     clause = source[left:right]
+    if right < len(source) and source[right] in '？?':
+        clause += source[right]
     if value not in clause:
         raise ValueError('one fact clause required for a state transition')
     previous_start = max(source.rfind(c,0,max(0,left-1)) for c in separators) + 1
     previous = source[previous_start:max(0,left-1)].strip()
-    if previous in {'客户确认','已确认','实际发生','实际执行','已经完成','已完成'}:
+    if previous in {'客户确认','已确认','实际发生','实际执行','已经完成','已完成', *UNCERTAIN}:
         clause = previous + clause
+    # A conditional introduction may span clauses. Keep these conservative;
+    # an unrelated pending fact does not invalidate an affirmative fact.
+    if any(word in source for word in ('如果', '假设', '假如', '是否')):
+        clause = '假设' + clause
     return clause
 
 
@@ -233,7 +239,7 @@ def _changes(request, context, principal, config):
         if state in {'reported_confirmed', 'occurred'}:
             clause = _source_clause(source,quote,value)
             markers = ('已确认', '确认采用', '客户确认', '确认改为') if state == 'reported_confirmed' else ('实际发生', '实际执行', '已经完成', '已完成')
-            if any(word in source for word in UNCERTAIN) or not any(word in clause for word in markers):
+            if any(word in clause for word in UNCERTAIN) or not any(word in clause for word in markers):
                 raise ValueError('confirmation not supported by the original message')
         replaces = change.get('replaces', False)
         if type(replaces) is not bool:
@@ -281,7 +287,7 @@ def _update(db, options, request, principal, context, config, key, name):
             source = context['source_text']
             clause = _source_clause(source,value['source']['quote'],value['value'])
             if not any(word in clause for word in ('改为', '调整为', '以此为准', '确认采用', '更正为')) or any(
-                word in source for word in UNCERTAIN
+                word in clause for word in UNCERTAIN
             ):
                 raise ValueError('explicit correction required')
         body['facts'][field] = value

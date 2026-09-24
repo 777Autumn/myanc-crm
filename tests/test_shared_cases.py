@@ -240,6 +240,39 @@ class SharedCaseTests(unittest.TestCase):
             self.assertEqual(['conflict','recorded'],sorted(f.result()['status'] for f in futures))
         self.assertEqual(1,self.call('case-read',{'case_name':'林陈婚宴'})['case']['revision'])
 
+    def test_confirmed_fact_and_pending_fact_can_be_saved_together(self):
+        for separator in ('；', '，'):
+            with self.subTest(separator=separator):
+                source = '林陈婚宴，客户已确认22桌' + separator + 'LED尚未确认'
+                update = dict(case_name='林陈婚宴',expected_revision=0,changes=[
+                    dict(field='桌数',value='22桌',state='reported_confirmed',quote='已确认22桌'),
+                    dict(field='待确认项',value='LED',state='unverified',quote='LED尚未确认')])
+                result = self.call('case-update',update,context={**self.context,'source_text':source})
+                self.assertEqual('recorded',result['status'],result)
+                self.assertEqual('reported_confirmed',result['case']['facts']['桌数']['state'])
+                self.assertEqual('unverified',result['case']['facts']['待确认项']['state'])
+                source = '林陈婚宴，客户已确认桌数改为23桌' + separator + 'LED尚未确认'
+                update.update(expected_revision=1)
+                update['changes'][0].update(value='23桌',quote='已确认桌数改为23桌',replaces=True)
+                result = self.call('case-update',update,principal=self.operations,
+                                   context={**self.context,'source_text':source})
+                self.assertEqual('recorded',result['status'],result)
+                self.assertEqual('23桌',result['case']['facts']['桌数']['value'])
+                # Each separator exercises the same initially empty store.
+                with closing(sqlite3.connect(self.path)) as db:
+                    db.execute('DELETE FROM shared_case_versions')
+                    db.execute('DELETE FROM shared_case_bindings')
+                    db.commit()
+
+    def test_clause_checks_keep_question_and_conditional_scope(self):
+        for source in ('林陈婚宴，客户已确认22桌？',
+                       '如果客户明天同意，林陈婚宴客户已确认22桌',
+                       '林陈婚宴，不要，桌数改为22桌'):
+            update = self.change()
+            update['changes'][0].update(quote='22桌',state='reported_confirmed',replaces=True)
+            self.assertEqual('blocked',self.call('case-update',update,
+                             context={**self.context,'source_text':source})['status'])
+
     def test_maintenance_initializes_only_existing_separate_test_store(self):
         cases.initialize_config(self.config)
         with self.assertRaises(ValueError):
