@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from pathlib import Path
 import sqlite3
 from contextlib import contextmanager
@@ -14,14 +15,16 @@ FIELDS = {
     'case-list': {'query'},
     'case-read': {'case_name'},
     'case-update': {'case_name', 'expected_revision', 'changes', 'source_message_id'},
+    'case-member-add': {'case_name', 'expected_revision', 'member_name', 'responsibility', 'source_message_id'},
     # Host-only: absent from the agent client and gateway request decoder.
     'case-artifact': {'phase', 'request_key', 'existing_delivery', 'artifact'},
+    'case-access': {'receipt', 'require_binding'},
 }
 STATES = {'proposed', 'reported_confirmed', 'occurred', 'unverified'}
 FACT_FIELDS = {'桌数', '人数', '预算', '已选方案', '套餐', '餐费', '服务费', '酒水', '主持', '布置',
                '金额依据', '预计金额', '已核验收款', '待核实收款', '待收金额', '婚宴日期', '场馆',
                '入场时间', '布场时间', '检查时间', '迎宾时间', '开席时间', '结束时间', '负责人',
-               '客户需求', '待确认项', '执行安排'}
+               '客户需求', '待确认项', '执行安排', '项目阶段'}
 UNCERTAIN = ('不要', '不改', '暂不', '如果', '是否', '假设', '未确认', '没确认', '没有确认',
              '尚未', '未发生', '没发生', '还没', '不确定', '请勿', '别改', '不确认', '假如', '建议', '考虑', '？', '?')
 
@@ -112,7 +115,9 @@ def _scope(config, principal, context):
     options = config.get('shared_cases', {})
     if not isinstance(options, dict) or options.get('enabled') is not True:
         return None
-    if set(options) != {'enabled', 'ledger_path', 'namespace', 'group_chat_id', 'members'}:
+    if set(options) - {'enabled', 'ledger_path', 'namespace', 'group_chat_id', 'members', 'project_context'} or not {
+        'enabled', 'ledger_path', 'namespace', 'group_chat_id', 'members'
+    } <= set(options):
         raise ValueError('invalid case configuration')
     namespace = _text(options['namespace'])
     if not namespace.startswith('mock-'):
@@ -129,6 +134,7 @@ def _scope(config, principal, context):
         raise ValueError('invalid case members')
     if not any(all(principal[k] == m[k] for k in fields) for m in members):
         raise ValueError('case member unavailable')
+    _project_policy(options, config)
     required = {'work_id', 'source_text', 'share_allowed'}
     if not isinstance(context, dict) or not required <= set(context) or set(context) - required - {'source_receipt','selected_case'}:
         raise ValueError('trusted case context required')
@@ -145,6 +151,118 @@ def _scope(config, principal, context):
         raise ValueError('invalid sharing permission')
     _text(principal['message_id'])
     return options
+
+
+def _project_policy(options, config):
+    policy = options.get('project_context')
+    if policy is None or policy == {'enabled': False}:
+        return None
+    if not isinstance(policy, dict) or set(policy) != {'enabled', 'group_case', 'managers'} or policy['enabled'] is not True:
+        raise ValueError('invalid project context configuration')
+    if not options['namespace'].startswith('mock-project-'):
+        raise ValueError('project context requires a fresh mock-project namespace')
+    _text(policy['group_case'], 120)
+    registered = {m['user_id'] for m in options['members']}
+    if (len({m['platform'] for m in options['members']}) != 1 or
+            not registered <= config['allowed_actors'].keys() or
+            not isinstance(policy['managers'], list) or
+            any(not isinstance(user, str) or user not in registered for user in policy['managers'])):
+        raise ValueError('invalid registered project actors')
+    return policy
+
+
+def _can_read(options, body, principal):
+    policy = options.get('project_context', {})
+    if not policy.get('enabled'):
+        return True
+    project = (body or {}).get('project', {})
+    return bool(project) and (principal['user_id'] in project['members'] or
+                              principal['user_id'] in policy['managers'])
+
+
+def _new_project(options, principal, config, name):
+    users = {principal['user_id']}
+    if name == options['project_context']['group_case']:
+        # The configured project group is a frozen shared audience, not a
+        # claim that an attachment already posted there can be kept secret.
+        users.update(m['user_id'] for m in options['members'] if m['chat_id'] == options['group_chat_id'])
+    return dict(owner=principal['user_id'], members={user: dict(
+        name=config['allowed_actors'][user]['display_name'],
+        responsibility='项目负责' if user == principal['user_id'] else '项目协作') for user in sorted(users)})
+
+
+def _save_version(db, options, key, body, message, digest):
+    body['revision'] += 1
+    body['updated_at'] = datetime.now(timezone.utc).isoformat()
+    encoded = core._json(body)
+    if len(encoded.encode()) > 48 * 1024:
+        raise ValueError('case record too large')
+    db.execute('INSERT INTO shared_case_versions VALUES(?,?,?,?,?,?)',
+               (options['namespace'], body['name'], body['revision'], message, digest, encoded))
+    _bind(db, options['namespace'], key, body)
+    return dict(status='recorded', case=body, replayed=False)
+
+
+def _add_member(db, options, request, principal, context, config, key, body):
+    policy = options.get('project_context', {})
+    if not policy.get('enabled') or body is None:
+        return dict(status='blocked', code='project_context_required')
+    if principal['user_id'] != body['project']['owner'] and principal['user_id'] not in policy['managers']:
+        return dict(status='blocked', code='project_owner_required')
+    if not context['share_allowed'] or request.get('source_message_id', principal['message_id']) != principal['message_id']:
+        return dict(status='blocked', code='case_share_not_authorized')
+    name = _text(request.get('member_name'), 100)
+    responsibility = _text(request.get('responsibility'), 100)
+    candidates = {m['user_id'] for m in options['members']
+                  if config['allowed_actors'][m['user_id']]['display_name'] == name}
+    if len(candidates) != 1:
+        return dict(status='needs_selection', code='project_member_name_not_unique')
+    source = context['source_text']
+    clauses = re.split(r'[，,。；;\n]', source)
+    instruction = r'(?:请)?(?:让|邀请|安排|添加|增加)\s*' + re.escape(name) + r'\s*(?:来)?(?:加入|参与|接手|负责).+'
+    if any(word in source for word in UNCERTAIN) or not any(
+        re.fullmatch(instruction, clause.strip()) and responsibility in clause for clause in clauses
+    ):
+        return dict(status='blocked', code='project_member_instruction_required')
+    revision = request.get('expected_revision')
+    if type(revision) is not int or revision < 1:
+        raise ValueError('invalid expected revision')
+    message = core._hash([*(principal[k] for k in ('platform', 'chat_id', 'user_id', 'message_id')), 'case-member-add'])
+    digest = core._hash(request)
+    previous = db.execute('SELECT request_hash,body FROM shared_case_versions WHERE namespace=? AND name=? AND message_key=?',
+                          (options['namespace'], body['name'], message)).fetchone()
+    if previous:
+        if previous['request_hash'] != digest:
+            return dict(status='blocked', code='case_message_already_recorded')
+        return dict(status='recorded', case=json.loads(previous['body']), replayed=True)
+    if revision != body['revision']:
+        return dict(status='conflict', code='case_revision_changed', current_revision=body['revision'])
+    user = candidates.pop()
+    body['project']['members'][user] = dict(name=name, responsibility=responsibility,
+        source=dict(speaker=config['allowed_actors'][principal['user_id']]['display_name'], quote=source))
+    return _save_version(db, options, key, body, message, digest)
+
+
+def _access(db, options, request, principal, key):
+    """Host-only receipt check shared by explicit references and snapshot import."""
+    if not options.get('project_context', {}).get('enabled'):
+        return dict(status='legacy')
+    receipt = _text(request.get('receipt'))
+    require_binding = request.get('require_binding')
+    if type(require_binding) is not bool:
+        raise ValueError('binding policy required')
+    rows = db.execute("SELECT DISTINCT name FROM shared_case_artifacts WHERE namespace=? AND receipt=? AND body<>''",
+                      (options['namespace'], receipt)).fetchall()
+    if len(rows) != 1 or not _can_read(options, _current(db, options['namespace'], rows[0]['name']), principal):
+        return dict(status='blocked', code='project_artifact_unavailable')
+    name = rows[0]['name']
+    binding = db.execute('SELECT name FROM shared_case_bindings WHERE namespace=? AND work_key=?',
+                         (options['namespace'], key)).fetchone()
+    if (require_binding and not binding) or (binding and binding['name'] != name):
+        return dict(status='blocked', code='project_artifact_work_mismatch')
+    if principal['chat_id'] == options['group_chat_id'] and name != options['project_context']['group_case']:
+        return dict(status='blocked', code='project_artifact_group_mismatch')
+    return dict(status='authorized', case_name=name, source_chat_id=options['group_chat_id'])
 
 
 def _current(db, namespace, name):
@@ -177,6 +295,13 @@ def _artifact(db, options, request, principal, key):
     binding = db.execute('SELECT name,revision,body FROM shared_case_artifacts '
                          'WHERE namespace=? AND work_key=? AND request_key=?',
                          (options['namespace'],key,request_key)).fetchone()
+    if options.get('project_context', {}).get('enabled'):
+        selected = db.execute('SELECT name FROM shared_case_bindings WHERE namespace=? AND work_key=?',
+                              (options['namespace'], key)).fetchone()
+        name = binding['name'] if binding else (selected['name'] if selected else '')
+        if (name != options['project_context']['group_case'] or
+                not _can_read(options, _current(db, options['namespace'], name), principal)):
+            return dict(status='blocked', code='project_delivery_not_authorized')
     if request.get('phase') == 'prepare':
         if not binding:
             selected = db.execute('SELECT name,revision FROM shared_case_bindings WHERE namespace=? AND work_key=?',
@@ -288,6 +413,8 @@ def _update(db, options, request, principal, context, config, key, name):
                           'without normalized names, added punctuation or state labels.')
     if body is None:
         body = dict(name=name, revision=0, facts={}, artifacts=[])
+        if options.get('project_context', {}).get('enabled'):
+            body['project'] = _new_project(options, principal, config, name)
     for field, value, replaces in changes:
         old = body['facts'].get(field)
         state_regressed = old and old['state'] in {'reported_confirmed','occurred'} and value['state'] != old['state'] and value['state'] != 'occurred'
@@ -303,15 +430,7 @@ def _update(db, options, request, principal, context, config, key, name):
             ):
                 raise ValueError('explicit correction required')
         body['facts'][field] = value
-    body['revision'] = revision + 1
-    body['updated_at'] = datetime.now(timezone.utc).isoformat()
-    encoded = core._json(body)
-    if len(encoded.encode()) > 48 * 1024:
-        raise ValueError('case record too large')
-    db.execute('INSERT INTO shared_case_versions VALUES(?,?,?,?,?,?)',
-               (namespace, name, body['revision'], message, digest, encoded))
-    _bind(db, namespace, key, body)
-    return dict(status='recorded', case=body, replayed=False)
+    return _save_version(db, options, key, body, message, digest)
 
 
 def tool(command, request, principal, context, config):
@@ -324,15 +443,27 @@ def tool(command, request, principal, context, config):
             raise ValueError('invalid case request')
         key = core._hash([*(principal[k] for k in ('platform', 'user_id', 'chat_id', 'project')), context['work_id']])
         with _database(options['ledger_path']) as db:
+            policy = options.get('project_context', {})
+            project_mode = policy.get('enabled') is True
+            if command == 'case-access':
+                return _access(db, options, request, principal, key)
             if command == 'case-artifact':
                 return _artifact(db,options,request,principal,key)
             if command == 'case-list':
                 query = request.get('query', '')
                 if not isinstance(query, str) or len(query) > 256:
                     raise ValueError('invalid case query')
-                rows = db.execute('SELECT name,MAX(revision) AS revision FROM shared_case_versions '
-                                  'WHERE namespace=? AND instr(name,?)>0 GROUP BY name ORDER BY name LIMIT 21',
-                                  (options['namespace'], query)).fetchall()
+                rows = []
+                candidates = db.execute('SELECT name,MAX(revision) AS revision FROM shared_case_versions '
+                                        'WHERE namespace=? AND instr(name,?)>0 GROUP BY name ORDER BY name',
+                                        (options['namespace'], query))
+                for row in candidates:
+                    if project_mode and principal['chat_id'] == options['group_chat_id'] and row['name'] != policy['group_case']:
+                        continue
+                    if _can_read(options, _current(db, options['namespace'], row['name']), principal):
+                        rows.append(row)
+                    if len(rows) == 21:
+                        break
                 return dict(status='ok', cases=[dict(r) for r in rows[:20]], has_more=len(rows)>20)
             binding = db.execute('SELECT name FROM shared_case_bindings WHERE namespace=? AND work_key=?',
                                  (options['namespace'], key)).fetchone()
@@ -348,6 +479,10 @@ def tool(command, request, principal, context, config):
                 # arrived. An explicit new name still requires its own source.
                 if name is None or name == context['selected_case']:
                     binding = {'name':context['selected_case']}
+            if project_mode and principal['chat_id'] == options['group_chat_id']:
+                if (name is not None and name != policy['group_case']) or (binding and binding['name'] != policy['group_case']):
+                    return dict(status='blocked', code='project_group_mismatch')
+                binding = {'name': policy['group_case']}
             if name is None:
                 if not binding:
                     return dict(status='needs_selection', code='case_not_selected')
@@ -355,6 +490,10 @@ def tool(command, request, principal, context, config):
             name = _text(name, 120)
             if binding and binding['name'] != name:
                 return dict(status='needs_new_work',code='case_work_already_bound')
+            body = _current(db, options['namespace'], name)
+            if body is not None and not _can_read(options, body, principal):
+                # Same shape as a missing record; no version, source or file leak.
+                return dict(status='not_found', case_name=name, revision=0)
             mentioned = [row['name'] for row in db.execute(
                 'SELECT DISTINCT name FROM shared_case_versions WHERE namespace=?', (options['namespace'],))
                 if row['name'] in context['source_text']]
@@ -363,11 +502,12 @@ def tool(command, request, principal, context, config):
             ):
                 return dict(status='needs_selection', code='case_target_requires_clarification')
             if command == 'case-read':
-                body = _current(db, options['namespace'], name)
                 if body is None:
                     return dict(status='not_found', case_name=name, revision=0)
                 _bind(db, options['namespace'], key, body)
                 return _view(db, options['namespace'], body)
+            if command == 'case-member-add':
+                return _add_member(db, options, request, principal, context, config, key, body)
             return _update(db, options, request, principal, context, config, key, name)
     except (ValueError, KeyError, TypeError):
         return dict(status='blocked', code='invalid_case_request_or_scope')

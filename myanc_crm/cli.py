@@ -470,7 +470,7 @@ def main(
             # A host-configured navigation link needs neither CRM IO nor a ledger.
             _write(target, _open_result(prepare_request, config, prepare_principal))
             return 0
-        if tool_command in {"case-list", "case-read", "case-update", "case-artifact"}:
+        if tool_command in {"case-list", "case-read", "case-update", "case-member-add", "case-artifact", "case-access"}:
             from .shared_cases import tool
             # Shared simulation state never opens the formal CRM backend/ledger.
             _write(target, tool(tool_command, prepare_request, prepare_principal,
