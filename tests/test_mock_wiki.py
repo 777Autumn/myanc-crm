@@ -66,6 +66,7 @@ class MockWikiRoutingTests(unittest.TestCase):
         def total(package, decoration):
             return 22 * (rows[package] + 6 * rows['酒水']) + rows['固定服务费'] + rows['主持'] + rows[decoration]
         self.assertEqual(total('A 清雅', '主题布置 · 基础'), 103720)
+        self.assertEqual(total('A 清雅', '主题布置 · 基础') + rows['A 清雅'] + 6 * rows['酒水'], 107980)
         self.assertEqual(total('A 清雅', '主题布置 · 基础') - 101520, 22 * 100)
         self.assertEqual(total('A 清雅', '主题布置 · 升级'), 109720)
         self.assertEqual(total('B 丰盛', '主题布置 · 基础'), 114720)

@@ -155,7 +155,7 @@ def _scope(config, principal, context):
 
 def _project_policy(options, config):
     policy = options.get('project_context')
-    if policy is None or policy == {'enabled': False}:
+    if 'project_context' not in options or policy == {'enabled': False}:
         return None
     if not isinstance(policy, dict) or set(policy) != {'enabled', 'group_case', 'managers'} or policy['enabled'] is not True:
         raise ValueError('invalid project context configuration')
@@ -209,7 +209,7 @@ def _add_member(db, options, request, principal, context, config, key, body):
         return dict(status='blocked', code='project_context_required')
     if principal['user_id'] != body['project']['owner'] and principal['user_id'] not in policy['managers']:
         return dict(status='blocked', code='project_owner_required')
-    if not context['share_allowed'] or request.get('source_message_id', principal['message_id']) != principal['message_id']:
+    if request.get('source_message_id', principal['message_id']) != principal['message_id']:
         return dict(status='blocked', code='case_share_not_authorized')
     name = _text(request.get('member_name'), 100)
     responsibility = _text(request.get('responsibility'), 100)
@@ -218,11 +218,15 @@ def _add_member(db, options, request, principal, context, config, key, body):
     if len(candidates) != 1:
         return dict(status='needs_selection', code='project_member_name_not_unique')
     source = context['source_text']
-    clauses = re.split(r'[，,。；;\n]', source)
-    instruction = r'(?:请)?(?:让|邀请|安排|添加|增加)\s*' + re.escape(name) + r'\s*(?:来)?(?:加入|参与|接手|负责).+'
-    if any(word in source for word in UNCERTAIN) or not any(
-        re.fullmatch(instruction, clause.strip()) and responsibility in clause for clause in clauses
-    ):
+    # A membership grant must be the complete original request, never a
+    # matching line extracted from a quotation, question or mixed message.
+    # ponytail: deliberately narrow grammar; unsupported phrasing asks the
+    # employee to restate one invitation, rather than guessing permission.
+    instruction = (r'(?:' + re.escape(body['name']) + r'[，,:：]\s*)?'
+                   r'(?:请)?(?:让|邀请|安排|添加|增加)\s*' + re.escape(name) +
+                   r'\s*(?:来)?(?:加入|参与|接手|负责)(?:本项目的)?' +
+                   re.escape(responsibility) + r'[。！!]?')
+    if any(word in source for word in (*UNCERTAIN, '禁止', '吗')) or not re.fullmatch(instruction, source.strip()):
         return dict(status='blocked', code='project_member_instruction_required')
     revision = request.get('expected_revision')
     if type(revision) is not int or revision < 1:
@@ -454,6 +458,8 @@ def tool(command, request, principal, context, config):
                 if not isinstance(query, str) or len(query) > 256:
                     raise ValueError('invalid case query')
                 rows = []
+                # ponytail: linear scan of this bounded mock namespace;
+                # index memberships only when a larger rollout is authorized.
                 candidates = db.execute('SELECT name,MAX(revision) AS revision FROM shared_case_versions '
                                         'WHERE namespace=? AND instr(name,?)>0 GROUP BY name ORDER BY name',
                                         (options['namespace'], query))
@@ -490,17 +496,30 @@ def tool(command, request, principal, context, config):
             name = _text(name, 120)
             if binding and binding['name'] != name:
                 return dict(status='needs_new_work',code='case_work_already_bound')
+            if project_mode:
+                # ponytail: conservative wedding-name grammar for this mock
+                # rollout; ambiguous prose asks rather than guessing a target.
+                # Inspect the message, never hidden database names, so a newly
+                # named wedding cannot silently update the bound group case.
+                mentioned = re.findall(r'[^\s，,。；;：:]{1,40}婚宴(?!团队)', context['source_text'])
+                if any(not other.endswith((name, '这场婚宴', '当前婚宴', '本场婚宴', '这次婚宴', '该婚宴', '模拟婚宴')) for other in mentioned):
+                    return dict(status='needs_selection', code='case_target_requires_clarification')
             body = _current(db, options['namespace'], name)
-            if body is not None and not _can_read(options, body, principal):
-                # Same shape as a missing record; no version, source or file leak.
+            visible = body is not None and _can_read(options, body, principal)
+            if command != 'case-update' and not visible:
+                # Missing and unauthorized reads have the same response,
+                # including when the model guessed a name absent from source.
                 return dict(status='not_found', case_name=name, revision=0)
             mentioned = [row['name'] for row in db.execute(
                 'SELECT DISTINCT name FROM shared_case_versions WHERE namespace=?', (options['namespace'],))
-                if row['name'] in context['source_text']]
+                if row['name'] in context['source_text'] and
+                _can_read(options, _current(db, options['namespace'], row['name']), principal)]
             if any(other != name for other in mentioned) or (
                 name not in context['source_text'] and (not binding or binding['name'] != name)
             ):
                 return dict(status='needs_selection', code='case_target_requires_clarification')
+            if body is not None and not visible:
+                return dict(status='not_found', case_name=name, revision=0)
             if command == 'case-read':
                 if body is None:
                     return dict(status='not_found', case_name=name, revision=0)

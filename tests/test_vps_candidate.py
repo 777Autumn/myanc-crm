@@ -137,6 +137,11 @@ class CandidateTests(unittest.TestCase):
             events.append(dict(Action='pass',Test='TestCUJ_CASEIPC_SharedProgressPrivateGrantAndRevision',Package='fixture/actionhost/crmfollowup'))
             with patch.object(builder.subprocess,'check_output',return_value='\n'.join(map(json.dumps,events))):
                 self.assertIn(events[-1]['Test'],builder.paired_tests(Path('gateway'),{}))
+                with self.assertRaises(ValueError):
+                    builder.paired_tests(Path('gateway'), {'MYANC_SPIKE_CRM_ROOT': 'fresh-crm'})
+            events.append(dict(Action='pass',Test='TestCUJ_CASEIPC_ProjectMembershipAcrossPrivateEntries',Package='fixture/actionhost/crmfollowup'))
+            with patch.object(builder.subprocess,'check_output',return_value='\n'.join(map(json.dumps,events))):
+                self.assertIn(events[-1]['Test'],builder.paired_tests(Path('gateway'), {'MYANC_SPIKE_CRM_ROOT': 'fresh-crm'}))
 
     def test_knowledge_source_is_explicit_and_ambient_canaries_are_disabled(self):
         with patch.dict(builder.os.environ, {"MYANC_TEAM_BRAIN_ROOT": "dirty-worktree",

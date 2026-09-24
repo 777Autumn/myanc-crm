@@ -136,13 +136,16 @@ def main():
     # Configuration and external Feishu are the injected system boundaries.
     # Host authentication, envelope checks, SQLite, claim and apply stay real.
     config = copy.deepcopy(CONFIG)
-    if os.environ.get('MYANC_SPIKE_SEED') == 'shared-cases':
+    if os.environ.get('MYANC_SPIKE_SEED') in {'shared-cases', 'project-context'}:
         from myanc_crm import shared_cases
         test_store = directory / 'mock-cases.sqlite3'
         config['ledger_path'] = str(directory / 'formal-never-opened.sqlite3')
         config['shared_cases'] = dict(enabled=True,ledger_path=str(test_store),namespace='mock-banquet',
             group_chat_id='group-1',members=[dict(platform='mock',user_id=user,chat_id=chat,project='test')
-            for user,chat in [('sender-1','group-1'),('sender-2','group-1'),('sender-1','private-1')]])
+            for user,chat in [('sender-1','group-1'),('sender-2','group-1'),('sender-1','private-1'),('sender-2','private-2')]])
+        if os.environ['MYANC_SPIKE_SEED'] == 'project-context':
+            config['shared_cases'].update(namespace='mock-project-journey',
+                project_context=dict(enabled=True, group_case='林陈婚宴', managers=[]))
         if not test_store.exists():
             test_store.touch(mode=0o600)
             shared_cases.initialize_config(config)

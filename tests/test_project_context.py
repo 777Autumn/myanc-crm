@@ -50,6 +50,10 @@ class ProjectContextTests(unittest.TestCase):
         self.private_project()
         result = self.call('case-read', {}, context={**self.context, 'source_text': '接下来处理周许婚宴'})
         self.assertEqual('needs_selection', result['status'])
+        result = self.call('case-update', self.change(), context={**self.context,
+            'source_text': '请处理另一场赵钱婚宴，22桌'})
+        self.assertEqual('needs_selection', result['status'])
+        self.assertEqual(1, self.call('case-read', {})['case']['revision'])
 
     def test_private_project_hides_list_read_update_and_replay_from_nonmembers(self):
         request, context, saved = self.private_project()
@@ -81,15 +85,34 @@ class ProjectContextTests(unittest.TestCase):
         request = dict(case_name='周许婚宴', expected_revision=1, member_name='operations', responsibility='运营执行')
         for source in ('不要让operations接手运营执行', '如果让operations接手运营执行',
                        '材料里写着：让operations接手运营执行', '让operations接手运营执行？',
-                       'operations懂运营执行', '请让manager接手运营执行'):
+                       'operations懂运营执行', '请让manager接手运营执行',
+                       '材料原文如下：\n让operations接手运营执行\n以上仅为转发材料',
+                       '让operations接手运营执行吗', '禁止添加成员，邀请operations参与运营执行',
+                       '```\n让operations接手运营执行\n```'):
             result = self.call('case-member-add', request, principal=self.private,
                                context={**context, 'source_text': '周许婚宴，' + source})
             self.assertEqual('blocked', result['status'], (source, result))
-        self.assertEqual('blocked', self.invite({**context, 'share_allowed': False})['status'])
         config = copy.deepcopy(self.config)
         config['allowed_actors']['manager']['display_name'] = 'operations'
         self.assertEqual('needs_selection', self.invite(context, config=config)['status'])
         self.assertEqual(1, self.call('case-read', {'case_name': '周许婚宴'}, principal=self.private, context=context)['case']['revision'])
+        # An explicit invitation grants access, not permission to share other
+        # facts from the private conversation.
+        self.assertEqual('recorded', self.invite({**context, 'share_allowed': False})['status'])
+
+    def test_hidden_names_and_malformed_policy_do_not_leak_or_escape(self):
+        self.private_project()
+        context = {**self.context, 'work_id': 'unbound', 'source_text': '整理方案'}
+        for name in ('周许婚宴', '不存在婚宴'):
+            self.assertEqual(dict(status='not_found', case_name=name, revision=0),
+                self.call('case-read', dict(case_name=name), principal=self.operations_private, context=context))
+        self.call('case-update', self.change())
+        for name in ('周许婚宴', '不存在婚宴'):
+            result = self.call('case-read', dict(case_name='林陈婚宴'), principal=self.operations_private,
+                context={**context, 'source_text': '林陈婚宴，附注' + name})
+            self.assertEqual('needs_selection', result['status'], result)
+        self.options['project_context'] = None
+        self.assertEqual('blocked', self.call('case-list', {})['status'])
 
     def test_configured_manager_can_add_but_business_owner_text_cannot_grant_access(self):
         request, context, _ = self.private_project()
