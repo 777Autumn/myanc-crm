@@ -13,9 +13,11 @@ from . import core
 FIELDS = {
     'case-list': {'query'},
     'case-read': {'case_name'},
-    'case-update': {'case_name', 'expected_revision', 'changes'},
+    'case-update': {'case_name', 'expected_revision', 'changes', 'source_message_id'},
 }
 STATES = {'proposed', 'reported_confirmed', 'occurred', 'unverified'}
+UNCERTAIN = ('不要', '不改', '暂不', '如果', '是否', '假设', '未确认', '没确认', '没有确认',
+             '尚未', '未发生', '没发生', '还没', '不确定', '？', '?')
 
 
 def _text(value, limit=256):
@@ -29,6 +31,7 @@ def _database(path):
     path = Path(path)
     if not path.is_absolute() or path.resolve() != path:
         raise ValueError('invalid case storage path')
+    core._validate_parent_chain(path.parent)
     core._validate_private_file(path)
     original = path.stat()
     with core._private_umask():
@@ -124,6 +127,13 @@ def _changes(request, context, principal, config):
         # Value must be grounded in this shared message, not the private history.
         if value not in quote:
             raise ValueError('case value must occur in its source quote')
+        # Inspect the complete authorized source, not a model-trimmed quote.
+        # Ambiguous confirmation stays unverified and may be clarified naturally.
+        source = context['source_text']
+        if state in {'reported_confirmed', 'occurred'}:
+            markers = ('已确认', '确认采用', '客户确认', '确认改为') if state == 'reported_confirmed' else ('实际发生', '实际执行', '已经完成', '已完成')
+            if any(word in source for word in UNCERTAIN) or not any(word in source for word in markers):
+                raise ValueError('confirmation not supported by the original message')
         replaces = change.get('replaces', False)
         if type(replaces) is not bool:
             raise ValueError('invalid replacement')
@@ -139,6 +149,8 @@ def _changes(request, context, principal, config):
 def _update(db, options, request, principal, context, config, key, name):
     if not context['share_allowed']:
         return dict(status='blocked', code='case_share_not_authorized')
+    if request.get('source_message_id', principal['message_id']) != principal['message_id']:
+        raise ValueError('source message mismatch')
     revision = request.get('expected_revision')
     if type(revision) is not int or revision < 0:
         raise ValueError('invalid expected revision')
@@ -159,14 +171,14 @@ def _update(db, options, request, principal, context, config, key, name):
         body = dict(name=name, revision=0, facts={}, artifacts=[])
     for field, value, replaces in changes:
         old = body['facts'].get(field)
-        if old and old['value'] != value['value'] and not replaces:
+        if old and (old['value'] != value['value'] or old['state'] == 'conflict') and not replaces:
             value = dict(value=old['value'], state='conflict', source=old['source'],
                          alternatives=old.get('alternatives', []) + [value])
         elif replaces:
             # Explicit correction language must come from the authorized message.
-            quote = value['source']['quote']
-            if not any(word in quote for word in ('改为', '调整为', '以此为准', '确认采用', '更正为')) or any(
-                word in quote for word in ('不要', '不改', '暂不', '如果', '是否', '假设', '？', '?')
+            source = context['source_text']
+            if not any(word in source for word in ('改为', '调整为', '以此为准', '确认采用', '更正为')) or any(
+                word in source for word in UNCERTAIN
             ):
                 raise ValueError('explicit correction required')
         body['facts'][field] = value
@@ -199,14 +211,21 @@ def tool(command, request, principal, context, config):
                                   'WHERE namespace=? AND instr(name,?)>0 GROUP BY name ORDER BY name LIMIT 21',
                                   (options['namespace'], query)).fetchall()
                 return dict(status='ok', cases=[dict(r) for r in rows[:20]], has_more=len(rows)>20)
+            binding = db.execute('SELECT name FROM shared_case_bindings WHERE namespace=? AND work_key=?',
+                                 (options['namespace'], key)).fetchone()
             name = request.get('case_name')
             if name is None:
-                binding = db.execute('SELECT name FROM shared_case_bindings WHERE namespace=? AND work_key=?',
-                                     (options['namespace'], key)).fetchone()
                 if not binding:
                     return dict(status='needs_selection', code='case_not_selected')
                 name = binding['name']
             name = _text(name, 120)
+            mentioned = [row['name'] for row in db.execute(
+                'SELECT DISTINCT name FROM shared_case_versions WHERE namespace=?', (options['namespace'],))
+                if row['name'] in context['source_text']]
+            if any(other != name for other in mentioned) or (
+                name not in context['source_text'] and (not binding or binding['name'] != name)
+            ):
+                return dict(status='needs_selection', code='case_target_requires_clarification')
             if command == 'case-read':
                 body = _current(db, options['namespace'], name)
                 if body is None:

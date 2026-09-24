@@ -83,7 +83,7 @@ class SharedCaseTests(unittest.TestCase):
 
     def test_conflicting_claim_preserves_both_sources_then_explicit_correction(self):
         self.call('case-update', self.change())
-        context = {**self.context, 'source_text': '我记得是23桌。'}
+        context = {**self.context, 'source_text': '林陈婚宴，我记得是23桌。'}
         update = dict(case_name='林陈婚宴', expected_revision=1, changes=[dict(
             field='桌数', value='23桌', state='unverified', quote=context['source_text'])])
         result = self.call('case-update', update, principal=self.operations, context=context)
@@ -105,7 +105,7 @@ class SharedCaseTests(unittest.TestCase):
             update = dict(case_name='林陈婚宴',expected_revision=1,changes=[dict(
                 field='桌数',value='23桌',state='reported_confirmed',quote=text,replaces=True)])
             self.assertEqual('blocked',self.call('case-update',update,principal=self.operations,
-                             context={**self.context,'source_text':text})['status'])
+                             context={**self.context,'source_text':'林陈婚宴，'+text})['status'])
 
     def test_storage_failure_does_not_consume_message_or_modify_record(self):
         with mock.patch.object(cases,'_bind',side_effect=sqlite3.OperationalError('fictional disk failure')):
@@ -117,10 +117,38 @@ class SharedCaseTests(unittest.TestCase):
         self.call('case-update',self.change())
         second = self.change()
         second['case_name']='周许婚宴'
-        self.call('case-update',second,principal={**self.principal,'message_id':'second-case'})
-        self.assertEqual('周许婚宴',self.call('case-read',{})['case']['name'])
+        context = {**self.context, 'source_text': '周许婚宴，客户要求22桌，A套餐。'}
+        second['changes'][0]['quote'] = context['source_text']
+        self.call('case-update',second,principal={**self.principal,'message_id':'second-case'},context=context)
+        self.assertEqual('周许婚宴',self.call('case-read',{},context=context)['case']['name'])
         self.assertEqual('林陈婚宴',self.call('case-read',{'case_name':'林陈婚宴'})['case']['name'])
         self.assertEqual(2,len(self.call('case-list',{})['cases']))
+
+    def test_trimmed_quote_cannot_remove_denial_or_invent_confirmation(self):
+        self.call('case-update', self.change())
+        for source, quote, state, replaces in (
+            ('林陈婚宴不要改为23桌', '改为23桌', 'proposed', True),
+            ('林陈婚宴22桌还没有确认', '22桌', 'reported_confirmed', False),
+            ('林陈婚宴22桌', '22桌', 'occurred', False),
+        ):
+            update = dict(case_name='林陈婚宴', expected_revision=1, changes=[dict(
+                field='桌数', value='23桌' if replaces else '22桌', state=state, quote=quote, replaces=replaces)])
+            result = self.call('case-update', update, principal=self.operations,
+                               context={**self.context, 'source_text':source})
+            self.assertEqual('blocked',result['status'],result)
+        self.assertEqual(1,self.call('case-read',{'case_name':'林陈婚宴'})['case']['revision'])
+
+    def test_unmentioned_or_ambiguous_target_is_not_selected_by_model(self):
+        update = self.change()
+        update['case_name'] = '王李婚宴'
+        self.assertEqual('needs_selection',self.call('case-update',update)['status'])
+        self.call('case-update',self.change())
+        self.assertEqual('needs_selection',self.call('case-read',{'case_name':'王李婚宴'})['status'])
+        context = {**self.context,'source_text':'王李婚宴22桌'}
+        update['changes'][0]['quote'] = context['source_text']
+        self.call('case-update',update,principal={**self.principal,'message_id':'another'},context=context)
+        context['source_text'] = '林陈婚宴和王李婚宴，修改预算'
+        self.assertEqual('needs_selection',self.call('case-read',{'case_name':'林陈婚宴'},context=context)['status'])
 
     def test_disabled_and_uninitialized_do_not_create_storage_or_tables(self):
         self.assertEqual('disabled',self.call('case-list',{},config={})['status'])
@@ -136,6 +164,12 @@ class SharedCaseTests(unittest.TestCase):
         config=copy.deepcopy(self.config)
         config['ledger_path']=str(self.path)
         self.assertEqual('blocked',self.call('case-list',{},config=config)['status'])
+
+    def test_replaceable_parent_is_rejected_before_sqlite(self):
+        with mock.patch.object(cases.core, '_validate_parent_chain', side_effect=ValueError('untrusted parent')):
+            with mock.patch.object(cases.sqlite3, 'connect') as connect:
+                self.assertEqual('blocked',self.call('case-list',{})['status'])
+                connect.assert_not_called()
 
 
 if __name__ == '__main__':
