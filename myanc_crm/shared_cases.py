@@ -232,7 +232,7 @@ def _changes(request, context, principal, config):
             raise ValueError('case change has no unique source')
         # Value must be grounded in this shared message, not the private history.
         if value not in quote:
-            raise ValueError('case value must occur in its source quote')
+            raise ValueError(f'{field}: value must occur verbatim in its source quote')
         # Inspect the complete authorized source, not a model-trimmed quote.
         # Ambiguous confirmation stays unverified and may be clarified naturally.
         source = context['source_text']
@@ -240,7 +240,7 @@ def _changes(request, context, principal, config):
             clause = _source_clause(source,quote,value)
             markers = ('已确认', '确认采用', '客户确认', '确认改为') if state == 'reported_confirmed' else ('实际发生', '实际执行', '已经完成', '已完成')
             if any(word in clause for word in UNCERTAIN) or not any(word in clause for word in markers):
-                raise ValueError('confirmation not supported by the original message')
+                raise ValueError(f'{field}: confirmation not supported by the original message; keep proposed or unverified')
         replaces = change.get('replaces', False)
         if type(replaces) is not bool:
             raise ValueError('invalid replacement')
@@ -273,7 +273,15 @@ def _update(db, options, request, principal, context, config, key, name):
     body = _current(db, namespace, name)
     if (body['revision'] if body else 0) != revision:
         return dict(status='conflict', code='case_revision_changed', current_revision=body['revision'] if body else 0)
-    changes = _changes(request, context, principal, config)
+    try:
+        changes = _changes(request, context, principal, config)
+    except ValueError as exc:
+        # Validation only: no writes or message consumption have occurred.
+        # Reasons contain fixed messages and whitelisted business field names.
+        return dict(status='blocked', code='case_changes_invalid', reason=str(exc), recorded=False,
+                    retry='Fix and resubmit the whole batch with the same revision. Do not probe with a subset; '
+                          'a successful update consumes this message. Values must be verbatim source text, '
+                          'without normalized names, added punctuation or state labels.')
     if body is None:
         body = dict(name=name, revision=0, facts={}, artifacts=[])
     for field, value, replaces in changes:

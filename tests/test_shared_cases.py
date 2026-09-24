@@ -85,6 +85,36 @@ class SharedCaseTests(unittest.TestCase):
         update['expected_revision'] = 1
         self.assertEqual('recorded', self.call('case-update', update, principal=self.operations)['status'])
 
+    def test_invalid_batch_explains_verbatim_value_and_retries_whole_message(self):
+        self.context['source_text'] = '林陈婚宴，22桌，选择A套餐和基础布置，尚未签约。'
+        update = self.change()
+        update['changes'].append(dict(field='已选方案', value='A套餐+基础布置',
+                                      state='proposed', quote='选择A套餐和基础布置'))
+        rejected = self.call('case-update', update)
+        self.assertEqual('case_changes_invalid', rejected['code'])
+        self.assertIn('已选方案', rejected['reason'])
+        self.assertIn('verbatim', rejected['reason'])
+        self.assertFalse(rejected['recorded'])
+        self.assertIn('whole batch', rejected['retry'])
+        with closing(sqlite3.connect(self.path)) as db:
+            self.assertEqual(0, db.execute('SELECT COUNT(*) FROM shared_case_versions').fetchone()[0])
+            self.assertEqual(0, db.execute('SELECT COUNT(*) FROM shared_case_bindings').fetchone()[0])
+        update['changes'][1]['value'] = 'A套餐和基础布置'
+        update['changes'].append(dict(field='待确认项', value='尚未签约',
+                                      state='reported_confirmed', quote='尚未签约'))
+        rejected = self.call('case-update', update)
+        self.assertEqual('case_changes_invalid', rejected['code'])
+        self.assertIn('待确认项', rejected['reason'])
+        self.assertFalse(rejected['recorded'])
+        update['changes'][2]['state'] = 'unverified'
+        saved = self.call('case-update', update)
+        self.assertEqual('recorded', saved['status'])
+        self.assertEqual({'桌数','已选方案','待确认项'}, set(saved['case']['facts']))
+        self.assertEqual(1, saved['case']['revision'])
+        self.assertTrue(self.call('case-update', update)['replayed'])
+        update['expected_revision'] = 1
+        self.assertEqual('case_message_already_recorded', self.call('case-update', update)['code'])
+
     def test_conflicting_claim_preserves_both_sources_then_explicit_correction(self):
         self.call('case-update', self.change())
         context = {**self.context, 'source_text': '林陈婚宴，我记得是23桌。'}
