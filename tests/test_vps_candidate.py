@@ -124,6 +124,20 @@ class CandidateTests(unittest.TestCase):
         self.assertEqual("off", env["GOWORK"])
         self.assertEqual("", env["GOFLAGS"])
 
+    def test_shared_case_candidate_requires_its_paired_journey(self):
+        names = ['TestCUJ_CRMIPC1_CustomerApprovalAndContinuedDiscussion',
+                 'TestCUJ_CRMIPC2_ProfileThenIndependentFollowup',
+                 'TestCUJ_CRMDaily1_ListAndPlanApproval']
+        events = [dict(Action='pass',Test=name,Package='fixture/actionhost/crmfollowup') for name in names]
+        events.append(dict(Action='pass',Test='TestCUJ_Fixture',Package='fixture/core'))
+        with patch.object(Path,'is_file',return_value=True):
+            with patch.object(builder.subprocess,'check_output',return_value='\n'.join(map(json.dumps,events))):
+                with self.assertRaises(ValueError):
+                    builder.paired_tests(Path('gateway'),{})
+            events.append(dict(Action='pass',Test='TestCUJ_CASEIPC_SharedProgressPrivateGrantAndRevision',Package='fixture/actionhost/crmfollowup'))
+            with patch.object(builder.subprocess,'check_output',return_value='\n'.join(map(json.dumps,events))):
+                self.assertIn(events[-1]['Test'],builder.paired_tests(Path('gateway'),{}))
+
     def test_knowledge_source_is_explicit_and_ambient_canaries_are_disabled(self):
         with patch.dict(builder.os.environ, {"MYANC_TEAM_BRAIN_ROOT": "dirty-worktree",
                                             "MYANC_REAL_CLAUDE_CANARY": "1", "MYANC_REAL_KNOWLEDGE_COMMAND": "external"}):

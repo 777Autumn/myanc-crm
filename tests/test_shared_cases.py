@@ -6,6 +6,7 @@ from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from unittest import mock
 
 from myanc_crm import shared_cases as cases
@@ -68,6 +69,9 @@ class SharedCaseTests(unittest.TestCase):
         change['share_allowed'] = True
         self.assertEqual('blocked', self.call('case-update', change)['status'])
         self.assertEqual('blocked', self.call('case-update', self.change(), context={})['status'])
+        change = self.change()
+        change['changes'][0]['field'] = '不属于这条消息的私人信息'
+        self.assertEqual('blocked', self.call('case-update',change)['status'])
 
     def test_successful_message_is_deduplicated_but_failed_revision_can_retry(self):
         update = self.change()
@@ -119,6 +123,8 @@ class SharedCaseTests(unittest.TestCase):
         second['case_name']='周许婚宴'
         context = {**self.context, 'source_text': '周许婚宴，客户要求22桌，A套餐。'}
         second['changes'][0]['quote'] = context['source_text']
+        self.assertEqual('needs_new_work',self.call('case-update',second,context=context)['status'])
+        context['work_id'] = 'another-work'
         self.call('case-update',second,principal={**self.principal,'message_id':'second-case'},context=context)
         self.assertEqual('周许婚宴',self.call('case-read',{},context=context)['case']['name'])
         self.assertEqual('林陈婚宴',self.call('case-read',{'case_name':'林陈婚宴'})['case']['name'])
@@ -143,11 +149,12 @@ class SharedCaseTests(unittest.TestCase):
         update['case_name'] = '王李婚宴'
         self.assertEqual('needs_selection',self.call('case-update',update)['status'])
         self.call('case-update',self.change())
-        self.assertEqual('needs_selection',self.call('case-read',{'case_name':'王李婚宴'})['status'])
-        context = {**self.context,'source_text':'王李婚宴22桌'}
+        self.assertEqual('needs_new_work',self.call('case-read',{'case_name':'王李婚宴'})['status'])
+        context = {**self.context,'work_id':'another','source_text':'王李婚宴22桌'}
         update['changes'][0]['quote'] = context['source_text']
         self.call('case-update',update,principal={**self.principal,'message_id':'another'},context=context)
         context['source_text'] = '林陈婚宴和王李婚宴，修改预算'
+        context['work_id'] = 'ambiguous-new-work'
         self.assertEqual('needs_selection',self.call('case-read',{'case_name':'林陈婚宴'},context=context)['status'])
 
     def test_disabled_and_uninitialized_do_not_create_storage_or_tables(self):
@@ -170,6 +177,78 @@ class SharedCaseTests(unittest.TestCase):
             with mock.patch.object(cases.sqlite3, 'connect') as connect:
                 self.assertEqual('blocked',self.call('case-list',{})['status'])
                 connect.assert_not_called()
+
+    def test_delivery_basis_is_pinned_before_send_and_late_file_stays_stale(self):
+        self.call('case-update',self.change())
+        prepare = dict(phase='prepare',request_key='a'*64,existing_delivery=False)
+        self.assertEqual(1,self.call('case-artifact',prepare)['case_revision'])
+        update = self.change()
+        update['expected_revision'] = 1
+        self.call('case-update',update,principal=self.operations)
+        self.call('case-read',{'case_name':'林陈婚宴'})  # Refresh does not relabel the in-flight delivery.
+        artifact = dict(status='accepted',delivery_id='fictional-delivery',version=1,
+                        name='fictional.xlsx',sha256='b'*64,message_receipt='fictional-receipt')
+        finish = dict(phase='finish',request_key='a'*64,artifact=artifact)
+        self.assertTrue(self.call('case-artifact',finish)['stale'])
+        self.assertTrue(self.call('case-artifact',finish)['stale'])
+        files=self.call('case-read',{'case_name':'林陈婚宴'})['case']['artifacts']
+        self.assertEqual(1,len(files))
+        self.assertEqual((1,True),(files[0]['case_revision'],files[0]['stale']))
+        self.assertNotIn('path',files[0])
+        self.assertEqual('not_shared',self.call('case-artifact',prepare,principal=self.private)['status'])
+
+    def test_unknown_and_old_unbound_deliveries_are_never_registered(self):
+        self.call('case-update',self.change())
+        request = dict(phase='prepare',request_key='c'*64,existing_delivery=True)
+        self.assertEqual('not_shared',self.call('case-artifact',request)['status'])
+        request['request_key']='d'*64
+        request['existing_delivery']=False
+        self.assertEqual('ready',self.call('case-artifact',request)['status'])
+        request=dict(phase='finish',request_key='d'*64,artifact={'status':'unknown'})
+        self.assertEqual('blocked',self.call('case-artifact',request)['status'])
+        self.assertEqual([],self.call('case-read',{'case_name':'林陈婚宴'})['case']['artifacts'])
+
+    def test_trusted_selection_and_delivered_reference_bind_a_new_work(self):
+        self.call('case-update',self.change())
+        context={**self.context,'work_id':'next-sales-work','source_text':'继续准备方案','selected_case':'林陈婚宴'}
+        self.assertEqual('林陈婚宴',self.call('case-read',{},context=context)['case']['name'])
+        self.call('case-artifact',dict(phase='prepare',request_key='f'*64,existing_delivery=False))
+        artifact=dict(status='accepted',delivery_id='handoff',version=1,name='fixture.xlsx',sha256='a'*64,message_receipt='handoff-receipt')
+        self.call('case-artifact',dict(phase='finish',request_key='f'*64,artifact=artifact))
+        context={**self.context,'work_id':'new-operations','source_text':'请接手这个文件','source_receipt':'handoff-receipt'}
+        self.assertEqual('林陈婚宴',self.call('case-read',{},principal=self.operations,context=context)['case']['name'])
+        context['work_id']='unknown-work'
+        context['source_receipt']='unknown-receipt'
+        self.assertEqual('needs_selection',self.call('case-read',{},principal=self.operations,context=context)['status'])
+
+    def test_confirmation_or_correction_cannot_be_borrowed_from_another_fact(self):
+        self.call('case-update',self.change())
+        for source, field, value, state, replaces in (
+            ('林陈婚宴客户确认A套餐；布置2500元只是建议','布置','2500元','reported_confirmed',False),
+            ('林陈婚宴客户确认A套餐，布置2500元','布置','2500元','reported_confirmed',False),
+            ('林陈婚宴开席改为12点；桌数23桌','桌数','23桌','proposed',True),
+        ):
+            update=dict(case_name='林陈婚宴',expected_revision=1,changes=[dict(
+                field=field,value=value,state=state,replaces=replaces,quote=source)])
+            self.assertEqual('blocked',self.call('case-update',update,principal=self.operations,
+                             context={**self.context,'source_text':source})['status'])
+
+    def test_concurrent_updates_only_one_revision_commits(self):
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(self.call,'case-update',self.change(),principal=p)
+                       for p in (self.principal,self.operations)]
+            self.assertEqual(['conflict','recorded'],sorted(f.result()['status'] for f in futures))
+        self.assertEqual(1,self.call('case-read',{'case_name':'林陈婚宴'})['case']['revision'])
+
+    def test_maintenance_initializes_only_existing_separate_test_store(self):
+        cases.initialize_config(self.config)
+        with self.assertRaises(ValueError):
+            cases.initialize_config({})
+        config=copy.deepcopy(self.config)
+        config['shared_cases']['ledger_path']=config['ledger_path']
+        with self.assertRaises(ValueError):
+            cases.initialize_config(config)
+        self.assertFalse(Path(config['ledger_path']).exists())
 
 
 if __name__ == '__main__':
