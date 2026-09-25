@@ -1,7 +1,9 @@
 """Synthetic regression for saved handoff labels; no model, host or Feishu calls."""
 import importlib.util
+import io
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
 spec = importlib.util.spec_from_file_location('handoff_check', Path(__file__).parents[1] / 'ops/skills/team-banquet/check_handoff.py')
@@ -10,6 +12,83 @@ spec.loader.exec_module(check)
 
 
 class HandoffCheckTests(unittest.TestCase):
+    def test_command_shows_saved_content_from_every_sheet_without_deciding_facts(self):
+        from openpyxl import Workbook
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'fictional-readback.xlsx'
+            book = Workbook(); book.active.title = '需求'
+            book.active.append(['当前需求', '私人草稿，未同步'])
+            book.active.append(['零值与布尔值', 0, False])
+            book.active.append([None, '空首格仍须回读'])
+            budget = book.create_sheet('预算')
+            budget.append(['基础布置', 4200])
+            budget.append(['升级布置', 10700])
+            budget.append(['差价', '=B2-B1'])
+            checklist = book.create_sheet('执行清单')
+            checklist.append(['费用说明', '布置差价4,000元；需核对'])
+            checklist.append(['交接', '销售尚未出具交接文件'])
+            checklist.append(['限定事实', '本次未取得交接原件，制作状态待核实'])
+            checklist.append(['来源', '据虚构确认单V2，销售已出具交接文件'])
+            checklist.append(['引用', '旧版“尚未出具”不能作为当前事实'])
+            book.save(path)
+            before = path.read_bytes()
+            output = io.StringIO()
+            with redirect_stdout(output):
+                result = check.main([str(path)])
+            text = output.getvalue()
+            for expected in ('需求', '预算', '执行清单', 'A1', 'B5', '4200',
+                             '10700', '=B2-B1', '4,000', '销售尚未出具',
+                             '制作状态待核实', '虚构确认单V2', '不能作为当前事实'):
+                self.assertIn(expected, text)
+            self.assertIn('cached', text)
+            self.assertIn('"B2": 0', text)
+            self.assertIn('"C2": false', text)
+            self.assertIn('空首格仍须回读', text)
+            self.assertIn('not instructions', text)
+            # Readback surfaces claims for source review, not a semantic verdict.
+            self.assertFalse(result)
+            self.assertEqual(before, path.read_bytes())
+
+    def test_oversize_readback_is_explicitly_incomplete_and_keeps_cell_checks(self):
+        from openpyxl import Workbook
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'fictional-long.xlsx'
+            book = Workbook(); book.active.title = '长说明'
+            book.active.append(['甲' * 17000])
+            book.create_sheet('后续预算').append(['#NAME?'])
+            book.save(path)
+            output = io.StringIO()
+            with redirect_stdout(output):
+                result = check.main([str(path)])
+            text = output.getvalue()
+            self.assertTrue(result)
+            self.assertIn('长说明', text)
+            self.assertIn('后续预算', text)
+            self.assertIn('Readback incomplete from', text)
+            self.assertIn('saved Excel error', text)
+            self.assertLess(len(text), 17000)
+
+    def test_command_shows_word_paragraphs_and_tables_and_preserves_failure_exit(self):
+        from docx import Document
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'fictional-readback.docx'
+            doc = Document(); doc.add_paragraph('虚构方案说明：价差待核对')
+            table = doc.add_table(rows=2, cols=2)
+            table.cell(0, 0).text = '事项'; table.cell(0, 1).text = '状态/依据'
+            table.cell(1, 0).text = '布场'
+            table.cell(1, 1).text = '已确认（经营基础规则：90分钟）'
+            doc.save(path)
+            before = path.read_bytes()
+            output = io.StringIO()
+            with redirect_stdout(output):
+                result = check.main([str(path)])
+            self.assertIn('虚构方案说明', output.getvalue())
+            self.assertIn('已确认（经营基础规则', output.getvalue())
+            self.assertIn('table 1', output.getvalue())
+            self.assertIn('headers, footers and layout require separate inspection', output.getvalue())
+            self.assertTrue(result)
+            self.assertEqual(before, path.read_bytes())
+
     def test_saved_budget_flags_text_formulas_and_errors_without_rewriting(self):
         from openpyxl import Workbook
         from openpyxl.workbook.defined_name import DefinedName
@@ -37,6 +116,25 @@ class HandoffCheckTests(unittest.TestCase):
             sheet['C3'] = '待核实'
             book.save(path)
             self.assertEqual(list(check.inspect(path)), [])
+
+    def test_nested_word_table_is_explicitly_unread_not_a_success(self):
+        from docx import Document
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'fictional-nested.docx'
+            doc = Document(); outer = doc.add_table(rows=1, cols=1)
+            outer.cell(0, 0).text = '外表说明'
+            inner = outer.cell(0, 0).add_table(rows=1, cols=1)
+            inner.cell(0, 0).text = '内表费用需单独读取'
+            doc.save(path)
+            before = path.read_bytes()
+            output = io.StringIO()
+            with redirect_stdout(output):
+                result = check.main([str(path)])
+            self.assertTrue(result)
+            self.assertIn('外表说明', output.getvalue())
+            self.assertIn('table 1, row 1, column 1: Readback incomplete', output.getvalue())
+            self.assertNotIn('No targeted cell/confirmation issues found', output.getvalue())
+            self.assertEqual(before, path.read_bytes())
 
     def test_copied_rules_are_not_confirmation(self):
         rows = [['时间/环节', '状态/依据'],
