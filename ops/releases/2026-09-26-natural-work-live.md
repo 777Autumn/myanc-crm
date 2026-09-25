@@ -10,7 +10,7 @@ evidence; successful retries are recorded separately.
 
 | Repository | Exact runtime source | PR / exact merge CI |
 | --- | --- | --- |
-| Gateway | `3f52085eb2201d683d094f32ecc50aa1f870b2e5` | [PR35](https://github.com/77AutumN/cc-connect-anc/pull/35), [CI](https://github.com/77AutumN/cc-connect-anc/actions/runs/36181489777) |
+| Gateway | `f587d60a580fef441cda8b79f940bc8a934475a8` | [PR36](https://github.com/77AutumN/cc-connect-anc/pull/36), [CI](https://github.com/77AutumN/cc-connect-anc/actions/runs/36187900440) |
 | CRM | `1f59510377eb9e17fec10c58e8b258714af74cac` | [PR88](https://github.com/77AutumN/myanc-crm/pull/88), [CI](https://github.com/77AutumN/myanc-crm/actions/runs/36181546559) |
 | Knowledge, unchanged | `88a60ba60a634fe3d6b0f68f91de326b19a39b30` | [CI](https://github.com/77AutumN/myanc-team-brain/actions/runs/34704220632) |
 
@@ -19,7 +19,10 @@ existing merge gate. AI review is not an independent human GitHub approval.
 All required exact merge-SHA jobs passed. The normal candidate builder exported
 these commits freshly from GitHub; no old worktree supplied runtime files.
 
-Candidate `candidate-reference-refresh.tgz`, 139 hashed files, SHA-256
+The earlier [PR35](https://github.com/77AutumN/cc-connect-anc/pull/35) checkpoint
+used gateway `3f52085eb2201d683d094f32ecc50aa1f870b2e5` with the same CRM/knowledge,
+after its [exact merge CI](https://github.com/77AutumN/cc-connect-anc/actions/runs/36181489777).
+Initial candidate `candidate-reference-refresh.tgz`, 139 hashed files, SHA-256
 `616a62bfe27e4c397408a2757009ad36b0380529bd0fb6030267e98917c132fa`.
 Toolchain: Go 1.25.6, Python 3.13.2, Node 24.13.0, pnpm 10.28.1.
 CRM: 394 tests, 8 platform skips; 18 spikes passed. Knowledge: 71 tests,
@@ -28,7 +31,7 @@ natural confirmation/continuation, project membership, shared progress/private
 grant, CRM daily planning, customer approval, profile follow-up, knowledge scope.
 Windows skips do not replace the required Linux CI.
 
-The final maintenance targets only the gateway binary and four copies each of
+That initial maintenance targeted only the gateway binary and four copies each of
 `team-banquet/SKILL.md` and `team-banquet/references/shared-cases.md`.
 Accounts, configuration, dependencies, CRM runtime and published Wiki stay fixed.
 The package's generated Wiki SOURCE metadata names its fresh CRM export; that
@@ -145,9 +148,67 @@ Reviewed base `3f52085eb2201d683d094f32ecc50aa1f870b2e5`, head
 `4d94ed599d36f84262d07b48b8507b2c6b4fd80c`; independent Spec and Standards AI
 reviews and all five [PR checks](https://github.com/77AutumN/cc-connect-anc/actions/runs/36186765152)
 passed. Gated squash merge produced `f587d60a580fef441cda8b79f940bc8a934475a8`.
-Its [merge CI](https://github.com/77AutumN/cc-connect-anc/actions/runs/36187900440),
-candidate, gateway-only installation and actual workbook correction remain
-pending at this checkpoint. CRM and knowledge retain the exact versions above.
+All five [merge CI](https://github.com/77AutumN/cc-connect-anc/actions/runs/36187900440)
+jobs passed. The normal candidate `candidate-skill-refresh.tgz` has SHA-256
+`55877ccb94f87983e27fc1f81a3bb80193ea04ab5fe7299ae97b285127d8066a`.
+Its 139 file hashes were verified; only the gateway binary differs from the
+initial candidate. All seven mandatory paired journeys passed with the exact
+sources in the table above and the same toolchain. CRM and knowledge stay fixed.
+
+The separately frozen, reviewed gateway-only maintenance completed with one
+stop/start, one receiver, ordinary UID/capabilities unchanged, no failure receipt
+and 130.8 seconds continuously healthy. New binary SHA-256:
+`f343c6f318bb6af057961e3841347ccf96e3251bafa333004f91b3b0a37ebe2b`.
+Healthy receipt SHA-256:
+`59d63e8972d63c29f2a28b9e1dd2bf1609b2a88cba9df803b209581584998307`.
+Independent verification matched backups and all 141 protected file entries.
+Seven stores and six saved sessions were unchanged at the healthy checkpoint;
+later model activity is separate acceptance activity, not an installation change.
+The real 19-table private revision completed, but **file-quality acceptance still
+fails**. The employee quoted the actual v3 file, requested 19 tables with the
+budget unchanged, and explicitly kept it private. The actual process had the new
+append-system-prompt instruction. It reread project revision 4 and its proposed
+11:00 welcome time, but the nine matched tool calls did not reread current Skills
+or their references. This establishes an observed failure to follow the refresh
+instruction, not a claim about hidden model state.
+
+The resulting v4 was accepted once in the original private work; SHA-256:
+`8d7727c588b9df2c7f16f23487a4d949c81c5f81036e8267306b3d4403af0453`.
+The host snapshot, saved output and downloaded workbook bytes match. Original
+v1/v2/v3 snapshots and outputs remain unchanged. Shared project bodies and shared
+artifact records also remain unchanged; the private revision did not synchronize
+its 19-table assumption into the shared project.
+
+All three actual worksheets were opened in Feishu: basic information, budget and
+execution checklist. Independent inspection of the saved file preserved all five
+valid formulas and found no explanation cells stored as formulas or error cells.
+The 19-table meal cost is 77520, wine 3420, fixed service 2000 and host 3000.
+Totals excluding decoration / with basic / with upgraded decoration are correctly
+85940 / 90940 / 96940 against the unchanged 80000 budget. Source labels still
+identify project revision 4 and Wiki v2. The shared 16-table proposal and private
+19-table draft remain distinct, with the welcome time explicitly unconfirmed.
+
+Nevertheless, all three retained defects are present in the actual file and
+Feishu display: the execution checklist says the decoration option difference is
+5000 instead of 6000; the budget omits explicit overruns of 10940 and 16940; and
+the checklist still claims sales has not produced a formal handoff without an
+adequate source. The saved-file readback covered only the budget worksheet, not
+the execution checklist, and did not establish that all required checks passed.
+Appending the instruction and successfully delivering v4 therefore do not close
+the earlier quality failures. The reviewer did not repair the model's artifact.
+
+Separate sanitized AI evidence, retained by the operator:
+
+| Evidence | SHA-256 |
+| --- | --- |
+| `skill-refresh-installed-standards.md` | `ee085a9441a3d249932c94d69b3030ad5b0d2927e1c7d238ffedbe1cb737caaf` |
+| `skill-refresh-real-spec.md` | `18758216d7cb434396bbeca1d5ef1f9d332960e162b35ff7c49228fb097ca2a3` |
+| `skill-refresh-real-standards.md` | `1a4c97aebb47d401179c548e8e9a07118f3a442af031de1fa6cfbaf674f1c2d9` |
+
+The next per-turn guidance repair is not implemented or accepted at this
+checkpoint. It has no new reviewed or deployed SHA recorded here. Source delivery
+and candidate installation above are complete; the outstanding file-quality work
+and its real regression remain **incomplete**. All earlier failures are retained.
 
 ## Evidence and boundaries
 
