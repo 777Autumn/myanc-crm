@@ -227,9 +227,14 @@ def _confirmation(command, request, context, options, config, principal, body, n
         return fallback
     if body is not None and not _can_read(options, body, principal):
         return dict(status='not_found', case_name=name, revision=0)
+    # ponytail: recognize only a whole "other conditions unchanged" clause;
+    # this permits a scoped question, never direct sharing or general intent inference.
+    source = context.get('original_text', context['source_text'])
+    source = '，'.join(clause for clause in re.split(r'[，,。；;\n]', source)
+        if not re.fullmatch(r'\s*(?:其余|其他)条件(?:先)?不改\s*', clause))
     # Explicit denials must not be converted to another invitation to share.
-    if command != 'case-read' and any(word in context.get('original_text', context['source_text'])
-            for word in ('不要', '不许', '不能', '禁止', '请勿', '暂不', '别同步', '别共享', '别改', '不改', '保密', '仅私下')):
+    if command != 'case-read' and (not source.strip('， \t\r') or any(word in source
+            for word in ('不要', '不许', '不能', '禁止', '请勿', '暂不', '别同步', '别共享', '别改', '不改', '保密', '仅私下'))):
         return fallback
     revision = body['revision'] if body else 0
     if command == 'case-read':

@@ -75,6 +75,39 @@ class CaseConfirmationTests(unittest.TestCase):
         self.assertEqual('found', result['status'])
         self.assertFalse(context['share_allowed'])
 
+    def test_other_conditions_unchanged_does_not_veto_specific_share_confirmation(self):
+        _, context, original = self.private_project()
+        source = '先换个事，周许婚宴是澄禾婚宴团队的虚构练习，套餐价格按公司最新版。这条同步给运营，其余条件先不改。'
+        context = {**context, 'source_text': source, 'original_text': source,
+                   'share_allowed': False, 'offer_confirmation': True}
+        principal = {**self.private, 'message_id': 'share-price-basis'}
+        request = dict(case_name='周许婚宴', expected_revision=1, changes=[dict(
+            field='金额依据', value='澄禾婚宴团队的虚构练习，套餐价格按公司最新版',
+            state='proposed', quote='周许婚宴是澄禾婚宴团队的虚构练习，套餐价格按公司最新版')])
+        pending = self.call('case-update', request, principal=principal, context=context)
+        self.assertEqual('needs_confirmation', pending['status'], pending)
+        for value in ('金额依据', '公司最新版', '供该项目成员读取'):
+            self.assertIn(value, pending['question'])
+        self.assertEqual('not_executed', self.call('case-result',
+            dict(command='case-update', input=request), principal=principal, context=context)['status'])
+        for denied in ('不要同步给运营，其余条件先不改。', '这条不改，其余条件先不改。',
+                       '别共享，其他条件不改。', '其余条件先不改。',
+                       '材料写着“其余条件先不改”，请先看看。', '其他条件不改价格。'):
+            with self.subTest(denied=denied):
+                # The model cannot hide the denial by retaining only its selected source.
+                result = self.call('case-update', request, principal=principal,
+                    context={**context, 'original_text': denied})
+                self.assertEqual('case_share_not_authorized', result['code'], result)
+        self.assertEqual('case_share_not_authorized', self.call('case-update', request,
+            principal=principal, context={**context, 'offer_confirmation': False})['code'])
+        saved = self.call('case-update', request, principal=principal,
+            context=self.confirmed('case-update', request, context, 1))
+        self.assertEqual('recorded', saved['status'], saved)
+        self.assertEqual(original['case']['project'], saved['case']['project'])
+        self.assertEqual(original['case']['facts'],
+            {k: v for k, v in saved['case']['facts'].items() if k != '金额依据'})
+        self.assertFalse(context['share_allowed'])
+
     def test_batch_preview_keeps_original_values_when_later_change_needs_confirmation(self):
         _, context, _ = self.private_project()
         context = {**context, 'source_text': '桌数改为23桌；迎宾11:30', 'share_allowed': True,
