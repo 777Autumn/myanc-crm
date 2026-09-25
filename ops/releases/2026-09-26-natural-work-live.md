@@ -39,7 +39,9 @@ errors and unchanged business/session state. Healthy receipt SHA-256:
 `65fadb9f7928d33976ee49c099c01071d4181a9e8ae4555db3ba873cb01102df`.
 Independent installation review matched all nine file receipts, backups and
 permissions, 133 protected files, seven stores and six saved sessions.
-The targeted real retry remains pending in this draft.
+Confirmation and current-record refresh retries passed. The new private budget
+passed amount, source and scope checks but still failed three content checks;
+this draft does not close the file-quality work.
 
 ## Previously completed real journeys
 
@@ -89,8 +91,36 @@ before delivery; that successful check does not erase the content defects.
 The final patch reminds an explicitly quoted project revision to reread current
 progress, preserves original work/source/private scope, uses ordinary wording for
 busy new-work rejection, and strengthens existing Skill readback and cost checks.
-Actual no-extra-reminder retry and pending-confirmation wording remain to be
-recorded before this draft can claim completion.
+The real confirmation retry preserved project revision 3 until the actual card
+answer. The pre-answer response explicitly said the operation was not yet done.
+One bound answer then added only a proposed 11:00 welcome time as revision 4;
+all other facts, ownership, members, shared artifacts and the other project were
+unchanged. Only after that write did the Bot report synchronization.
+
+After a fresh switch to the other project, the employee quoted the original v1
+file and repeated the earlier 17-table request without a reread reminder. The
+actual `case-read` returned revision 4, including the newly proposed welcome
+time, in the original work. Claude reused the existing v2 reference instead of
+producing another file. This proves refreshed project context; it is not evidence
+that v2's retained content defects were repaired. The employee next requested an
+18-table private Excel explicitly. Its v3 SHA-256 is
+`079fc71f4eff395bac9c1f88fdbddda984e6a12279b409238fb5569969287de3`.
+The actual run reread revision 4, generated and checked the workbook, reread the
+saved cells and delivered once. Base/upgrade totals 86680/92680 and five valid
+formulas are correct; original v1/v2 bytes remain unchanged. All three sheets
+were opened in Feishu. Nevertheless, a retained note still says the decoration
+difference is 5000 rather than 6000; the workbook omits budget overruns 6680/12680;
+and it still asserts that sales has not produced a handoff without evidence.
+The saved-cell readback already contained these errors. The run did not reload
+the updated Skill body; whether that explains the missed instructions is under
+investigation, not an established complete diagnosis.
+
+The concurrent new-work request received an ordinary-language rejection saying
+that the new work had not started. It entered neither the saved queue nor the
+model conversation. Both shared project bodies and shared artifact records
+remained unchanged during this private revision. The direct turn's in-memory
+sharing flag was not separately persisted; this conclusion rests on the actual
+private route, bound source/work and observed unchanged shared records.
 
 ## Evidence and boundaries
 
