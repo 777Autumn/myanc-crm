@@ -10,6 +10,32 @@ spec.loader.exec_module(check)
 
 
 class HandoffCheckTests(unittest.TestCase):
+    def test_saved_budget_flags_text_formulas_and_errors_without_rewriting(self):
+        from openpyxl import Workbook
+        from openpyxl.workbook.defined_name import DefinedName
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'fictional-budget.xlsx'
+            book = Workbook(); sheet = book.active
+            sheet.title = '预算'
+            sheet.append(['桌数', '单价', '金额', '说明'])
+            sheet.append([22, 4080, '=A2*B2', '=套餐+固定服务+酒水'])
+            sheet.append([None, None, '#NAME?', '费用 = 餐费 + 服务费'])
+            sheet.append([None, None, '=SUM(C2:C2)', '待确认'])
+            sheet.append([None, None, '=套餐单价*A2', None])
+            book.defined_names.add(DefinedName('套餐单价', attr_text="'预算'!$B$2"))
+            book.save(path)
+            before = path.read_bytes()
+            findings = list(check.inspect(path))
+            self.assertTrue(any('D2' in value for value in findings), findings)
+            self.assertTrue(any('C3' in value for value in findings), findings)
+            self.assertEqual(len(findings), 2, findings)
+            self.assertEqual(before, path.read_bytes())
+            sheet['D2'] = '=套餐+固定服务+酒水'
+            sheet['D2'].data_type = 's'  # Explicit text, not an Excel expression.
+            sheet['C3'] = '待核实'
+            book.save(path)
+            self.assertEqual(list(check.inspect(path)), [])
+
     def test_copied_rules_are_not_confirmation(self):
         rows = [['时间/环节', '状态/依据'],
                 ['布场', '已确认（经营基础规则：布场90分钟）'],

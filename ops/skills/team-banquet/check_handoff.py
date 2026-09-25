@@ -1,4 +1,4 @@
-"""Read saved handoffs and flag rule-first confirmation labels; never edit them.
+"""Read saved handoffs: confirmation labels and budget cell errors; never edit.
 
 This narrow lint catches a reproduced copying error. Zero findings are not proof
 of business confirmation: sources, missing statuses and cross-file consistency
@@ -43,13 +43,45 @@ def conflicts(rows):
 def inspect(path):
     if path.suffix.lower() == '.xlsx':
         from openpyxl import load_workbook
+        from openpyxl.formula import Tokenizer
+        from openpyxl.formula.tokenizer import TokenizerError
+        from openpyxl.utils.cell import range_boundaries
         book = load_workbook(path, read_only=True, data_only=False)
+        cached = load_workbook(path, read_only=True, data_only=True)
         try:
             for sheet in book:
                 for row, col in conflicts(sheet.values):
                     yield f'{path.name}: {sheet.title} row {row}, column {col}'
+                names = set(book.defined_names) | set(sheet.defined_names)
+                for row, cached_row in zip(sheet, cached[sheet.title]):
+                    for cell, cached_cell in zip(row, cached_row):
+                        reason = ''
+                        if cell.data_type == 'e' or cached_cell.data_type == 'e':
+                            reason = 'saved Excel error'
+                        elif cell.data_type == 'f':
+                            try:
+                                tokens = Tokenizer(cell.value).items
+                                for token in tokens:
+                                    if token.type != 'OPERAND' or token.subtype != 'RANGE':
+                                        continue
+                                    value = token.value
+                                    # ponytail: catch undeclared bare names from
+                                    # description-as-formula mistakes; this is
+                                    # not a formula evaluator or layout check.
+                                    if value in names or '!' in value or '[' in value:
+                                        continue
+                                    try:
+                                        range_boundaries(value)
+                                    except ValueError:
+                                        reason = 'undeclared formula name; check whether this cell should be text'
+                                        break
+                            except (TokenizerError, TypeError):
+                                reason = 'formula could not be parsed'
+                        if reason:
+                            yield f'{path.name}: {sheet.title}!{cell.coordinate}: {reason}'
         finally:
             book.close()
+            cached.close()
     elif path.suffix.lower() == '.docx':
         from docx import Document
         doc = Document(path)
@@ -67,9 +99,9 @@ def main(paths):
         raise ValueError('provide the saved handoff Excel and Word paths')
     findings = [finding for path in paths for finding in inspect(Path(path))]
     for finding in findings:
-        print(f'{finding}: confirmation basis starts with a rule/calculation; review any specific confirmation source before delivery')
+        print(f'{finding}: review this saved cell/confirmation basis before delivery')
     if not findings:
-        print('No rule-first confirmation labels found. Full source/status/content readback is still required.')
+        print('No targeted cell/confirmation issues found. Formula calculation, source/content readback and visual inspection are still required.')
     return bool(findings)
 
 

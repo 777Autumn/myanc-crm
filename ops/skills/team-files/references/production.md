@@ -29,6 +29,9 @@ Native Feishu images appear in `work-context.inputs`, with saved paths and hashe
   unverified until actually opened and checked.
 - Use `openpyxl` or `XlsxWriter` for the editable budget. Store assumptions,
   sources, selected items and pending decisions in the workbook itself.
+  Write explanations as text (`write_string`, or an explicit string cell type),
+  especially text beginning with `=`. Use formulas only for actual calculations;
+  preserve valid formulas when revising an imported workbook.
 
 ## Update, render, inspect
 
@@ -67,6 +70,18 @@ confirm editability. For Word, compare the saved DOCX's TOC entries, page fields
 and total pages with the exported PDF after added content moves headings. A
 successful export alone is not proof of correct pagination. Inspect the reopened
 Excel's formulas, rows and totals as well as the slide/Word/PDF summary amounts.
+Reopen Excel with formulas and cached values separately. Check stored error cells
+and explanation cells accidentally typed as formulas. A blank formula cache is
+not an error and is not evidence of a calculated result. Independently recompute
+table count × unit price, item totals, verified receipts and balance from the
+current cited inputs; compare the actual saved cells and each document's summary.
+Do not claim Excel was recalculated or visually checked by this renderer: it does
+not support XLSX. Keep this limitation explicit until the workbook is opened.
+
+For Word tables, repeat header rows, prevent splitting short rows across pages,
+and keep headings with their next paragraph/table. Allow long tables to span
+pages. Inspect all page images for isolated headings, unnecessary blank space,
+clipped text and missing repeated headers; fix only observed layout defects.
 
 Before delivery and the final reply, reopen the saved outputs and enumerate their
 cited source names, IDs and versions. Match each against materials actually read

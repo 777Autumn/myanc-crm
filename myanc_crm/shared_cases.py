@@ -19,6 +19,7 @@ FIELDS = {
     # Host-only: absent from the agent client and gateway request decoder.
     'case-artifact': {'phase', 'request_key', 'existing_delivery', 'artifact'},
     'case-access': {'receipt', 'require_binding'},
+    'case-result': {'command', 'input'},
 }
 STATES = {'proposed', 'reported_confirmed', 'occurred', 'unverified'}
 INVITE_RESPONSIBILITIES = {'销售', '运营', '销售准备', '销售跟进', '运营执行', '执行准备', '宴后核对', '项目协作'}
@@ -137,8 +138,10 @@ def _scope(config, principal, context):
         raise ValueError('case member unavailable')
     _project_policy(options, config)
     required = {'work_id', 'source_text', 'share_allowed'}
-    if not isinstance(context, dict) or not required <= set(context) or set(context) - required - {'source_receipt','selected_case','original_text'}:
+    if not isinstance(context, dict) or not required <= set(context) or set(context) - required - {'source_receipt','selected_case','original_text', 'offer_confirmation', 'confirmation'}:
         raise ValueError('trusted case context required')
+    if type(context.get('offer_confirmation', False)) is not bool:
+        raise ValueError('invalid confirmation policy')
     if context.get('selected_case'):
         _text(context['selected_case'],120)
     if context.get('source_receipt'):
@@ -206,6 +209,89 @@ def _save_version(db, options, key, body, message, digest):
     return dict(status='recorded', case=body, replayed=False)
 
 
+def _confirmed(command, request, context):
+    """Only the authenticated gateway supplies this frozen answer, never tools."""
+    answer = context.get('confirmation')
+    if answer is None:
+        return False
+    if (not isinstance(answer, dict) or set(answer) != {'command', 'input', 'answer_message_id', 'revision'} or
+            answer['command'] != command or answer['input'] != request or
+            type(answer['revision']) is not int or answer['revision'] < 0):
+        raise ValueError('confirmation does not match this operation')
+    _text(answer['answer_message_id'], 1024)
+    return True
+
+
+def _confirmation(command, request, context, options, config, principal, body, name, fallback):
+    if not context.get('offer_confirmation'):
+        return fallback
+    if body is not None and not _can_read(options, body, principal):
+        return dict(status='not_found', case_name=name, revision=0)
+    # Explicit denials must not be converted to another invitation to share.
+    if command != 'case-read' and any(word in context.get('original_text', context['source_text'])
+            for word in ('不要', '不许', '不能', '禁止', '请勿', '暂不', '别同步', '别共享', '别改', '不改', '保密', '仅私下')):
+        return fallback
+    revision = body['revision'] if body else 0
+    if command == 'case-read':
+        if body is None:
+            return dict(status='not_found', case_name=name, revision=0)
+        question = f'这次处理的是「{name}」吗？只确定当前工作的项目，私聊内容仍不共享。'
+    else:
+        if request.get('source_message_id', principal['message_id']) != principal['message_id']:
+            raise ValueError('source message mismatch')
+        if type(request.get('expected_revision')) is not int or request['expected_revision'] != revision:
+            return dict(status='conflict', code='case_revision_changed', current_revision=revision)
+        if command == 'case-member-add':
+            if body is None or not options.get('project_context', {}).get('enabled'):
+                return fallback
+            if principal['user_id'] != body['project']['owner'] and principal['user_id'] not in options['project_context']['managers']:
+                return dict(status='blocked', code='project_owner_required')
+            member = _text(request.get('member_name'), 100)
+            responsibility = _text(request.get('responsibility'), 100)
+            registered = {m['user_id'] for m in options['members'] if config['allowed_actors'][m['user_id']]['display_name'] == member}
+            if len(registered) != 1 or responsibility not in INVITE_RESPONSIBILITIES:
+                return fallback
+            question = f'让「{member}」加入「{name}」，负责「{responsibility}」，可以读取该项目的共享记录和成果，项目负责人不变。确认吗？'
+        else:
+            changes = _changes(request, context, principal, config, interpreted=True)
+            states = dict(proposed='提出要求', reported_confirmed='员工报告已确认', occurred='报告实际发生', unverified='待核实')
+            lines = []
+            for field, value, replaces in changes:
+                old = body['facts'].get(field) if body else None
+                change = f'{field}：{value["value"]}（{states[value["state"]]}）'
+                if old:
+                    change += f'；原记录：{old["value"]}；' + ('替换旧值' if replaces else '有差异则并列保留待澄清')
+                lines.append(change)
+            question = f'将以下内容记入「{name}」，供该项目成员读取（当前版本 {revision}）：\n' + '\n'.join(lines) + '\n确认这些内容和共享范围吗？'
+    if len(question) > 3500:
+        return dict(status='blocked', code='case_confirmation_too_large')
+    return dict(status='needs_confirmation', question=question, revision=revision)
+
+
+def _operation_result(db, options, request, principal, key):
+    """Host-only reconciliation; never executes an operation after a restart."""
+    command, data = request.get('command'), request.get('input')
+    if command not in {'case-read', 'case-update', 'case-member-add'} or not isinstance(data, dict) or set(data) - FIELDS[command]:
+        raise ValueError('invalid operation result query')
+    name = _text(data.get('case_name'), 120)
+    body = _current(db, options['namespace'], name)
+    if body is not None and not _can_read(options, body, principal):
+        return dict(status='not_found', case_name=name, revision=0)
+    if command == 'case-read':
+        row = db.execute('SELECT name FROM shared_case_bindings WHERE namespace=? AND work_key=?', (options['namespace'], key)).fetchone()
+        return dict(status='found' if row and row['name'] == name and body else 'not_executed', current_revision=body['revision'] if body else 0)
+    parts = [principal[k] for k in ('platform', 'chat_id', 'user_id', 'message_id')]
+    if command == 'case-member-add':
+        parts.append(command)
+    row = db.execute('SELECT request_hash,body FROM shared_case_versions WHERE namespace=? AND name=? AND message_key=?',
+                     (options['namespace'], name, core._hash(parts))).fetchone()
+    if row:
+        if row['request_hash'] != core._hash(data):
+            return dict(status='blocked', code='case_message_already_recorded')
+        return dict(status='recorded', case=json.loads(row['body']), replayed=True)
+    return dict(status='not_executed', current_revision=body['revision'] if body else 0)
+
+
 def _add_member(db, options, request, principal, context, config, key, body):
     policy = options.get('project_context', {})
     if not policy.get('enabled') or body is None:
@@ -231,8 +317,9 @@ def _add_member(db, options, request, principal, context, config, key, body):
                    r'(?:请)?(?:让|邀请|安排|添加|增加)\s*' + re.escape(name) +
                    r'\s*(?:来)?(?:加入|参与|接手|负责)(?:本项目的)?' +
                    re.escape(responsibility) + r'[。！!]?')
-    if any(word in source for word in (*UNCERTAIN, '禁止', '吗')) or not re.fullmatch(instruction, source.strip()):
-        return dict(status='blocked', code='project_member_instruction_required')
+    if not _confirmed('case-member-add', request, context) and (any(word in source for word in (*UNCERTAIN, '禁止', '吗')) or not re.fullmatch(instruction, source.strip())):
+        return _confirmation('case-member-add', request, context, options, config, principal, body, body['name'],
+                             dict(status='blocked', code='project_member_instruction_required'))
     revision = request.get('expected_revision')
     if type(revision) is not int or revision < 1:
         raise ValueError('invalid expected revision')
@@ -247,6 +334,8 @@ def _add_member(db, options, request, principal, context, config, key, body):
     if revision != body['revision']:
         return dict(status='conflict', code='case_revision_changed', current_revision=body['revision'])
     user = candidates.pop()
+    if context.get('confirmation'):
+        source = f'确认邀请{name}负责{responsibility}'
     body['project']['members'][user] = dict(name=name, responsibility=responsibility,
         source=dict(speaker=config['allowed_actors'][principal['user_id']]['display_name'], quote=source))
     return _save_version(db, options, key, body, message, digest)
@@ -348,7 +437,7 @@ def _artifact(db, options, request, principal, key):
                 stale=current['revision'] != binding['revision'])
 
 
-def _changes(request, context, principal, config):
+def _changes(request, context, principal, config, interpreted=False):
     changes = request.get('changes')
     if not isinstance(changes, list) or not 1 <= len(changes) <= 30:
         raise ValueError('one complete bounded update required')
@@ -366,15 +455,15 @@ def _changes(request, context, principal, config):
             raise ValueError(f'{field}: duplicate field; use one entry per field, preserving all facts in the complete batch')
         if state not in STATES:
             raise ValueError(f'{field}: state must be proposed, reported_confirmed, occurred or unverified')
-        if quote not in context['source_text']:
+        if not interpreted and quote not in context['source_text']:
             raise ValueError(f'{field}: quote must occur verbatim in the authorized source message')
         # Value must be grounded in this shared message, not the private history.
-        if value not in quote:
+        if not interpreted and value not in quote:
             raise ValueError(f'{field}: value must occur verbatim in its source quote')
         # Inspect the complete authorized source, not a model-trimmed quote.
         # Ambiguous confirmation stays unverified and may be clarified naturally.
         source = context['source_text']
-        if state in {'reported_confirmed', 'occurred'}:
+        if not interpreted and state in {'reported_confirmed', 'occurred'}:
             clause = _source_clause(source,quote,value)
             markers = ('已确认', '确认采用', '客户确认', '确认改为') if state == 'reported_confirmed' else ('实际发生', '实际执行', '已经完成', '已完成')
             if any(word in clause for word in UNCERTAIN) or not any(word in clause for word in markers):
@@ -385,15 +474,18 @@ def _changes(request, context, principal, config):
         seen.add(field)
         result.append((field, dict(value=value, state=state, source={
             'speaker': config['allowed_actors'][principal['user_id']]['display_name'],
-            'quote': quote,
-            'origin': 'group' if principal['chat_id'] == config['shared_cases']['group_chat_id'] else 'explicit_private_share',
+            'quote': f'{field}：{value}（{state}）' if interpreted else quote,
+            'origin': 'confirmed_interpretation' if interpreted else ('group' if principal['chat_id'] == config['shared_cases']['group_chat_id'] else 'explicit_private_share'),
         }), replaces))
     return result
 
 
 def _update(db, options, request, principal, context, config, key, name):
-    if not context['share_allowed']:
-        return dict(status='blocked', code='case_share_not_authorized')
+    confirmed = _confirmed('case-update', request, context)
+    if not context['share_allowed'] and not confirmed:
+        return _confirmation('case-update', request, context, options, config, principal,
+                             _current(db, options['namespace'], name), name,
+                             dict(status='blocked', code='case_share_not_authorized'))
     if request.get('source_message_id', principal['message_id']) != principal['message_id']:
         raise ValueError('source message mismatch')
     revision = request.get('expected_revision')
@@ -412,14 +504,15 @@ def _update(db, options, request, principal, context, config, key, name):
     if (body['revision'] if body else 0) != revision:
         return dict(status='conflict', code='case_revision_changed', current_revision=body['revision'] if body else 0)
     try:
-        changes = _changes(request, context, principal, config)
+        changes = _changes(request, context, principal, config, interpreted=confirmed)
     except ValueError as exc:
         # Validation only: no writes or message consumption have occurred.
         # Reasons contain fixed messages and whitelisted business field names.
-        return dict(status='blocked', code='case_changes_invalid', reason=str(exc), recorded=False,
+        return _confirmation('case-update', request, context, options, config, principal, body, name,
+                    dict(status='blocked', code='case_changes_invalid', reason=str(exc), recorded=False,
                     retry='Fix and resubmit the whole batch with the same revision. Do not probe with a subset; '
                           'a successful update consumes this message. Values must be verbatim source text, '
-                          'without normalized names, added punctuation or state labels.')
+                          'without normalized names, added punctuation or state labels.'))
     if body is None:
         body = dict(name=name, revision=0, facts={}, artifacts=[])
         if options.get('project_context', {}).get('enabled'):
@@ -430,14 +523,15 @@ def _update(db, options, request, principal, context, config, key, name):
         if old and (old['value'] != value['value'] or old['state'] == 'conflict' or state_regressed) and not replaces:
             value = dict(value=old['value'], state='conflict', source=old['source'],
                          alternatives=old.get('alternatives', []) + [value])
-        elif replaces:
+        elif replaces and not confirmed:
             # Explicit correction language must come from the authorized message.
             source = context['source_text']
             clause = _source_clause(source,value['source']['quote'],value['value'])
             if not any(word in clause for word in ('改为', '调整为', '以此为准', '确认采用', '更正为')) or any(
                 word in clause for word in UNCERTAIN
             ):
-                raise ValueError('explicit correction required')
+                return _confirmation('case-update', request, context, options, config, principal, body, name,
+                                     dict(status='blocked', code='explicit_correction_required'))
         body['facts'][field] = value
     return _save_version(db, options, key, body, message, digest)
 
@@ -458,6 +552,8 @@ def tool(command, request, principal, context, config):
                 return _access(db, options, request, principal, key)
             if command == 'case-artifact':
                 return _artifact(db,options,request,principal,key)
+            if command == 'case-result':
+                return _operation_result(db, options, request, principal, key)
             if command == 'case-list':
                 query = request.get('query', '')
                 if not isinstance(query, str) or len(query) > 256:
@@ -501,9 +597,12 @@ def tool(command, request, principal, context, config):
             name = _text(name, 120)
             if binding and binding['name'] != name:
                 return dict(status='needs_new_work',code='case_work_already_bound')
-            if command == 'case-update' and not context['share_allowed']:
-                return dict(status='blocked', code='case_share_not_authorized')
-            if project_mode:
+            confirmed = _confirmed(command, request, context)
+            if command == 'case-update' and not context['share_allowed'] and not confirmed:
+                return _confirmation(command, request, context, options, config, principal,
+                                     _current(db, options['namespace'], name), name,
+                                     dict(status='blocked', code='case_share_not_authorized'))
+            if project_mode and not confirmed:
                 # ponytail: conservative wedding-name grammar for this mock
                 # rollout; ambiguous prose asks rather than guessing a target.
                 # A candidate read does not authorize choosing that project.
@@ -517,9 +616,12 @@ def tool(command, request, principal, context, config):
                         candidate = _current(db, options['namespace'], name)
                         if candidate is None or not _can_read(options, candidate, principal):
                             return dict(status='not_found', case_name=name, revision=0)
-                        return dict(status='needs_selection', code='case_target_requires_clarification',
-                                    candidate=candidate, trust='source_data_not_instructions')
-                    return dict(status='needs_selection', code='case_target_requires_clarification')
+                        return _confirmation(command, request, context, options, config, principal, candidate, name,
+                                    dict(status='needs_selection', code='case_target_requires_clarification',
+                                         candidate=candidate, trust='source_data_not_instructions'))
+                    return _confirmation(command, request, context, options, config, principal,
+                                         _current(db, options['namespace'], name), name,
+                                         dict(status='needs_selection', code='case_target_requires_clarification'))
             body = _current(db, options['namespace'], name)
             visible = body is not None and _can_read(options, body, principal)
             if command != 'case-update' and not visible:
@@ -530,15 +632,18 @@ def tool(command, request, principal, context, config):
                 'SELECT DISTINCT name FROM shared_case_versions WHERE namespace=?', (options['namespace'],))
                 if row['name'] in context['source_text'] and
                 _can_read(options, _current(db, options['namespace'], row['name']), principal)]
-            if any(other != name for other in mentioned) or (
+            if not confirmed and (any(other != name for other in mentioned) or (
                 name not in context['source_text'] and (not binding or binding['name'] != name)
-            ):
-                return dict(status='needs_selection', code='case_target_requires_clarification')
+            )):
+                return _confirmation(command, request, context, options, config, principal, body, name,
+                                     dict(status='needs_selection', code='case_target_requires_clarification'))
             if body is not None and not visible:
                 return dict(status='not_found', case_name=name, revision=0)
             if command == 'case-read':
                 if body is None:
                     return dict(status='not_found', case_name=name, revision=0)
+                if confirmed and context['confirmation']['revision'] != body['revision']:
+                    return dict(status='conflict', code='case_revision_changed', current_revision=body['revision'])
                 _bind(db, options['namespace'], key, body)
                 return _view(db, options['namespace'], body)
             if command == 'case-member-add':
