@@ -77,9 +77,6 @@ class ProjectContextTests(unittest.TestCase):
         for i, text in enumerate((
             '换个事，请接手林陈婚宴的运营准备，看看销售已经交出的预算和建议。',
             '换个事，我想私下先看林陈婚宴的销售预算和建议。暂时不要同步给执行。',
-            '那个麻烦帮忙看看林陈婚宴，销售做到哪了？',
-            '今天先聊聊林陈婚宴吧，帮我理一理。',
-            '我这边要拿林陈婚宴的表，私下做点准备。',
         )):
             context = {**self.context, 'work_id': f'private-preview-{i}',
                        'source_text': text, 'share_allowed': False}
@@ -94,6 +91,30 @@ class ProjectContextTests(unittest.TestCase):
         context.update(work_id='outsider-preview', source_text='请接手周许婚宴的运营准备')
         self.assertEqual('not_found', self.call('case-read', {'case_name': '周许婚宴'},
             principal=self.operations_private, context=context)['status'])
+
+    def test_ordinary_preambles_and_similar_names_read_candidates_without_binding(self):
+        self.call('case-update', self.change())
+        for number, source in enumerate((
+            '那个麻烦帮忙看看林陈婚宴，销售做到哪了？',
+            '今天先聊聊林陈婚宴吧，帮我理一理。',
+            '我这边要拿林陈婚宴的表，私下做点准备。',
+            '请处理另一场周林陈婚宴',
+            '不存在婚宴和林陈婚宴哪个好',
+        )):
+            context = {**self.context, 'work_id': f'candidate-{number}',
+                       'source_text': source, 'share_allowed': False}
+            read = self.call('case-read', {'case_name': '林陈婚宴'},
+                             principal=self.operations_private, context=context)
+            self.assertEqual('needs_selection', read['status'], read)
+            self.assertEqual('22桌', read['candidate']['facts']['桌数']['value'])
+            unbound = self.call('case-read', {}, principal=self.operations_private,
+                                context={**context, 'source_text': '继续'})
+            self.assertEqual('case_not_selected', unbound['code'])
+        _, context, _ = self.private_project()
+        context.update(source_text='那个麻烦帮忙看看周许婚宴', work_id='hidden-candidate')
+        hidden = self.call('case-read', {'case_name': '周许婚宴'},
+                           principal=self.operations_private, context=context)
+        self.assertEqual({'status': 'not_found', 'case_name': '周许婚宴', 'revision': 0}, hidden)
 
     def test_owner_adds_registered_colleague_across_entries_without_transferring_owner(self):
         _, context, _ = self.private_project()
