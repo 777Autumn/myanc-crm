@@ -49,6 +49,8 @@ def paired_tests(gateway, env):
         required.add('TestCUJ_CASEIPC_SharedProgressPrivateGrantAndRevision')
     if 'MYANC_SPIKE_CRM_ROOT' in env and (Path(env['MYANC_SPIKE_CRM_ROOT']) / 'tests/test_project_context.py').is_file():
         required.add('TestCUJ_CASEIPC_ProjectMembershipAcrossPrivateEntries')
+    if 'MYANC_SPIKE_CRM_ROOT' in env and (Path(env['MYANC_SPIKE_CRM_ROOT']) / 'tests/test_case_confirmation.py').is_file():
+        required.add('TestCUJ_CASEIPC_NaturalClarificationAndConfirmedContinuation')
     passed = {item.get("Test") for item in events if item.get("Action") == "pass"}
     gate.require(required <= passed, "required cross-repo journeys did not execute successfully")
     gate.require(any(item.get("Action") == "pass" and item.get("Test", "").startswith("TestCUJ")
