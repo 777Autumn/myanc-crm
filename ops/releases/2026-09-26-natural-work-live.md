@@ -122,6 +122,33 @@ remained unchanged during this private revision. The direct turn's in-memory
 sharing flag was not separately persisted; this conclusion rests on the actual
 private route, bound source/work and observed unchanged shared records.
 
+## Current Skill guidance in resumed file work
+
+The visible original session loaded the earlier business Skill and shared-case
+reference before their update. Later quoted turns received the new host reminder
+and reread project state, but did not visibly reload the updated Skill bodies.
+Correct installation alone did not demonstrate that the old work used current
+guidance. This is evidence for a missing refresh step, not proof of a model's
+internal state or the only possible cause of the content errors.
+
+[Gateway PR36](https://github.com/77AutumN/cc-connect-anc/pull/36) adds one sentence
+to the existing file-work prompt: before each creation or revision, reread the
+current applicable file/domain Skills and required references, then perform their
+checks. New and resumed file processes receive it; already-running processes are
+not hot-reloaded. No business rules, dependencies or validation platform were added.
+The actual-spawn regression failed on old source and passed after the change for
+native new/resumed, isolated resumed and the unaffected ordinary-session control.
+The first CI attempt caught an unchecked cleanup error in the new test; that
+failure is retained and was corrected before final reviews and CI.
+
+Reviewed base `3f52085eb2201d683d094f32ecc50aa1f870b2e5`, head
+`4d94ed599d36f84262d07b48b8507b2c6b4fd80c`; independent Spec and Standards AI
+reviews and all five [PR checks](https://github.com/77AutumN/cc-connect-anc/actions/runs/36186765152)
+passed. Gated squash merge produced `f587d60a580fef441cda8b79f940bc8a934475a8`.
+Its [merge CI](https://github.com/77AutumN/cc-connect-anc/actions/runs/36187900440),
+candidate, gateway-only installation and actual workbook correction remain
+pending at this checkpoint. CRM and knowledge retain the exact versions above.
+
 ## Evidence and boundaries
 
 Private operational evidence, original failures, exact review inputs, package
