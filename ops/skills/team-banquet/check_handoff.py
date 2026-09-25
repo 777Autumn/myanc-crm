@@ -106,6 +106,10 @@ def inspect(path, readback=None):
                 for row, cells in enumerate(table.rows, 1):
                     readback(f'{path.name}: table {number}, row {row}',
                              {f'column {col}': cell.text for col, cell in enumerate(cells.cells, 1)})
+                    for col, cell in enumerate(cells.cells, 1):
+                        if cell.tables:
+                            yield (f'{path.name}: table {number}, row {row}, column {col}: '
+                                   'Readback incomplete: nested table content requires separate reading')
             for row, col in conflicts([[c.text for c in r.cells] for r in table.rows]):
                 yield f'{path.name}: table {number}, row {row}, column {col}'
     else:

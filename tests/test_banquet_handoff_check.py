@@ -117,6 +117,25 @@ class HandoffCheckTests(unittest.TestCase):
             book.save(path)
             self.assertEqual(list(check.inspect(path)), [])
 
+    def test_nested_word_table_is_explicitly_unread_not_a_success(self):
+        from docx import Document
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'fictional-nested.docx'
+            doc = Document(); outer = doc.add_table(rows=1, cols=1)
+            outer.cell(0, 0).text = '外表说明'
+            inner = outer.cell(0, 0).add_table(rows=1, cols=1)
+            inner.cell(0, 0).text = '内表费用需单独读取'
+            doc.save(path)
+            before = path.read_bytes()
+            output = io.StringIO()
+            with redirect_stdout(output):
+                result = check.main([str(path)])
+            self.assertTrue(result)
+            self.assertIn('外表说明', output.getvalue())
+            self.assertIn('table 1, row 1, column 1: Readback incomplete', output.getvalue())
+            self.assertNotIn('No targeted cell/confirmation issues found', output.getvalue())
+            self.assertEqual(before, path.read_bytes())
+
     def test_copied_rules_are_not_confirmation(self):
         rows = [['时间/环节', '状态/依据'],
                 ['布场', '已确认（经营基础规则：布场90分钟）'],
