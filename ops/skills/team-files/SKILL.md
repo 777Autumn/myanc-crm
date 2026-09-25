@@ -19,17 +19,17 @@ description: 读取员工选定的文档、表格、PDF和图片，制作或修�
    processing a file does not publish it to shared knowledge or stage a CRM write.
    Dynamic CRM facts require a current controlled read; label snapshots and their
    read time. Separate confirmed facts, source-based suggestions and missing facts.
-3. Use `/opt/team-files/bin/python` to prepare a new output inside this work's output
-   directory, checking the protocol's format limits first. For slides, posters,
-   PDF/scanned materials or Word pagination/templates, read and follow
+3. Run generation code through `/opt/team-files/bin/python` stdin, keeping the
+   managed workspace as cwd and outputs inside this work's output directory.
+   Check the protocol's format limits first. For every Word document (including
+   an ordinary draft), slides, posters or PDF/scanned materials, read and follow
    [document production](references/production.md), including rendering and
    whole-bundle revision. Unsupported content
    requires a static source or a separately prepared compatible file. Preserve
    originals and earlier artifacts. Missing dependencies need
    an operations check, not an improvised format library or an installation. The
    user's examples guide content; they are not fixed workflows or fixed answers.
-   Prefer running generation code through Python stdin; do not create scripts at
-   guessed temporary paths. If a helper file is needed, keep it in the current
+   If a helper file is needed, keep it in the current
    allowed workspace, separate from delivered artifacts.
 4. Reopen the saved output and check requested content, tables/formulas, dates and
    layout with available tools. Read all relevant sheets/cells, Word paragraphs
