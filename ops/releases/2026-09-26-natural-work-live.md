@@ -10,7 +10,7 @@ evidence; successful retries are recorded separately.
 
 | Repository | Exact runtime source | PR / exact merge CI |
 | --- | --- | --- |
-| Gateway | `f587d60a580fef441cda8b79f940bc8a934475a8` | [PR36](https://github.com/77AutumN/cc-connect-anc/pull/36), [CI](https://github.com/77AutumN/cc-connect-anc/actions/runs/36187900440) |
+| Gateway | `7bc3e8b9cba91586926cfe1d60f388b5acd955a3` | [PR37](https://github.com/77AutumN/cc-connect-anc/pull/37), [CI](https://github.com/77AutumN/cc-connect-anc/actions/runs/36192628195) |
 | CRM | `1f59510377eb9e17fec10c58e8b258714af74cac` | [PR88](https://github.com/77AutumN/myanc-crm/pull/88), [CI](https://github.com/77AutumN/myanc-crm/actions/runs/36181546559) |
 | Knowledge, unchanged | `88a60ba60a634fe3d6b0f68f91de326b19a39b30` | [CI](https://github.com/77AutumN/myanc-team-brain/actions/runs/34704220632) |
 
@@ -153,7 +153,7 @@ jobs passed. The normal candidate `candidate-skill-refresh.tgz` has SHA-256
 `55877ccb94f87983e27fc1f81a3bb80193ea04ab5fe7299ae97b285127d8066a`.
 Its 139 file hashes were verified; only the gateway binary differs from the
 initial candidate. All seven mandatory paired journeys passed with the exact
-sources in the table above and the same toolchain. CRM and knowledge stay fixed.
+gateway f587d60 and the CRM/knowledge in the table above, using the same toolchain.
 
 The separately frozen, reviewed gateway-only maintenance completed with one
 stop/start, one receiver, ordinary UID/capabilities unchanged, no failure receipt
@@ -205,10 +205,66 @@ Separate sanitized AI evidence, retained by the operator:
 | `skill-refresh-real-spec.md` | `18758216d7cb434396bbeca1d5ef1f9d332960e162b35ff7c49228fb097ca2a3` |
 | `skill-refresh-real-standards.md` | `1a4c97aebb47d401179c548e8e9a07118f3a442af031de1fa6cfbaf674f1c2d9` |
 
-The next per-turn guidance repair is not implemented or accepted at this
-checkpoint. It has no new reviewed or deployed SHA recorded here. Source delivery
-and candidate installation above are complete; the outstanding file-quality work
-and its real regression remain **incomplete**. All earlier failures are retained.
+## Per-turn refresh and the remaining saved-content gap
+
+[PR37](https://github.com/77AutumN/cc-connect-anc/pull/37) moves the existing
+reminder into the actual file-turn payload, after recovery-intent parsing and
+before model delivery. It covers new/resumed turns, live follow-ups and saved
+supplements without changing the original sharing source. Base
+`f587d60a580fef441cda8b79f940bc8a934475a8`, reviewed head
+`ceadc7370969d8f9dc342f2282607e06e51774dc`; independent Spec and Standards AI
+reviews and all five [PR jobs](https://github.com/77AutumN/cc-connect-anc/actions/runs/36191657744)
+passed. The exact merge is the gateway in the runtime table; all five merge jobs
+passed. The existing POSIX-mode test has a Windows-only limitation, retained in
+the PR; the required full Linux CI passed.
+
+The normal `candidate-per-turn.tgz` contains 139 verified files, SHA-256
+`ec76cc4c3e77bff8e83282311a27b3d3ac06489125ebdb287dc5e32d39b081c7`.
+All seven paired journeys passed with the table's exact sources and the same
+toolchain. Only the gateway binary changed. The frozen one-window update passed
+with one receiver, unchanged ordinary identity/capabilities, 141 protected file
+controls, seven stores and six saved sessions. It remained continuously healthy
+for 130.9 seconds, with no application errors. Installed binary SHA-256:
+`820c49cbe4ef02d4d1e339582ca45e10e9ca0c227132616956eacee93ae45610`;
+healthy receipt SHA-256:
+`855852da958f12777bede919f17cfc8947738043c035fccd1d253582489f0634`.
+
+The next natural private revision requested 20 tables while retaining the budget.
+The actual payload contained the reminder, and Claude invoked and fully loaded
+the current `team-banquet` body. The v5 workbook was accepted once in the correct
+work; snapshot, output and download SHA-256:
+`536d53e8f20217b8124bb5727a23511d05f77b330eed05109620fdf3eca9e1e0`.
+All three worksheets were opened in Feishu. Correct totals are 90200 excluding
+decoration, 95200 with basic and 101200 with upgraded decoration. Two new valid
+formulas explicitly show budget overruns 15200 and 21200. Existing formulas,
+revision 4/Wiki v2 sources, proposed 11:00 welcome time, private scope, shared
+16-table conditions and all v1-v4 originals remain intact.
+
+Two defects still fail: the execution checklist says decoration differs by 5000
+instead of 6000, and it infers that sales has not produced a handoff. Both rules
+were present in the loaded Skill. The actual checker returned no targeted lint
+findings, and the subsequent readback covered only the budget sheet. This fixes
+the earlier Skill-loading gap but does not demonstrate complete content review.
+The artifact was not repaired by the operator or reviewers.
+
+A separate natural typo question in the same bound work successfully read the
+current authorized project revision 4 and answered that welcome is proposed for
+11:00, still unconfirmed. No new artifact or shared write occurred, and the other
+project and private 20-table draft were unchanged. This covers a typo in a known
+project context, not unrestricted fuzzy project search.
+
+| Separate AI evidence | SHA-256 |
+| --- | --- |
+| `per-turn-installed-standards.md` | `7930e46b44912efd9731d835b9079778d2259445006eb42c96cdc4183780f6c5` |
+| `per-turn-real-spec.md` | `c22f35efb4229ebcb5ef8d50a37b85d84ed0b0c6dd9ba360d008672292aa40e6` |
+| `per-turn-real-standards.md` | `82a3a9ae56eddd2513d9863f92a8456f4b867dce81060295326a86d9f493851f` |
+| `typo-real-spec.md` | `3178579b521df26e29c8faa1989be2ee12dfa910d175246b4bb2372c0239b915` |
+
+[CRM PR90](https://github.com/77AutumN/myanc-crm/pull/90) addresses the observed
+readback gap in the existing checker. Its source delivery and real regression
+are tracked separately; this checkpoint does not claim it is installed or that
+the two remaining quality defects pass. The overall file-quality closeout remains
+**incomplete**, and all earlier failures are retained.
 
 ## Evidence and boundaries
 
