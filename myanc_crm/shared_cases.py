@@ -501,14 +501,21 @@ def tool(command, request, principal, context, config):
             name = _text(name, 120)
             if binding and binding['name'] != name:
                 return dict(status='needs_new_work',code='case_work_already_bound')
+            if command == 'case-update' and not context['share_allowed']:
+                return dict(status='blocked', code='case_share_not_authorized')
             if project_mode:
                 # ponytail: conservative wedding-name grammar for this mock
                 # rollout; ambiguous prose asks rather than guessing a target.
+                # Reads use the named accessible candidate below, not a list of
+                # allowed sentence prefixes. Keep this write guard until the
+                # host has a concrete confirmed operation.
                 # Inspect the message, never hidden database names, so a newly
                 # named wedding cannot silently update the bound group case.
                 mentioned = re.findall(r'[^\s，,。；;：:]{1,40}婚宴(?!团队)', context['source_text'])
                 target = (r'(?:(?:请|帮我|我想|私下|先看|接手|处理|准备|根据|为|关于|针对|另一个|另一场|新建|新增|创建|登记|记录|接下来|继续|核对|读取|查看|整理))*'
                           r'(?:' + re.escape(name) + r'|这场婚宴|当前婚宴|本场婚宴|这次婚宴|该婚宴|模拟婚宴)')
+                if command == 'case-read':
+                    target = r'.*(?:' + re.escape(name) + r'|这场婚宴|当前婚宴|本场婚宴|这次婚宴|该婚宴|模拟婚宴)'
                 if any(not re.fullmatch(target, other) for other in mentioned):
                     return dict(status='needs_selection', code='case_target_requires_clarification')
             body = _current(db, options['namespace'], name)
