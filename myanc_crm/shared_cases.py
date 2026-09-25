@@ -471,6 +471,11 @@ def _changes(request, context, principal, config, interpreted=False):
         replaces = change.get('replaces', False)
         if type(replaces) is not bool:
             raise ValueError('invalid replacement')
+        if replaces and not interpreted:
+            clause = _source_clause(source, quote, value)
+            if not any(word in clause for word in ('改为', '调整为', '以此为准', '确认采用', '更正为')) or any(
+                    word in clause for word in UNCERTAIN):
+                raise ValueError('explicit_correction_required')
         seen.add(field)
         result.append((field, dict(value=value, state=state, source={
             'speaker': config['allowed_actors'][principal['user_id']]['display_name'],
@@ -523,15 +528,6 @@ def _update(db, options, request, principal, context, config, key, name):
         if old and (old['value'] != value['value'] or old['state'] == 'conflict' or state_regressed) and not replaces:
             value = dict(value=old['value'], state='conflict', source=old['source'],
                          alternatives=old.get('alternatives', []) + [value])
-        elif replaces and not confirmed:
-            # Explicit correction language must come from the authorized message.
-            source = context['source_text']
-            clause = _source_clause(source,value['source']['quote'],value['value'])
-            if not any(word in clause for word in ('改为', '调整为', '以此为准', '确认采用', '更正为')) or any(
-                word in clause for word in UNCERTAIN
-            ):
-                return _confirmation('case-update', request, context, options, config, principal, body, name,
-                                     dict(status='blocked', code='explicit_correction_required'))
         body['facts'][field] = value
     return _save_version(db, options, key, body, message, digest)
 

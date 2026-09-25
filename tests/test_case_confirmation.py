@@ -75,6 +75,19 @@ class CaseConfirmationTests(unittest.TestCase):
         self.assertEqual('found', result['status'])
         self.assertFalse(context['share_allowed'])
 
+    def test_batch_preview_keeps_original_values_when_later_change_needs_confirmation(self):
+        _, context, _ = self.private_project()
+        context = {**context, 'source_text': '桌数改为23桌；迎宾11:30', 'share_allowed': True,
+                   'offer_confirmation': True}
+        request = dict(case_name='周许婚宴', expected_revision=1, changes=[
+            dict(field='桌数', value='23桌', quote='桌数改为23桌', state='proposed', replaces=True),
+            dict(field='迎宾时间', value='11:30', quote='迎宾11:30', state='proposed', replaces=True)])
+        pending = self.call('case-update', request,
+            principal={**self.private, 'message_id': 'batch-preview'}, context=context)
+        self.assertEqual('needs_confirmation', pending['status'], pending)
+        self.assertIn('原记录：22桌', pending['question'])
+        self.assertNotIn('原记录：23桌', pending['question'])
+
     def test_version_conflict_and_denial_do_not_execute_or_invent_confirmation(self):
         _, context, _ = self.private_project()
         request = dict(case_name='周许婚宴', expected_revision=1, member_name='operations', responsibility='运营执行')

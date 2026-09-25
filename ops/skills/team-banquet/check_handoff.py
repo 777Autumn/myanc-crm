@@ -52,7 +52,7 @@ def inspect(path):
             for sheet in book:
                 for row, col in conflicts(sheet.values):
                     yield f'{path.name}: {sheet.title} row {row}, column {col}'
-                names = set(book.defined_names) | set(sheet.defined_names)
+                names = {name.casefold() for name in (*book.defined_names, *sheet.defined_names)}
                 for row, cached_row in zip(sheet, cached[sheet.title]):
                     for cell, cached_cell in zip(row, cached_row):
                         reason = ''
@@ -68,7 +68,7 @@ def inspect(path):
                                     # ponytail: catch undeclared bare names from
                                     # description-as-formula mistakes; this is
                                     # not a formula evaluator or layout check.
-                                    if value in names or '!' in value or '[' in value:
+                                    if value.casefold() in names or '!' in value or '[' in value:
                                         continue
                                     try:
                                         range_boundaries(value)

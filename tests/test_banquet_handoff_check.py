@@ -23,6 +23,8 @@ class HandoffCheckTests(unittest.TestCase):
             sheet.append([None, None, '=SUM(C2:C2)', '待确认'])
             sheet.append([None, None, '=套餐单价*A2', None])
             book.defined_names.add(DefinedName('套餐单价', attr_text="'预算'!$B$2"))
+            book.defined_names.add(DefinedName('package_price', attr_text="'预算'!$B$2"))
+            sheet.append([None, None, '=PACKAGE_PRICE*A2', None])
             book.save(path)
             before = path.read_bytes()
             findings = list(check.inspect(path))
