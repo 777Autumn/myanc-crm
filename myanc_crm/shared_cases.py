@@ -587,6 +587,7 @@ def tool(command, request, principal, context, config):
                 # arrived. An explicit new name still requires its own source.
                 if name is None or name == context['selected_case']:
                     binding = {'name':context['selected_case']}
+            previously_bound = binding['name'] if binding else None
             if project_mode and principal['chat_id'] == options['group_chat_id']:
                 if (name is not None and name != policy['group_case']) or (binding and binding['name'] != policy['group_case']):
                     return dict(status='blocked', code='project_group_mismatch')
@@ -609,9 +610,18 @@ def tool(command, request, principal, context, config):
                 # A candidate read does not authorize choosing that project.
                 # Inspect the message, never hidden database names, so a newly
                 # named wedding cannot silently update the bound group case.
-                mentioned = re.findall(r'[^\s，,。；;：:]{1,40}婚宴(?!团队)', context['source_text'])
+                # Read tolerance must not weaken the original write-confirmation grammar.
+                mention_pattern = (r'[^\s，,。；;：:]{1,40}?婚宴(?!团队)' if command == 'case-read'
+                                   else r'[^\s，,。；;：:]{1,40}婚宴(?!团队)')
+                mentioned = re.findall(mention_pattern, context['source_text'])
+                bound_read = command == 'case-read' and previously_bound == name
+                comparison_name = name.replace('、', '') if bound_read else name
                 target = (r'(?:(?:请|帮我|我想|私下|先看|接手|处理|准备|根据|为|关于|针对|另一个|另一场|新建|新增|创建|登记|记录|接下来|继续|核对|读取|查看|整理))*'
-                          r'(?:' + re.escape(name) + r'|这场婚宴|当前婚宴|本场婚宴|这次婚宴|该婚宴|模拟婚宴)')
+                          r'(?:' + re.escape(comparison_name) + r'|这场婚宴|当前婚宴|本场婚宴|这次婚宴|该婚宴|模拟婚宴)')
+                if bound_read:
+                    # Compare mentions only; keep the original sharing source and quotes intact.
+                    mentioned = [other.replace('、', '') for other in mentioned]
+                    target += r'|仍是模拟婚宴'
                 if any(not re.fullmatch(target, other) for other in mentioned):
                     if command == 'case-read':
                         candidate = _current(db, options['namespace'], name)

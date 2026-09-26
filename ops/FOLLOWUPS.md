@@ -1,8 +1,46 @@
 # Tracked delivery and experience follow-ups
 
-Updated 2026-09-17. This ledger distinguishes implemented source, GitHub delivery
+Updated 2026-09-26. This ledger distinguishes implemented source, GitHub delivery
 and online acceptance under [RELEASE.md](RELEASE.md); it is not a deployment receipt.
-The current model acceptance scope is defined once in the
+
+## Current checkpoint
+
+The [September 26 natural-work record](releases/2026-09-26-natural-work-live.md)
+contains the latest recorded runtime combination, candidate, installation and
+bounded acceptance evidence:
+
+| Component | Exact recorded source |
+| --- | --- |
+| CRM | `d4738b512fd0f6810b31981dd312d2570a1fc0fe` |
+| Gateway | `7bc3e8b9cba91586926cfe1d60f388b5acd955a3` |
+| Knowledge, unchanged | `88a60ba60a634fe3d6b0f68f91de326b19a39b30` |
+
+The evidence-only [PR89](https://github.com/77AutumN/myanc-crm/pull/89) merged as
+`3383afc1e9c21cee15d67f85683a7b944b7365fc`; that documentation commit is not a new
+runtime installation. The latest two eight-file Skill updates retained their
+failed original stable windows; later independent read-only observations passed.
+The release record keeps those distinct rather than relabelling the failures.
+
+| Capability / follow-up | Current evidence and limit |
+| --- | --- |
+| File production and revision | [Word/Excel natural work](releases/2026-09-26-natural-work-live.md) and [PPTX/PDF/PNG plus a fictional Word template](releases/2026-09-23-banquet-formats.md) were actually opened within their recorded journeys. Originals and versions remain; real complex templates and reliable first-pass quality remain unverified. |
+| Company knowledge and role methods | [Mock Wiki v1/v2 publication and use](releases/2026-09-24-mock-wiki.md) passed for the fictional company, including revised prices and cross-role use. The [project-context record](releases/2026-09-25-project-context-live.md) extends use to authorized group/private entries. No real company's knowledge or department directory is implied. |
+| Natural wording and project collaboration | [Specified two-account journeys](releases/2026-09-26-natural-work-live.md) cover vague requests, saved supplements, invitations, private revisions, project switching and a typo in an already bound work. Earlier refusals and corrections are retained; this is not arbitrary-expression coverage. |
+| Saved-file checks and business review | Explanation cells mistaken for formulas were caught and corrected before delivery, with valid formulas retained. Autonomous business review still failed in v7; v8 fixed the price difference after feedback but retained an unsupported sales-status inference. v9 corrected that inference and its notes after a second employee feedback, then reread all three sheets. Employee review is still required; these outcomes are not a first-pass success. |
+| CRM and reminders | Earlier deployment and acceptance states remain in the historical table below, including the [formal CRM workbench update](releases/2026-09-17-crm-overview.md). Simulated banquet success does not establish formal CRM access isolation or clear those separate pending checks. |
+| New colloquial trial | [September 26 operator-run simulation](acceptance/2026-09-26-colloquial-trial.md) remains partial. Sales v1/v2 required a configuration-only repair and clarifications. Operations retrieved the right project/files and calculated the time shortfall, but its first handoff reversed source chronology and mislabelled a draft as decided; feedback repair is pending. The specified private snippets were absent from this handoff's inputs, shared record and outputs. PR92 contains an uninstalled narrow source candidate; no general first-pass success is claimed. CRM sandbox testing is blocked by the active formal-resource selector; no formal query/write or resource switch occurred. |
+
+The current knowledge adapter requires exactly six configured and attached
+runtime entries ([configuration check](https://github.com/77AutumN/cc-connect-anc/blob/7bc3e8b9cba91586926cfe1d60f388b5acd955a3/actionhost/teambrain/adapter.go#L67-L85),
+[startup check](https://github.com/77AutumN/cc-connect-anc/blob/7bc3e8b9cba91586926cfe1d60f388b5acd955a3/cmd/cc-connect/main.go#L1213-L1215)).
+Names come from protected configuration, but the count is enforced in code.
+These entries are account/chat workspaces, not six banquet projects. The existing
+[mock project policy](project-context.md) remains limited to the authorized simulation;
+neither constraint is relaxed by this documentation update.
+
+## Historical checkpoints and retained follow-ups
+
+The September 10 model acceptance scope is recorded in the
 [candidate record](acceptance/2026-09-10-bot-ux-candidate.md#当前验收口径2026-09-10-用户调整):
 the Owner changed the gate to practical task completion on September 10.
 Post-merge version and CI evidence is in the
