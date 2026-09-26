@@ -6,15 +6,76 @@ runs before Poppler. No receiver, network listener, delivery or dependency setup
 """
 import argparse
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
+import posixpath
 import signal
 import subprocess
 import sys
 import tempfile
+import zipfile
+import xml.etree.ElementTree as ET
 
 MAX_BYTES = 20 << 20
+
+
+def xlsx_cells(data):
+    """Read saved cell types/caches without evaluating or expanding sheet ranges.
+
+    Call only after the gateway has bounded and validated this OOXML package.
+    """
+    ns = {'s': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+    relation_ns = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+    cells = {}
+    with zipfile.ZipFile(io.BytesIO(data)) as package:
+        links = {node.attrib['Id']: posixpath.normpath(posixpath.join('xl', node.attrib['Target'])).lstrip('/')
+                 for node in ET.fromstring(package.read('xl/_rels/workbook.xml.rels'))}
+        sheets = {links[node.attrib[f'{{{relation_ns}}}id']]: node.attrib['name']
+                  for node in ET.fromstring(package.read('xl/workbook.xml')).findall('s:sheets/s:sheet', ns)}
+        strings = []
+        if 'xl/sharedStrings.xml' in package.namelist():
+            strings = [''.join(node.itertext()) for node in
+                       ET.fromstring(package.read('xl/sharedStrings.xml')).findall('s:si', ns)]
+        for name, title in sheets.items():
+            for cell in ET.fromstring(package.read(name)).findall('s:sheetData/s:row/s:c', ns):
+                value, formula = cell.find('s:v', ns), cell.find('s:f', ns)
+                kind = cell.get('t', 'n')
+                text = value.text if value is not None else None
+                if kind == 's':
+                    text = strings[int(text)]
+                elif kind == 'inlineStr':
+                    inline = cell.find('s:is', ns)
+                    text = ''.join(inline.itertext()) if inline is not None else ''
+                key = f'{title}!{cell.attrib["r"]}'
+                if key in cells:
+                    raise ValueError('duplicate workbook cell')
+                cells[key] = {'formula': formula.text if formula is not None else None,
+                              'is_formula': formula is not None, 'type': kind, 'value': text,
+                              'cached': value is not None and (text is not None or kind == 'str')}
+    return cells
+
+
+def check_xlsx_result(before, data):
+    after = xlsx_cells(data)
+    formulas = {key: cell['formula'] for key, cell in before.items() if cell['is_formula']}
+    saved = {key: cell['formula'] for key, cell in after.items() if cell['is_formula']}
+    if formulas != saved:
+        raise ValueError('saved workbook formulas changed; inspect the retained source')
+    if any(cell['type'] == 'e' or (cell['is_formula'] and not cell['cached']) for cell in after.values()):
+        raise ValueError('saved workbook contains an error or an uncalculated formula')
+    # Only task intent distinguishes explanatory text from a formula saved as text.
+    # Report the actual type; never silently convert either kind into a formula.
+    text_cells = [key for key, cell in after.items() if not cell['is_formula']
+                  and isinstance(cell['value'], str) and cell['value'].startswith('=')]
+    for key, cell in before.items():
+        if not cell['is_formula'] and isinstance(cell['value'], str) and cell['value'].startswith('='):
+            if key not in after or after[key]['is_formula'] or after[key]['value'] != cell['value']:
+                raise ValueError('saved workbook changed an equals-prefixed text cell')
+    return {'formula_cells': sorted(formulas), 'formula_count': len(formulas),
+            'formula_caches_checked': True, 'equals_text_cells': text_cells,
+            'equals_text_requires_task_review': bool(text_cells)}
 
 
 def run(command, *, data=None, timeout=30, env=None):
@@ -63,7 +124,7 @@ def prepare_paths(work_root, source, destination):
         raise ValueError('output must be a new directory inside current work outputs')
     if target.exists():
         raise FileExistsError('render destination already exists')
-    if source.suffix.lower() not in ('.docx', '.pptx', '.pdf') or not source.is_file() or not 0 < source.stat().st_size <= MAX_BYTES:
+    if source.suffix.lower() not in ('.docx', '.pptx', '.xlsx', '.pdf') or not source.is_file() or not 0 < source.stat().st_size <= MAX_BYTES:
         raise ValueError('unsupported input format/size')
     return source, target, outputs
 
@@ -81,6 +142,8 @@ def render(work_root, source, destination, gateway):
         office_check(gateway, source.name, data)
     else:
         pdf_check(data)
+    spreadsheet = source.suffix.lower() == '.xlsx'
+    before = xlsx_cells(data) if spreadsheet else None
     target.mkdir(mode=0o700)
     with tempfile.TemporaryDirectory(prefix='.render-', dir=outputs) as scratch_name:
         scratch = Path(scratch_name)
@@ -95,6 +158,11 @@ def render(work_root, source, destination, gateway):
             updated = target / (source.stem + '.docx')
             if source.suffix.lower() == '.docx':
                 office_check(gateway, updated.name, updated.read_bytes())
+            if spreadsheet:
+                updated = target / (source.stem + '.xlsx')
+                updated_data = updated.read_bytes()
+                office_check(gateway, updated.name, updated_data)
+                xlsx_result = check_xlsx_result(before, updated_data)
         else:
             pdf.write_bytes(data)
         pdf_check(pdf.read_bytes())
@@ -108,6 +176,8 @@ def render(work_root, source, destination, gateway):
     result = {'status': 'rendered_not_visually_verified', 'source_sha256': hashlib.sha256(data).hexdigest(),
               'pages': page_count, 'files': {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
                                            for p in sorted(target.iterdir()) if p.is_file()}}
+    if spreadsheet:
+        result['xlsx'] = xlsx_result
     (target / 'render.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     # The setgid outputs directory supplies the existing model/host handoff
     # group. Override service umask only on completed artifacts, never scratch.
@@ -185,6 +255,11 @@ def office_worker(source, destination, stem, scratch):
                     indexes.getByIndex(index).update()
             doc.storeAsURL((target / (stem + '.docx')).as_uri(), props(FilterName='Office Open XML Text', Overwrite=False))
             pdf_filter = 'writer_pdf_Export'
+        elif source.suffix == '.xlsx':
+            doc.calculateAll()
+            doc.storeAsURL((target / (stem + '.xlsx')).as_uri(),
+                           props(FilterName='Calc MS Excel 2007 XML', Overwrite=False))
+            pdf_filter = 'calc_pdf_Export'
         else:
             pdf_filter = 'impress_pdf_Export'
         doc.storeToURL((target / (stem + '.pdf')).as_uri(), props(FilterName=pdf_filter, Overwrite=False))
