@@ -115,6 +115,8 @@ def fictional_budget(path):
         ('预算判断', None, None, '=IF(D6<=110000,"预算内","超预算")'),
         ('误存为文本的公式', '=SUM(D2:D5)'),
         ('正常说明', '= 表示预算口径说明，不是公式'),
+        ('跨表来源价格', None, None, "='依据 v2'!B1"),
+        ('空字符串结果', None, None, '=IF(D6>0,"","")'),
     ):
         sheet.append(row)
     sheet['B9'].data_type = 's'
@@ -128,7 +130,10 @@ def fictional_budget(path):
     sheet.page_setup.paperSize = sheet.PAPERSIZE_A4
     sheet.page_setup.fitToWidth = 1
     sheet.page_setup.fitToHeight = 1
-    sheet.print_area = 'A1:D10'
+    sheet.print_area = 'A1:D12'
+    reference = workbook.create_sheet('依据 v2')
+    reference.append(('虚构 Wiki v2 A 套餐单价', 4080))
+    reference.column_dimensions['A'].width = 32
     workbook.save(path)
 
 
@@ -166,7 +171,7 @@ class RenderBoundaryTests(unittest.TestCase):
                 return result.getvalue()
 
             result = check_xlsx_result(before, with_caches())
-            self.assertEqual(result['formula_count'], 5)
+            self.assertEqual(result['formula_count'], 7)
             self.assertEqual(result['equals_text_cells'], ['虚构婚宴预算!B9', '虚构婚宴预算!B10'])
             with self.assertRaisesRegex(ValueError, 'formulas changed'):
                 check_xlsx_result(before, with_caches(text_formula=True))
@@ -295,6 +300,7 @@ class ActualRenderTests(unittest.TestCase):
                 ('D2', '=B2*C2', 89760), ('D3', '=B3*C3', 3960),
                 ('D6', '=SUM(D2:D5)', 103720), ('D7', '=110000-D6', 6280),
                 ('D8', '=IF(D6<=110000,"预算内","超预算")', '预算内'),
+                ('D11', "='依据 v2'!B1", 4080), ('D12', '=IF(D6>0,"","")', None),
             ):
                 self.assertEqual(formulas.active[address].data_type, 'f')
                 self.assertEqual(formulas.active[address].value, formula)
@@ -304,7 +310,7 @@ class ActualRenderTests(unittest.TestCase):
             self.assertEqual(formulas.active['B9'].value, '=SUM(D2:D5)')
             self.assertEqual(formulas.active['B10'].value, '= 表示预算口径说明，不是公式')
             self.assertEqual(source.read_bytes(), original)
-            self.assertEqual(result['xlsx']['formula_count'], 5)
+            self.assertEqual(result['xlsx']['formula_count'], 7)
             self.assertTrue(result['xlsx']['formula_caches_checked'])
             self.assertEqual(len(result['xlsx']['equals_text_cells']), 2)
             self.assertTrue(result['xlsx']['equals_text_requires_task_review'])
@@ -330,6 +336,33 @@ class ActualRenderTests(unittest.TestCase):
                 render(root, source, root / 'outputs' / 'rejected', os.environ['TEAM_FILES_TEST_GATEWAY'])
             self.assertFalse((root / 'outputs' / 'rejected' / 'render.json').exists())
             self.assertEqual(source.read_bytes(), original)
+
+    def test_xlsx_active_content_is_rejected_before_office_starts(self):
+        self.assertNotEqual(os.geteuid(), 0)
+        deny_unix_sockets()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / 'inputs').mkdir()
+            (root / 'outputs').mkdir()
+            for content in ('external-link', 'macro'):
+                with self.subTest(content=content):
+                    source = root / 'inputs' / f'{content}.xlsx'
+                    workbook = Workbook()
+                    workbook.active['A1'] = '虚构说明'
+                    if content == 'external-link':
+                        workbook.active['A1'].hyperlink = 'https://example.invalid/never-contact'
+                    workbook.save(source)
+                    if content == 'macro':
+                        with zipfile.ZipFile(source, 'a') as package:
+                            package.writestr('xl/vbaProject.bin', b'fictional rejected macro marker')
+                    original = source.read_bytes()
+                    with patch('team_file_render.run', wraps=run) as tools:
+                        with self.assertRaises(RuntimeError):
+                            render(root, source, root / 'outputs' / content, os.environ['TEAM_FILES_TEST_GATEWAY'])
+                    self.assertEqual(tools.call_count, 1)
+                    self.assertEqual(tools.call_args.args[0][1], 'file-check')
+                    self.assertFalse((root / 'outputs' / content).exists())
+                    self.assertEqual(source.read_bytes(), original)
 
     def test_chinese_slides_and_word_toc_revision(self):
         self.assertNotEqual(os.geteuid(), 0, 'acceptance must use an ordinary identity')
@@ -414,7 +447,7 @@ class HandoffRenderTests(unittest.TestCase):
             made = as_user(model_uid, '''
 import json, os, sys
 from pathlib import Path
-from test_team_file_render import fictional_template, deny_unix_sockets
+from test_team_file_render import fictional_template, fictional_budget, deny_unix_sockets
 from team_file_render import render
 assert os.geteuid() == 61001
 assert 'CapEff:\t0000000000000000' in Path('/proc/self/status').read_text()
@@ -427,6 +460,9 @@ for version in (1, 2):
     source = root / 'outputs' / f'source-v{version}.docx'
     fictional_template(source, extra=version == 2)
     render(root, source, root / 'outputs' / f'v{version}', os.environ['TEAM_FILES_TEST_GATEWAY'])
+source = root / 'outputs' / 'budget.xlsx'
+fictional_budget(source)
+render(root, source, root / 'outputs' / 'budget-v1', os.environ['TEAM_FILES_TEST_GATEWAY'])
 ''')
             self.assertEqual(made.returncode, 0, made.stderr)
             checked = as_user(gateway_uid, '''
@@ -452,6 +488,14 @@ for version in (1, 2):
         assert path.stat().st_mode & 0o777 == 0o640
     pages.append(record['pages'])
 assert pages[1] > pages[0]
+budget = root / 'budget-v1'
+record = json.loads((budget / 'render.json').read_text())
+assert record['xlsx']['formula_count'] == 7
+for name, digest in record['files'].items():
+    path = budget / name
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == digest
+    assert path.stat().st_uid == 61001 and path.stat().st_gid == 61002
+    assert path.stat().st_mode & 0o777 == 0o640
 print(json.dumps(pages))
 ''')
             self.assertEqual(checked.returncode, 0, checked.stderr)

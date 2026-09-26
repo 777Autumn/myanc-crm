@@ -153,6 +153,10 @@ def render(work_root, source, destination, gateway):
         pdf = target / (source.stem + '.pdf')
         if office:
             env = {'HOME': str(scratch), 'TMPDIR': str(scratch), 'LANG': 'C.UTF-8', 'PATH': '/usr/bin:/bin', 'SAL_USE_VCLPLUGIN': 'svp'}
+            if spreadsheet:
+                # Bound Calc's import pool on many-core hosts under the same 2 GiB
+                # worker limit; do not relax the sandbox or start an Office server.
+                env['MAX_CONCURRENCY'] = '1'
             run(['/usr/bin/python3', '-I', str(Path(__file__).resolve()), '--office-worker',
                  str(frozen), str(target), source.stem, str(scratch)], timeout=120, env=env)
             updated = target / (source.stem + '.docx')
@@ -291,7 +295,8 @@ def main():
     except FileExistsError:
         parser.exit(1, 'Output directory already exists; preserve it and choose a new directory name '
                     'inside this work outputs; do not create it beforehand. No delivery was attempted.\n')
-    except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired):
+    except (OSError, ValueError, RuntimeError, KeyError, IndexError, TypeError,
+            zipfile.BadZipFile, ET.ParseError, subprocess.TimeoutExpired):
         parser.exit(1, 'Document preparation failed; originals retained. No delivery was attempted.\n')
     print(json.dumps(result, ensure_ascii=False))
 
