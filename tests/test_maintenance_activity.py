@@ -2,7 +2,7 @@
 import json
 import unittest
 
-from ops.maintenance_activity import activity
+from ops.maintenance_activity import activity, log_fields
 
 
 def row(second, event, **fields):
@@ -77,6 +77,35 @@ class MaintenanceActivityTests(unittest.TestCase):
             with self.subTest(text=text):
                 with self.assertRaises(ValueError):
                     activity(text, 200)
+
+    def test_missing_or_unsupported_messages_fail_closed(self):
+        for fields in ({}, {'MESSAGE': None}, {'MESSAGE': [65, 66]}, {'MESSAGE': ''},
+                       {'MESSAGE': '{"msg":null}'}, {'MESSAGE': 'msg=one msg=two'},
+                       {'MESSAGE': '{"msg":"one","msg":"two"}'},
+                       {'MESSAGE': 'level=INFO msg="truncated'}):
+            with self.subTest(fields=fields):
+                with self.assertRaisesRegex(ValueError, '^unsupported_journal_record$'):
+                    activity(json.dumps(dict(__REALTIME_TIMESTAMP='1000000', **fields)), 200)
+
+    def test_json_logfmt_sdk_and_default_go_text(self):
+        fields = {'level': 'INFO', 'msg': 'platform ready', 'project': 'fictional-a'}
+        self.assertEqual(fields, log_fields(json.dumps(fields)))
+        self.assertEqual(fields, log_fields('level=INFO msg="platform ready" project=fictional-a'))
+        self.assertEqual(dict(level='INFO', msg='config loaded', path='/example/config.toml'),
+                         log_fields('2026/01/01 00:00:01 INFO config loaded path=/example/config.toml'))
+        self.assertEqual(dict(level='ERROR', msg='websocket failed', format='sdk'),
+                         log_fields('2026/01/01 00:00:01 [Error] websocket failed'))
+
+    def test_unknown_events_and_changed_known_fields_remain_unclassified(self):
+        known = {'level': 'INFO', 'msg': 'config loaded', 'path': '/example/config.toml'}
+        saved = json.dumps({'__REALTIME_TIMESTAMP': '1000000', 'MESSAGE': json.dumps(known)})
+        self.assertEqual(1, activity(saved, 200)['unclassified'])
+        self.assertEqual(0, activity(saved, 200, known_messages=[known])['unclassified'])
+        self.assertEqual(1, activity(saved.replace('config.toml', 'changed.toml'), 200,
+                                    known_messages=[known])['unclassified'])
+        self.assertGreater(activity(row(1, 'unknown INFO', level='INFO'), 200)['unclassified'], 0)
+        sdk = json.dumps({'__REALTIME_TIMESTAMP': '1000000', 'MESSAGE': '[Error] websocket failed'})
+        self.assertGreater(activity(sdk, 200)['unclassified'], 0)
 
     def test_rejected_intake_is_terminal_but_not_a_completed_model_turn(self):
         reject = row(2, 'file work intake rejected', msg_id='message-a',
