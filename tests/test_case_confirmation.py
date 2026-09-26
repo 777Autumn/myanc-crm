@@ -78,8 +78,6 @@ class CaseConfirmationTests(unittest.TestCase):
     def test_bound_case_accepts_name_separator_and_mock_marker(self):
         self.call('case-update', self.change())
         for source in ('林、陈婚宴追加消息', '仍是模拟婚宴。',
-                       '我这边只看到确认是哪场婚宴的卡，已经点了。',
-                       '请接着把刚才的追加消息存进林陈婚宴，给运营看。',
                        '林、陈婚宴追加消息\n仍是模拟婚宴。桌数改为23桌'):
             with self.subTest(source=source):
                 context = {**self.context, 'source_text': source, 'offer_confirmation': True}
@@ -87,11 +85,56 @@ class CaseConfirmationTests(unittest.TestCase):
                 self.assertEqual('found', read['status'], read)
         request = dict(case_name='林陈婚宴', expected_revision=1, changes=[
             dict(field='桌数', value='23桌', quote=context['source_text'], state='proposed', replaces=True)])
-        saved = self.call('case-update', request, context=context,
-                          principal={**self.principal, 'message_id': 'punctuated-update'})
+        principal = {**self.principal, 'message_id': 'punctuated-update'}
+        pending = self.call('case-update', request, context=context, principal=principal)
+        self.assertEqual('needs_confirmation', pending['status'], pending)
+        self.assertEqual('not_executed', self.call('case-result',
+            dict(command='case-update', input=request), context=context, principal=principal)['status'])
+        saved = self.call('case-update', request, principal=principal,
+                          context=self.confirmed('case-update', request, context, 1))
         self.assertEqual('recorded', saved['status'], saved)
         self.assertEqual('23桌', saved['case']['facts']['桌数']['value'])
-        self.assertEqual(context['source_text'], saved['case']['facts']['桌数']['source']['quote'])
+        self.assertEqual('confirmed_interpretation', saved['case']['facts']['桌数']['source']['origin'])
+        self.assertEqual('林、陈婚宴追加消息\n仍是模拟婚宴。桌数改为23桌', context['source_text'])
+        self.assertEqual(context['source_text'], request['changes'][0]['quote'])
+
+    def assert_source_does_not_write(self, source):
+        saved = self.call('case-update', self.change())
+        context = {**self.context, 'source_text': source, 'original_text': source,
+                   'share_allowed': True, 'offer_confirmation': True}
+        request = dict(case_name='林陈婚宴', expected_revision=1, changes=[
+            dict(field='桌数', value='23桌', quote='23桌', state='proposed')])
+        result = self.call('case-update', request, context=context,
+                           principal={**self.principal, 'message_id': 'non-authorizing-source'})
+        self.assertNotEqual('recorded', result['status'], result)
+        self.assertEqual(saved['case'], self.call('case-read', {'case_name': '林陈婚宴'})['case'])
+
+    def test_bound_store_phrase_does_not_swallow_denial(self):
+        self.assert_source_does_not_write('不要把23桌存进林陈婚宴。')
+
+    def test_bound_record_phrase_does_not_swallow_denial(self):
+        self.assert_source_does_not_write('不要记入林陈婚宴，23桌。')
+
+    def test_bound_generic_question_does_not_swallow_denial(self):
+        self.assert_source_does_not_write('我没说是哪场婚宴，先记23桌。')
+
+    def test_bound_generic_question_does_not_swallow_condition(self):
+        self.assert_source_does_not_write('如果知道是哪场婚宴就记23桌。')
+
+    def test_bound_generic_question_does_not_swallow_quoted_material(self):
+        self.assert_source_does_not_write('材料写着“是哪场婚宴”，23桌仅是样例。')
+
+    def test_bound_mock_marker_does_not_relax_write_authorization(self):
+        self.assert_source_does_not_write('不要改，仍是模拟婚宴，23桌。')
+
+    def test_bound_long_prefaces_still_require_project_clarification(self):
+        self.call('case-update', self.change())
+        for source in ('我这边只看到确认是哪场婚宴的卡，已经点了。',
+                       '请接着把刚才的追加消息存进林陈婚宴，给运营看。'):
+            with self.subTest(source=source):
+                result = self.call('case-read', {'case_name': '林陈婚宴'}, context={
+                    **self.context, 'source_text': source, 'offer_confirmation': True})
+                self.assertEqual('needs_confirmation', result['status'], result)
 
     def test_name_separator_does_not_select_an_unbound_work(self):
         self.call('case-update', self.change())
@@ -124,7 +167,8 @@ class CaseConfirmationTests(unittest.TestCase):
         result = self.call('case-member-add', invitation, context=context)
         self.assertEqual('needs_confirmation', result['status'], result)
         self.call('case-read', {'case_name': '林陈婚宴'}, principal=self.operations)
-        refused = self.call('case-member-add', invitation, context=context, principal=self.operations)
+        refused = self.call('case-member-add', invitation,
+            context={**context, 'source_text': '林陈婚宴'}, principal=self.operations)
         self.assertEqual('project_owner_required', refused['code'], refused)
         current = self.call('case-read', {'case_name': '林陈婚宴'})['case']
         self.assertEqual(saved['case'], current)
