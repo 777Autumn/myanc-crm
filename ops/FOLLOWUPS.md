@@ -1,13 +1,14 @@
 # Tracked delivery and experience follow-ups
 
-Updated 2026-09-26. This ledger distinguishes implemented source, GitHub delivery
+Updated 2026-09-27. This ledger distinguishes implemented source, GitHub delivery
 and online acceptance under [RELEASE.md](RELEASE.md); it is not a deployment receipt.
 
 ## Current checkpoint
 
 The [September 26 natural-work record](releases/2026-09-26-natural-work-live.md)
 contains the latest recorded runtime combination, candidate, installation and
-bounded acceptance evidence:
+bounded acceptance evidence for that completed journey (not the later candidate
+installation and recovery described below):
 
 | Component | Exact recorded source |
 | --- | --- |
@@ -21,6 +22,33 @@ runtime installation. The latest two eight-file Skill updates retained their
 failed original stable windows; later independent read-only observations passed.
 The release record keeps those distinct rather than relabelling the failures.
 
+The later [colloquial trial](acceptance/2026-09-26-colloquial-trial.md) used the
+same combination for its feedback-corrected operations v3. CRM PR92 then merged
+as `482bd97092994e53fd7c3b0f4abfdffa6dc62292`, passed exact merge CI and produced a
+normal candidate. Its original five-file update stopped after four replacements;
+that failed attempt remains recorded. The table above is the journey's source
+baseline, not a claim that all current runtime files still match it. Gateway PR38
+has since merged as `6e7c014ed3ea200007b86a6636fc76a6b9ec5e00`; exact merge CI
+and the new paired candidate passed, including independent verification of 141
+payload hashes. After a fresh preflight stopped on intervening test conversations,
+those activities were reconciled and the three-target cutover was attempted.
+The candidate files are now installed, including the remaining Skill and scoped
+simulation binding. The first stop misclassified a normal shutdown log; the later
+start was protectively paused after a health-check parsing/classification failure.
+Those failed attempts remain recorded separately from the later authorized recovery.
+
+The revised startup checker passed 17 offline checks and a fresh read-only
+preparation. Independent review then blocked execution because selecting a fresh
+receipt directory for this candidate would bypass the consumed-start rule in
+[MAINTENANCE_START.md](MAINTENANCE_START.md). The Owner subsequently approved one
+explicit recovery exception for the exact installed candidate, with no file,
+configuration or permission changes and no automatic retry. After the scoped
+authorization review, one start completed a 127.3-second, 22-sample stable window:
+all six entries were ready, the ordinary receiver was unique, installed controls
+matched, and business stores and saved sessions were unchanged. The candidate is
+now installed and running; its frozen backup trial started at 18:10 UTC; the first result is pending. Earlier failures,
+protective pause and the review correction remain distinct from this recovery.
+
 | Capability / follow-up | Current evidence and limit |
 | --- | --- |
 | File production and revision | [Word/Excel natural work](releases/2026-09-26-natural-work-live.md) and [PPTX/PDF/PNG plus a fictional Word template](releases/2026-09-23-banquet-formats.md) were actually opened within their recorded journeys. Originals and versions remain; real complex templates and reliable first-pass quality remain unverified. |
@@ -28,7 +56,8 @@ The release record keeps those distinct rather than relabelling the failures.
 | Natural wording and project collaboration | [Specified two-account journeys](releases/2026-09-26-natural-work-live.md) cover vague requests, saved supplements, invitations, private revisions, project switching and a typo in an already bound work. Earlier refusals and corrections are retained; this is not arbitrary-expression coverage. |
 | Saved-file checks and business review | Explanation cells mistaken for formulas were caught and corrected before delivery, with valid formulas retained. Autonomous business review still failed in v7; v8 fixed the price difference after feedback but retained an unsupported sales-status inference. v9 corrected that inference and its notes after a second employee feedback, then reread all three sheets. Employee review is still required; these outcomes are not a first-pass success. |
 | CRM and reminders | Earlier deployment and acceptance states remain in the historical table below, including the [formal CRM workbench update](releases/2026-09-17-crm-overview.md). Simulated banquet success does not establish formal CRM access isolation or clear those separate pending checks. |
-| New colloquial trial | [September 26 operator-run simulation](acceptance/2026-09-26-colloquial-trial.md) remains partial. Sales v1/v2 required a configuration-only repair and clarifications. Operations retrieved the right project/files and calculated the time shortfall, but its first handoff reversed source chronology and mislabelled a draft as decided; feedback repair is pending. The specified private snippets were absent from this handoff's inputs, shared record and outputs. PR92 contains an uninstalled narrow source candidate; no general first-pass success is claimed. CRM sandbox testing is blocked by the active formal-resource selector; no formal query/write or resource switch occurred. |
+| New colloquial trial | [September 26 operator-run simulation](acceptance/2026-09-26-colloquial-trial.md) remains partial overall. Sales v1/v2 required a configuration-only repair and clarifications. Operations v1 reversed source chronology and mislabelled a draft as decided; first-feedback v2 still misattributed customer requests and invented a written-confirmation prerequisite. Second-feedback v3 passed bounded content and actual Word/Excel viewing, including the budget, time shortfall and cross-page repeated header. This used the old runtime before candidate installation; it does not establish first-pass reliability or a new-Skill regression. Three correction items/four sends and the failures remain recorded. Specified private snippets were absent only within the bounded evidence. CRM sandbox testing remains blocked by the active formal-resource selector; no formal query/write or resource switch occurred. |
+| Candidate installation, recovery and idle event diagnosis | PR92's original 4/5 installation failure and the three unknown unsolicited INFO records remain historical failures. Exact business-card reconciliation did not fix the general classifier. [Gateway PR38](https://github.com/77AutumN/cc-connect-anc/pull/38) independently fixes empty metadata starting a false turn and passed merge CI/candidate delivery; it does not prove the historical INFO cause. Candidate files are installed; after a failed startup health check and protective pause, the Owner approved one exact recovery exception. That single start passed its 127.3-second stable window with unchanged business stores and saved sessions. The frozen backup trial is in progress; no business pass is recorded. Preserve old failures; neither recovery nor the exception establishes business acceptance or authorizes further retries. |
 
 The current knowledge adapter requires exactly six configured and attached
 runtime entries ([configuration check](https://github.com/77AutumN/cc-connect-anc/blob/7bc3e8b9cba91586926cfe1d60f388b5acd955a3/actionhost/teambrain/adapter.go#L67-L85),
