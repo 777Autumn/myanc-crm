@@ -11,10 +11,15 @@ CI and normal paired candidate construction. One controlled installation upgrade
 the shared CLI to 2.1.283, with Opus 5.5 / low explicit on four test entries and
 the other two defaults preserved. Its 127.834-second stable window passed without
 recovery. Actual invocation/response metadata verifies Opus 5.5 / low in a resumed
-sales session. CRM business runtime remains `482bd97`; gateway and knowledge below
-are unchanged. The new sales first draft mislabelled group files as private, and
+sales session and a new operations session. CRM business runtime remains
+`482bd97`; gateway and knowledge below are unchanged. The new sales first draft mislabelled group files as private, and
 the first proposed update omitted old pending facts; one employee correction
-produced business-correct revised files. Operations/private acceptance is pending.
+produced business-correct revised files. Operations first Excel stored five
+formulas as text; one feedback produced a correctly calculating file. A later
+readback's timing explanation required another correction. The private reminder
+did not change shared case/artifact records. These are feedback-corrected results,
+not reliable first-pass quality. Gateway PR39 corrects the observed group/private
+prompt mismatch; it is merged but not installed in this trial.
 These results do not clear the earlier CRM sandbox or document-quality limits.
 
 The later [colloquial trial](acceptance/2026-09-26-colloquial-trial.md) records the
