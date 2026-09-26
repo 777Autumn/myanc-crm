@@ -77,8 +77,9 @@ Delivery states have different evidence:
 
 - A file that was generated and locally checked is ready, not yet sent.
 - `submitted`: the host recorded a send attempt; Feishu acceptance is unconfirmed.
-- `accepted` with `message_receipt`: Feishu accepted the file message. Say the
-  file was submitted to Feishu; employee receipt/opening still needs real feedback.
+- `accepted` with `message_receipt`: Feishu accepted the file message. Tell the
+  colleague which requested results were sent and what changed, in ordinary
+  language such as “方案和预算表已发到这里”. Keep receipt details internal.
 - `failed`: the transport established that no recipient-visible message was
   accepted. Preserve the generated file and report the failure.
 - `unknown`: the request may have succeeded. Keep the delivery ID for an operator
@@ -91,3 +92,7 @@ result; they do not send again. Pending/unknown delivery prevents another versio
 from hiding the uncertain attempt. A service restart preserves unknown outcomes.
 Employee receipt, ability to open, content correctness and actual waiting time
 are separate acceptance observations, not facts inferred from an API receipt.
+Check these distinctions internally; they are not a disclaimer to append to every
+successful delivery. State actual partial failures, unknown sends or unverified
+content plainly, together with the useful next step. For an unknown send, for
+example: “这份文件是否发出还没确认，我先不重复发送，核实后再继续。”

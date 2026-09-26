@@ -27,7 +27,7 @@ description: 读取员工选定的文档、表格、PDF和图片，制作或修�
 3. Run generation code through `/opt/team-files/bin/python` stdin, keeping the
    managed workspace as cwd and outputs inside this work's output directory.
    Check the protocol's format limits first. For every Word document (including
-   an ordinary draft), slides, posters or PDF/scanned materials, read and follow
+   an ordinary draft), Excel workbook, slides, posters or PDF/scanned materials, read and follow
    [document production](references/production.md), including rendering and
    whole-bundle revision. Unsupported content
    requires a static source or a separately prepared compatible file. Preserve
@@ -40,9 +40,9 @@ description: 读取员工选定的文档、表格、PDF和图片，制作或修�
    layout with available tools. Read all relevant sheets/cells, Word paragraphs
    and table cells, including changed rows, totals, statuses and sources. File
    dimensions, a hash or a first-rows preview cannot establish content correctness.
-   For Excel, check long titles/notes against merged widths, wrapping and row heights;
-   inspect an actual preview when available, and state when display remains unverified. Fix omissions
-   and reread the saved revision before delivery. Report any unverified rendering. For byte hashes,
+   Apply the production reference's saved-cell and visual checks, including Excel.
+   Fix omissions and reread the saved revision before delivery; distinguish inspected
+   output from any part whose rendering remains unverified. For byte hashes,
    use the installed `sha256sum -- '<absolute artifact path>'` on paths belonging
    to this work; shell-quote each path. Reuse that result until the file changes,
    then deliver the exact file/version through the controlled client. Avoid

@@ -21,7 +21,7 @@ adding a template to git does not enable it on any of the six live environments.
 
 `team-files-requirements.txt` pins the existing Python packages plus presentation,
 image and PDF libraries. `team-files-system-packages.txt` records the Debian 12
-Writer/Impress, UNO, Poppler and CJK-font versions actually tested. Preserve the
+Writer/Impress/Calc, UNO, Poppler and CJK-font versions actually tested. Preserve the
 existing package versions; resolve and record the installation transaction before
 the authorized maintenance window. These files do not run an installer.
 
@@ -40,7 +40,12 @@ with the current work root, selected input and a new output subdirectory; its
 binary for offline checks, not a sending endpoint. The script first invokes the
 gateway's read-only `file-check`, then uses a private profile and the installed
 LibreOfficeKit inside the worker, refreshes Word fields/indexes through UNO,
-exports PDF and renders every page. No Unix socket or sandbox exception is needed. The worker
+recalculates XLSX into a new editable copy, exports PDF and renders every page.
+Calc uses `MAX_CONCURRENCY=1` within the existing resource limits. Saved formulas
+must retain their type and expression; changed formulas, error cells or missing
+caches fail preparation. Equals-prefixed text is reported for task-specific review,
+never silently converted. PDF previews show print layout; inspect the employee's
+spreadsheet interface separately. No Unix socket or sandbox exception is needed. The worker
 uses `/usr/bin/python3` with distro UNO; the caller uses the locked virtualenv.
 Timeout cleanup targets only the spawned process group. It rejects root execution.
 Office and preview workers share memory/CPU/file-size limits. Completed output
