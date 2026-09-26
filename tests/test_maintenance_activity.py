@@ -107,6 +107,12 @@ class MaintenanceActivityTests(unittest.TestCase):
         sdk = json.dumps({'__REALTIME_TIMESTAMP': '1000000', 'MESSAGE': '[Error] websocket failed'})
         self.assertGreater(activity(sdk, 200)['unclassified'], 0)
 
+    def test_warning_or_error_cannot_masquerade_as_completed_activity(self):
+        for level in ('WARN', 'ERROR'):
+            with self.subTest(level=level):
+                rows = [incoming(), row(2, 'turn complete', level=level, msg_id='message-a')]
+                self.assertGreater(self.check(rows)['unclassified'], 0)
+
     def test_rejected_intake_is_terminal_but_not_a_completed_model_turn(self):
         reject = row(2, 'file work intake rejected', msg_id='message-a',
                      platform='feishu', session='session-a', reason='file_work_association_required')

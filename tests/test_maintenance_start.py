@@ -1,7 +1,11 @@
 import copy
+from concurrent.futures import ThreadPoolExecutor
+import hashlib
 import importlib.util
+import json
 import os
 from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -271,6 +275,194 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(failure['pause_error'], 'TimeoutError')
         self.assertFalse(failure['last_sample']['expected_exe'])
         self.assertNotIn('private credential', str(caught.exception))
+
+
+class RecoveryTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.backend = FakeSystemd([sample(), sample()])
+        self.now = 0
+        self.controls_count = 0
+        self.snapshots = dict(controls_sha256='a' * 64, business_state_sha256='b' * 64,
+                              installed_manifest_sha256='e' * 64)
+        attempt = dict(candidate_sha256='c' * 64, manifest_sha256='d' * 64,
+                       installed_manifest_sha256='e' * 64)
+        request = dict(unit=m.UNIT, identity_sha256=hashlib.sha256(
+            json.dumps(m.unit_identity(sample('inactive')), sort_keys=True).encode()).hexdigest())
+        self.expected = dict(attempt,
+                             attempt_sha256=self.put('attempt.json', attempt),
+                             start_request_sha256=self.put('start-requested.json', request),
+                             failure_sha256=self.put('failed.json', {'category': 'fixture_health_failure'}),
+                             failure_receipt='failed.json')
+        self.diagnosis = dict(self.expected, **self.snapshots,
+                              cause='Fixture classifier rejected known shutdown after a verified stop.',
+                              maintainer_reference='fixture-maintainer-review')
+        self.expected['diagnosis_sha256'] = self.put('recovery-diagnosis.json', self.diagnosis)
+
+    def put(self, name, value):
+        raw = json.dumps(value, sort_keys=True).encode()
+        (self.root / name).write_bytes(raw)
+        return hashlib.sha256(raw).hexdigest()
+
+    def read(self, name):
+        return (self.root / name).read_bytes()
+
+    def record(self, name, value):
+        with (self.root / name).open('xb') as stream:
+            stream.write(json.dumps(value, sort_keys=True).encode())
+            stream.flush()
+            os.fsync(stream.fileno())
+
+    def controls(self):
+        self.controls_count += 1
+
+    def sleep(self, seconds):
+        self.now += seconds
+
+    def recover(self, **overrides):
+        args = dict(record=self.record, read_record=self.read, verify_controls=self.controls,
+                    verify_reconciled=lambda: dict(self.snapshots), expected=self.expected,
+                    backend=self.backend, timeout=2, clock=lambda: self.now, sleep=self.sleep)
+        args.update(overrides)
+        return m.recover_once(**args)
+
+    def test_health_failure_recovers_once_and_retains_original_receipts(self):
+        original = {p.name: p.read_bytes() for p in self.root.iterdir()}
+        self.assertEqual(self.recover()['pid'], '42')
+        self.assertEqual(self.backend.commands, ['start'])
+        self.assertTrue((self.root / 'recovery-started.json').is_file())
+        for name, raw in original.items():
+            self.assertEqual(self.read(name), raw)
+        with self.assertRaisesRegex(m.StartError, 'recovery_already_requested'):
+            self.recover()
+        self.assertEqual(self.backend.commands, ['start'])
+
+    def test_start_failure_can_be_the_bound_failure(self):
+        self.expected['failure_receipt'] = 'start-failed.json'
+        self.expected['failure_sha256'] = self.put('start-failed.json', {'failed': True, 'category': 'StartError'})
+        self.diagnosis.update({key: value for key, value in self.expected.items() if key != 'diagnosis_sha256'})
+        self.expected['diagnosis_sha256'] = self.put('recovery-diagnosis.json', self.diagnosis)
+        self.recover()
+        self.assertEqual(self.backend.commands, ['start'])
+
+    def test_missing_changed_or_unbound_receipts_reject_before_consumption(self):
+        for name in ('attempt.json', 'start-requested.json', 'failed.json', 'recovery-diagnosis.json'):
+            with self.subTest(name=name):
+                old = self.read(name)
+                (self.root / name).write_bytes(old + b' ')
+                with self.assertRaisesRegex(m.StartError, 'recovery_receipt_changed'):
+                    self.recover()
+                (self.root / name).unlink()
+                with self.assertRaises(FileNotFoundError):
+                    self.recover()
+                (self.root / name).write_bytes(old)
+        self.assertEqual(self.backend.commands, [])
+        self.assertFalse((self.root / 'recovery-requested.json').exists())
+
+    def test_candidate_or_unknown_cause_cannot_be_relabelled(self):
+        self.diagnosis['candidate_sha256'] = 'f' * 64
+        self.expected['diagnosis_sha256'] = self.put('recovery-diagnosis.json', self.diagnosis)
+        with self.assertRaisesRegex(m.StartError, 'recovery_diagnosis_unbound'):
+            self.recover()
+        self.diagnosis['candidate_sha256'] = self.expected['candidate_sha256']
+        self.diagnosis['cause'] = ''
+        self.expected['diagnosis_sha256'] = self.put('recovery-diagnosis.json', self.diagnosis)
+        with self.assertRaisesRegex(m.StartError, 'recovery_not_diagnosed'):
+            self.recover()
+        self.assertEqual(self.backend.commands, [])
+
+    def test_actual_reconciliation_failure_blocks_pending_business_or_unknown_send(self):
+        for reason in ('unfinished_work', 'unknown_delivery', 'installed_inventory_not_new:partial',
+                       'installed_inventory_not_new:unknown', 'unexplained_business_change'):
+            def check():
+                raise ValueError(reason)
+            with self.subTest(reason=reason), self.assertRaisesRegex(ValueError, reason):
+                self.recover(verify_reconciled=check)
+        with self.assertRaisesRegex(m.StartError, 'reconciliation_changed'):
+            self.recover(verify_reconciled=lambda: True)
+        with self.assertRaisesRegex(m.StartError, 'reconciliation_changed'):
+            self.recover(verify_reconciled=lambda: dict(self.snapshots, installed_manifest_sha256='f' * 64))
+        self.assertEqual(self.backend.commands, [])
+
+    def test_active_duplicate_or_changed_unit_is_rejected(self):
+        for state in (sample(), sample('inactive', receivers=['99']),
+                      sample('inactive', ExecStart=exec_status(argv='replacement'))):
+            self.backend.state = state
+            with self.subTest(state=state), self.assertRaises(m.StartError):
+                self.recover()
+        self.assertEqual(self.backend.commands, [])
+
+    def test_changed_controls_do_not_consume_or_start(self):
+        def changed():
+            raise ValueError('frozen_controls_changed')
+        with self.assertRaisesRegex(ValueError, 'frozen_controls_changed'):
+            self.recover(verify_controls=changed)
+        self.assertFalse((self.root / 'recovery-requested.json').exists())
+        self.assertEqual(self.backend.commands, [])
+
+    def test_state_changes_after_marker_consume_the_allowance(self):
+        checks = 0
+        def check():
+            nonlocal checks
+            checks += 1
+            return self.snapshots if checks == 1 else dict(self.snapshots, business_state_sha256='f' * 64)
+        with self.assertRaisesRegex(m.StartError, 'reconciliation_changed'):
+            self.recover(verify_reconciled=check)
+        self.assertTrue((self.root / 'recovery-requested.json').exists())
+        self.assertTrue((self.root / 'recovery-failed.json').exists())
+        with self.assertRaisesRegex(m.StartError, 'recovery_already_requested'):
+            self.recover()
+        self.assertEqual(self.backend.commands, [])
+
+    def test_marker_write_uncertainty_never_starts_or_grants_another_attempt(self):
+        def uncertain(name, value):
+            self.record(name, value)
+            raise OSError('disk sync outcome unknown')
+        with self.assertRaises(OSError):
+            self.recover(record=uncertain)
+        with self.assertRaisesRegex(m.StartError, 'recovery_already_requested'):
+            self.recover()
+        self.assertEqual(self.backend.commands, [])
+
+    def test_marker_save_failure_before_persistence_never_starts(self):
+        def full(name, value):
+            raise OSError('disk full')
+        with self.assertRaises(OSError):
+            self.recover(record=full)
+        self.assertEqual(self.backend.commands, [])
+
+    def test_concurrent_recovery_has_at_most_one_start(self):
+        def run():
+            try:
+                return self.recover()
+            except (m.StartError, FileExistsError):
+                return None
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(lambda _: run(), range(2)))
+        self.assertEqual(sum(result is not None for result in results), 1)
+        self.assertEqual(self.backend.commands, ['start'])
+
+    def test_interruption_keeps_marker_and_stops_through_original_helper(self):
+        self.backend.sequence = [sample(exe=None, receivers=[])]
+        def interrupt(seconds):
+            raise KeyboardInterrupt()
+        with self.assertRaises(m.StartError):
+            self.recover(sleep=interrupt)
+        self.assertEqual(self.backend.commands, ['start', 'stop'])
+        self.assertTrue((self.root / 'recovery-start-failed.json').exists())
+        with self.assertRaisesRegex(m.StartError, 'recovery_already_requested'):
+            self.recover()
+
+    def test_second_start_error_is_recorded_and_cannot_retry(self):
+        self.backend.start_error = TimeoutError('untrusted command output')
+        with self.assertRaises(m.StartError):
+            self.recover()
+        self.assertEqual(self.backend.commands, ['start', 'stop'])
+        with self.assertRaisesRegex(m.StartError, 'recovery_already_requested'):
+            self.recover()
+        self.assertEqual(self.backend.commands, ['start', 'stop'])
 
 
 if __name__ == '__main__':

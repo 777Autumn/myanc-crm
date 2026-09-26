@@ -189,3 +189,99 @@ def start_once(record, verify_controls, *, backend=None, timeout=40,
             failure['receipt_failed'] = True
         error = StartError(json.dumps(failure, sort_keys=True))
         raise error from None
+
+
+def recover_once(record, read_record, verify_controls, verify_reconciled, *, expected,
+                 backend=None, timeout=40, clock=time.monotonic, sleep=time.sleep):
+    """One explicit, diagnosed recovery in the *original* protected receipt root.
+
+    Both receipt callbacks are bound to that same root. read_record returns exact
+    bytes; record retains start_once's durable, exclusive-create contract.
+    verify_reconciled is trusted maintenance code, never Bot input: it must
+    freshly check the complete installed manifest, controls/permissions, explained
+    business changes, no unfinished work and no unknown deliveries. It returns
+    the frozen controls_sha256, business_state_sha256 and installed_manifest_sha256
+    from those actual checks (the last is inspect_inventory's inventory_sha256).
+    All application health and stable-window checks still belong to the caller.
+    """
+    fields = {'attempt_sha256', 'start_request_sha256', 'failure_sha256',
+              'diagnosis_sha256', 'candidate_sha256', 'manifest_sha256',
+              'installed_manifest_sha256', 'failure_receipt'}
+    require(isinstance(expected, dict) and set(expected) == fields, 'invalid_recovery_binding')
+    for key in fields - {'failure_receipt'}:
+        require(isinstance(expected[key], str)
+                and re.fullmatch('[0-9a-f]{64}', expected[key]) is not None, 'invalid_recovery_digest')
+    require(expected['failure_receipt'] in ('failed.json', 'start-failed.json'),
+            'invalid_failure_receipt')
+    require(0 < timeout <= 40, 'invalid_timeout')
+    try:
+        read_record('recovery-requested.json')
+    except FileNotFoundError:
+        pass
+    else:
+        raise StartError('recovery_already_requested')
+
+    def read_bound(name, digest):
+        raw = read_record(name)
+        require(isinstance(raw, bytes) and hashlib.sha256(raw).hexdigest() == digest,
+                'recovery_receipt_changed')
+        try:
+            value = json.loads(raw)
+        except (UnicodeError, ValueError):
+            raise StartError('invalid_recovery_receipt') from None
+        require(isinstance(value, dict), 'invalid_recovery_receipt')
+        return value
+
+    attempt = read_bound('attempt.json', expected['attempt_sha256'])
+    request = read_bound('start-requested.json', expected['start_request_sha256'])
+    failure = read_bound(expected['failure_receipt'], expected['failure_sha256'])
+    diagnosis = read_bound('recovery-diagnosis.json', expected['diagnosis_sha256'])
+    require(all(attempt.get(key) == expected[key] for key in
+                ('candidate_sha256', 'manifest_sha256', 'installed_manifest_sha256')),
+            'recovery_candidate_changed')
+    require(request.get('unit') == UNIT and isinstance(request.get('identity_sha256'), str),
+            'invalid_original_start_request')
+    require(isinstance(failure.get('category'), str) and bool(failure['category']),
+            'invalid_original_failure')
+    require(all(diagnosis.get(key) == expected[key] for key in fields - {'diagnosis_sha256'}),
+            'recovery_diagnosis_unbound')
+    require(all(isinstance(diagnosis.get(key), str) and diagnosis[key].strip()
+                for key in ('cause', 'maintainer_reference')), 'recovery_not_diagnosed')
+    snapshots = {key: diagnosis.get(key) for key in
+                 ('controls_sha256', 'business_state_sha256', 'installed_manifest_sha256')}
+    require(all(isinstance(value, str) and re.fullmatch('[0-9a-f]{64}', value)
+                for value in snapshots.values()), 'invalid_reconciliation_snapshot')
+    backend = backend or Systemd()
+
+    def reconciled():
+        # Recheck the immutable bindings as well as live state immediately before
+        # consuming the existing start helper. A failed second check spends the
+        # recovery allowance; it cannot become an automatic retry path.
+        read_bound('attempt.json', expected['attempt_sha256'])
+        read_bound('start-requested.json', expected['start_request_sha256'])
+        read_bound(expected['failure_receipt'], expected['failure_sha256'])
+        read_bound('recovery-diagnosis.json', expected['diagnosis_sha256'])
+        verify_controls()
+        require(verify_reconciled() == snapshots, 'reconciliation_changed')
+        state = backend.sample()
+        identity = unit_identity(state)
+        identity_sha = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
+        require(identity_sha == request['identity_sha256'], 'recovery_unit_changed')
+        require(state['ActiveState'] == 'inactive' and state['MainPID'] == '0'
+                and not state['receivers'], 'service_not_stopped')
+
+    reconciled()
+    # Atomic non-overwrite creation is the concurrency guard. Never remove this
+    # marker, even if its writer raises after persistence or the process dies.
+    record('recovery-requested.json', dict(expected, **snapshots, time=time.time(), unit=UNIT))
+    try:
+        reconciled()
+        return start_once(lambda name, payload: record('recovery-' + name, payload),
+                          verify_controls, backend=backend, timeout=timeout, clock=clock, sleep=sleep)
+    except BaseException as exc:
+        try:
+            record('recovery-failed.json', {'failed': True, 'category': type(exc).__name__,
+                                            'reconciliation_required': True})
+        except BaseException:
+            pass  # The consumed marker remains authoritative even without this receipt.
+        raise

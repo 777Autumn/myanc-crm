@@ -81,6 +81,8 @@ def parse_journal(journal, now):
     for line in journal.splitlines():
         try:
             record = json.loads(line, object_pairs_hook=_object)
+            if not isinstance(record, dict):
+                raise ValueError('unsupported_journal_record')
             stamp = int(record['__REALTIME_TIMESTAMP'])
             fields = log_fields(record.get('MESSAGE'))
         except (KeyError, TypeError, ValueError):
@@ -100,8 +102,9 @@ def activity(journal, now, *, known_messages=()):
 
     active, questions = {}, {}
     received, completed, rejected = set(), set(), set()
-    unknown = sum(fields['msg'] not in EVENTS and (log_key(fields) not in known
-                  or fields.get('level') in {'WARN', 'ERROR'}) for _, fields in all_rows)
+    unknown = sum(fields.get('level') in {'WARN', 'ERROR'} or
+                  (fields['msg'] not in EVENTS and log_key(fields) not in known)
+                  for _, fields in all_rows)
     callbacks = []
     for stamp, fields in rows:
         event = fields['msg']
