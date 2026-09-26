@@ -11,7 +11,7 @@ evidence; successful retries are recorded separately.
 | Repository | Exact runtime source | PR / exact merge CI |
 | --- | --- | --- |
 | Gateway | `7bc3e8b9cba91586926cfe1d60f388b5acd955a3` | [PR37](https://github.com/77AutumN/cc-connect-anc/pull/37), [CI](https://github.com/77AutumN/cc-connect-anc/actions/runs/36192628195) |
-| CRM | `98ce59012e5e9adfe662d5e5c20e545943beaf3b` | [PR90](https://github.com/77AutumN/myanc-crm/pull/90), [CI](https://github.com/77AutumN/myanc-crm/actions/runs/36196669117) |
+| CRM | `d4738b512fd0f6810b31981dd312d2570a1fc0fe` | [PR91](https://github.com/77AutumN/myanc-crm/pull/91), [CI](https://github.com/77AutumN/myanc-crm/actions/runs/36213527344) |
 | Knowledge, unchanged | `88a60ba60a634fe3d6b0f68f91de326b19a39b30` | [CI](https://github.com/77AutumN/myanc-team-brain/actions/runs/34704220632) |
 
 The exact heads/bases passed separate Spec and Standards AI reviews and the
@@ -116,8 +116,8 @@ were opened in Feishu. Nevertheless, a retained note still says the decoration
 difference is 5000 rather than 6000; the workbook omits budget overruns 6680/12680;
 and it still asserts that sales has not produced a handoff without evidence.
 The saved-cell readback already contained these errors. The run did not reload
-the updated Skill body; whether that explains the missed instructions is under
-investigation, not an established complete diagnosis.
+the updated Skill body; at that checkpoint its contribution to the missed
+instructions was unresolved, not an established complete diagnosis.
 
 The concurrent new-work request received an ordinary-language rejection saying
 that the new work had not started. It entered neither the saved queue nor the
@@ -280,8 +280,9 @@ reviews passed. Two new readback checks failed on the old source; all nine final
 handoff checks and four runtime-Skill checks passed. The Standards finding on
 nested tables was reproduced and fixed before final review.
 [PR CI](https://github.com/77AutumN/myanc-crm/actions/runs/36196398586) and the
-exact merge CI in the runtime table passed. The normal candidate at that table's
-three exact sources is `candidate-handoff-readback.tgz`, SHA-256
+exact [merge CI](https://github.com/77AutumN/myanc-crm/actions/runs/36196669117)
+passed at CRM `98ce59012e5e9adfe662d5e5c20e545943beaf3b`, paired with the unchanged
+gateway and knowledge above. Its normal candidate is `candidate-handoff-readback.tgz`, SHA-256
 `81ade17422d1bf493fdd65d2943f63e3d362a88c62abd23c93e5662076ae31cc`.
 All 139 file hashes and seven paired journeys passed. The existing toolchain is
 unchanged; CRM ran 398 tests with eight Windows skips and 18 passing spikes,
@@ -328,7 +329,121 @@ decoration difference instead of 6000, and unsupported claims that sales has not
 produced a handoff. Both statements were present in the complete checker result,
 so absence of sheet content no longer explains this attempt. Independent Spec
 and Standards inspections retain this as a partial result. Neither the operator
-nor reviewers repaired the model's artifact. Overall closeout remains incomplete.
+nor reviewers repaired the model's artifact. Overall closeout was incomplete at
+this v6 checkpoint.
+
+## Separate evidence-based content review
+
+[PR91](https://github.com/77AutumN/myanc-crm/pull/91) removes the checker's broad
+zero-findings sentence and explicitly reports business review as pending. The
+existing Skill requires a subsequent, separate read-only check of saved claims:
+statement location, actual operands or source, calculation/evidence and whether
+correction is needed. Retained narrative is included. This changes guidance,
+not host-enforced delivery rules; no semantic validator or dependency was added.
+
+Reviewed base `98ce59012e5e9adfe662d5e5c20e545943beaf3b`, head
+`70a7614c450c08abc32824fdaa5f2c25be11a519`; independent Spec and Standards AI
+reviews passed. Nine handoff and four runtime-Skill checks passed, including a
+synthetic file whose technical findings are zero while business review stays
+pending and bytes remain unchanged. [PR CI](https://github.com/77AutumN/myanc-crm/actions/runs/36213406257),
+gated merge and exact merge CI passed; the reviewed and merged trees match.
+The runtime table gives the exact new source combination.
+
+Normal candidate `candidate-handoff-review.tgz`, SHA-256
+`4695e64120ed0d5dc27bef0779de891c04f6a610213b71313ec75c3d34da1455`,
+contains 139 verified files. All seven paired journeys passed with that exact
+combination; toolchain and platform skip counts are unchanged. Only the checker,
+Skill and generated Wiki SOURCE metadata differ; the latter is not installed.
+
+A new, separately frozen eight-file update preserved permissions, the service
+instance, all protected controls and existing records. It also encountered one
+late INFO event during its stable window and stopped with all eight files written.
+Both consumed installers retain their own failure and absent healthy receipt.
+Independent audits confirmed only the full journal hash changed, with no new
+native-session record, employee message, delivery or other observed state change.
+The event type remains unknown; recurrence after file replacement suggests an
+association but does not establish its cause. No automatic reinstall or service
+restart was used. A separately reviewed complete read-only window then passed:
+129.9 seconds, 18 samples, 145 protected paths, eight installed targets, seven
+stores and six sessions remained stable. Independent verification matched the
+exact script, frozen inputs and full journal baseline, and rechecked both original
+failures and absent healthy receipts. This establishes current post-install
+stability, not success of either original installation window. The new receipt
+SHA-256 is `08be1eec0ccd9bcc21346a1a6fe0ffa435860d50ff2d8a998c26288a3d1955aa`;
+independent Standards report SHA-256 is
+`bf9e98dcfe078b9e8594b05d760d621fec1dd794cca6509e1cc55ba1d2bca1ee`.
+The real v7 request changed only the private assumption to 22 tables, keeping the
+80000 budget. It received one accepted delivery in the original work; output,
+snapshot and local copy SHA-256:
+`29f9ed7b4b239ebeec93e61880d9e52063e332e21f85997a4cdc5428bd2b3fe1`.
+All three sheets were opened in Feishu. Seven valid formulas give meal 89760,
+wine 3960, subtotal 98720, basic/upgrade totals 103720/109720 and overruns
+23720/29720. Shared records, five shared artifacts and v1-v6 originals remain.
+
+The two retained narrative defects still **failed**. Claude truncated checker
+output with `tail -5`, received its pending-review instruction, but used the
+next separate read-only call on the budget sheet alone. The actual trace contains
+one workbook save with the old execution narrative and no later correction or
+save before delivery. It supports neither a failed save after correction nor
+editing a different file. The final message describes the editable table-count
+cell and budget; it does not claim to have corrected the execution narrative.
+PR91's source checks passed, but its intended complete autonomous business review
+was not demonstrated. Independent Spec/Standards report hashes are respectively
+`9e334474c976f7c4e23792b2c8166a1b68e2884bef631647e4bff745937e69f6` and
+`6689abae8947874b153722cb4b895a5712d2529cc5213e44b625e39f35021be3`.
+
+## Feedback-driven repair, separate from autonomous review
+
+The employee identified the mismatch and asked for the source of the sales-status
+statement, without supplying the correct number, cell coordinates, commands or
+Skill names. No source or runtime change occurred between these feedback turns.
+
+The first feedback produced v8, SHA-256
+`e0e3e8c2e6156b7cb3c5b1cae428c43d075ae9d8b346fd2df649f35fc301fdc0`.
+All three actual sheets were opened. The decoration difference became 6000 in
+the checklist and a new budget formula; other budget values stayed correct.
+The sales-status row admitted its claim was an inference from the pre-sales
+stage and lack of imported documents, marking it unconfirmed. This still did not
+establish what sales had done, and a separate note retained the unqualified claim
+that no formal handoff existed. Both independent reviewers retained a partial
+result; feedback fixed the difference, not all unsupported assertions.
+
+A second ordinary feedback pointed out the remaining guess and unchanged note,
+asking to retain only supported facts and mark unknowns for verification. Any
+success is recorded as a second-feedback repair, not a first-pass or autonomous
+check. The delivered v9 has SHA-256
+`f4d775aeb568dc47a98803ef311d731d03e78c183d9943ca8939b21b7200fbd0`.
+All three actual sheets were opened in Feishu. The checklist retains the correct
+6000 difference and now states that the available facts cannot establish whether
+sales completed a handoff; its status is unknown, requiring verification. The old
+unqualified assertion in the note is explicitly withdrawn, not retained as a
+current conclusion. Budget amounts and the private 22-table assumption are
+unchanged. The original and v1-v8 snapshots and saved outputs remain intact.
+The actual run saved those changes and then reopened all three sheets in a
+separate read-only call before one accepted delivery. The checker output itself
+was still truncated by the model; the later complete actual-file read supplies
+the review evidence for this attempt. Both shared project bodies and all five
+shared artifact records stayed unchanged. Actual source, identity, quoted v8 and
+original work matched; no private synchronization occurred.
+
+This completes these two corrections after **two employee feedback turns**.
+The specified natural-work journeys, technical formula/text correction and
+feedback-driven revision are distinct from reliable autonomous business review.
+The latter remains **unverified/failed in the observed v7 attempt**: PR91's
+guidance did not make Claude reliably read all narrative before delivery. These
+results support the scoped two-account simulated workflow with employee review,
+not first-pass accuracy or removal of human checking. No further checking
+platform, delivery gate or runtime change was introduced for these retries.
+The v9 budget's eight valid formulas were independently recalculated; their saved
+caches remain empty, while Feishu displayed the correct results. This retry did
+not reread the Wiki itself and is not a new knowledge-access acceptance.
+
+| Separate feedback-review evidence | SHA-256 |
+| --- | --- |
+| `handoff-v8-real-spec.md` | `5dbfcd261bdbfdddce3862e2659343dd4a57c9d22eeb32c44b20628982278729` |
+| `handoff-v8-standards.md` | `132dbbd035fe6290312856e6759449408a39397f8e57b4955c26604f2e6ae58d` |
+| `handoff-v9-real-spec.md` | `2ceae2f6a6eac1b76890924ab1e1b7a07dbc5062e3f43b01eb3aae6195cc5076` |
+| `handoff-v9-standards.md` | `4c56863963c69ad8d8009a51edd01d9118e2f01a03cc148b55f74cac9a65bd46` |
 
 ## Evidence and boundaries
 
