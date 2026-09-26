@@ -11,7 +11,7 @@ evidence; successful retries are recorded separately.
 | Repository | Exact runtime source | PR / exact merge CI |
 | --- | --- | --- |
 | Gateway | `7bc3e8b9cba91586926cfe1d60f388b5acd955a3` | [PR37](https://github.com/77AutumN/cc-connect-anc/pull/37), [CI](https://github.com/77AutumN/cc-connect-anc/actions/runs/36192628195) |
-| CRM | `1f59510377eb9e17fec10c58e8b258714af74cac` | [PR88](https://github.com/77AutumN/myanc-crm/pull/88), [CI](https://github.com/77AutumN/myanc-crm/actions/runs/36181546559) |
+| CRM | `98ce59012e5e9adfe662d5e5c20e545943beaf3b` | [PR90](https://github.com/77AutumN/myanc-crm/pull/90), [CI](https://github.com/77AutumN/myanc-crm/actions/runs/36196669117) |
 | Knowledge, unchanged | `88a60ba60a634fe3d6b0f68f91de326b19a39b30` | [CI](https://github.com/77AutumN/myanc-team-brain/actions/runs/34704220632) |
 
 The exact heads/bases passed separate Spec and Standards AI reviews and the
@@ -20,7 +20,8 @@ All required exact merge-SHA jobs passed. The normal candidate builder exported
 these commits freshly from GitHub; no old worktree supplied runtime files.
 
 The earlier [PR35](https://github.com/77AutumN/cc-connect-anc/pull/35) checkpoint
-used gateway `3f52085eb2201d683d094f32ecc50aa1f870b2e5` with the same CRM/knowledge,
+used gateway `3f52085eb2201d683d094f32ecc50aa1f870b2e5` with CRM
+`1f59510377eb9e17fec10c58e8b258714af74cac` and the fixed knowledge above,
 after its [exact merge CI](https://github.com/77AutumN/cc-connect-anc/actions/runs/36181489777).
 Initial candidate `candidate-reference-refresh.tgz`, 139 hashed files, SHA-256
 `616a62bfe27e4c397408a2757009ad36b0380529bd0fb6030267e98917c132fa`.
@@ -44,7 +45,7 @@ Independent installation review matched all nine file receipts, backups and
 permissions, 133 protected files, seven stores and six saved sessions.
 Confirmation and current-record refresh retries passed. The new private budget
 passed amount, source and scope checks but still failed three content checks;
-this draft does not close the file-quality work.
+that checkpoint did not close the file-quality work.
 
 ## Previously completed real journeys
 
@@ -153,7 +154,8 @@ jobs passed. The normal candidate `candidate-skill-refresh.tgz` has SHA-256
 `55877ccb94f87983e27fc1f81a3bb80193ea04ab5fe7299ae97b285127d8066a`.
 Its 139 file hashes were verified; only the gateway binary differs from the
 initial candidate. All seven mandatory paired journeys passed with the exact
-gateway f587d60 and the CRM/knowledge in the table above, using the same toolchain.
+gateway f587d60, CRM `1f59510377eb9e17fec10c58e8b258714af74cac` and fixed
+knowledge `88a60ba60a634fe3d6b0f68f91de326b19a39b30`, using the same toolchain.
 
 The separately frozen, reviewed gateway-only maintenance completed with one
 stop/start, one receiver, ordinary UID/capabilities unchanged, no failure receipt
@@ -220,7 +222,8 @@ the PR; the required full Linux CI passed.
 
 The normal `candidate-per-turn.tgz` contains 139 verified files, SHA-256
 `ec76cc4c3e77bff8e83282311a27b3d3ac06489125ebdb287dc5e32d39b081c7`.
-All seven paired journeys passed with the table's exact sources and the same
+All seven paired journeys passed with gateway 7bc3e8b, CRM
+`1f59510377eb9e17fec10c58e8b258714af74cac`, fixed knowledge 88a60ba and the same
 toolchain. Only the gateway binary changed. The frozen one-window update passed
 with one receiver, unchanged ordinary identity/capabilities, 141 protected file
 controls, seven stores and six saved sessions. It remained continuously healthy
@@ -260,11 +263,72 @@ project context, not unrestricted fuzzy project search.
 | `per-turn-real-standards.md` | `82a3a9ae56eddd2513d9863f92a8456f4b867dce81060295326a86d9f493851f` |
 | `typo-real-spec.md` | `3178579b521df26e29c8faa1989be2ee12dfa910d175246b4bb2372c0239b915` |
 
-[CRM PR90](https://github.com/77AutumN/myanc-crm/pull/90) addresses the observed
-readback gap in the existing checker. Its source delivery and real regression
-are tracked separately; this checkpoint does not claim it is installed or that
-the two remaining quality defects pass. The overall file-quality closeout remains
-**incomplete**, and all earlier failures are retained.
+## Complete saved-content readback
+
+[CRM PR90](https://github.com/77AutumN/myanc-crm/pull/90) extends the existing
+read-only checker to return saved worksheet rows and Word body/table content,
+with locations, formulas and uncalculated caches. It retains existing lint and
+does not modify artifacts. A shared output limit and unsupported nested Word
+tables explicitly report incomplete inspection. No semantic rule engine,
+delivery gate, dependency or new tool was added. The Skill requires reviewing
+all returned sheets, including retained narrative, against actual amounts and
+sources; missing evidence is not evidence that another employee did no work.
+
+Reviewed base `1f59510377eb9e17fec10c58e8b258714af74cac`, head
+`3a259044b2bd66d9099403b8e7ff6fe6964c9372`; separate Spec and Standards AI
+reviews passed. Two new readback checks failed on the old source; all nine final
+handoff checks and four runtime-Skill checks passed. The Standards finding on
+nested tables was reproduced and fixed before final review.
+[PR CI](https://github.com/77AutumN/myanc-crm/actions/runs/36196398586) and the
+exact merge CI in the runtime table passed. The normal candidate at that table's
+three exact sources is `candidate-handoff-readback.tgz`, SHA-256
+`81ade17422d1bf493fdd65d2943f63e3d362a88c62abd23c93e5662076ae31cc`.
+All 139 file hashes and seven paired journeys passed. The existing toolchain is
+unchanged; CRM ran 398 tests with eight Windows skips and 18 passing spikes,
+knowledge 71 tests with two Windows skips. Required Linux CI passed.
+
+Only four copies each of the checker and Skill were installed. Independent
+readback matched candidate bytes, backups, receipts, original ownership/modes
+and ordinary-account read-only access. No configuration, identity, dependency,
+gateway binary or published Wiki changed, and no service restart occurred.
+
+The original installer wrote all eight files but failed its stable window when
+one INFO event changed the complete journal hash. Its failure is retained and
+its healthy receipt remains absent. The event's underlying type remains unknown;
+it is not proof of an external send. Bounded reconciliation found no new employee
+message, delivery, native-session record or business-state change in that window.
+
+Two independent AI reviews then approved a separate read-only observation using
+the entire reconciled journal, excluding no entries. All 145 protected paths,
+seven stores, six saved-session files and service/activity state stayed equal
+for 131.8 seconds over 18 samples. Original failure and absent healthy were
+rechecked. This is new post-install stability evidence, not a retroactive pass
+or a retry of the consumed installer. New local observation receipt SHA-256:
+`328464fd69c93d18816b6ce9ab3bd2db41c8b717273ceea06fc4c22fba638e36`.
+
+The natural private v6 regression requested 21 tables with the budget unchanged,
+replying to the actual v5 file without a checking reminder or expected answers.
+The new checker returned all three saved sheets (39 nonempty rows, 6694 characters,
+no truncation). Claude then computed the hash and delivered without correcting
+the two retained narrative defects. The current per-turn reminder was present,
+but this turn did not explicitly reload the Skill body. These are observed
+actions, not a claim about hidden model reasoning.
+
+The accepted v6 output, snapshot and local copy share SHA-256
+`e26dd3c5022e1da0ad95f19cae1b425cd375cc1671c9beba2175c6c578800c2c`.
+All three sheets were actually opened in Feishu. Seven valid formulas are
+preserved; meal 85680, wine 3780, subtotal 94460, basic/upgrade totals 99460/105460
+and overruns 19460/25460 are correct. Saved formula caches remain empty; actual
+Feishu display and independent arithmetic, not cached values, verify these sums.
+The correct work received one accepted delivery. Shared project bodies and five
+shared artifact records stayed unchanged; private scope and v1-v5 originals remain.
+
+File-quality acceptance still **fails**: the execution checklist retains a 5000
+decoration difference instead of 6000, and unsupported claims that sales has not
+produced a handoff. Both statements were present in the complete checker result,
+so absence of sheet content no longer explains this attempt. Independent Spec
+and Standards inspections retain this as a partial result. Neither the operator
+nor reviewers repaired the model's artifact. Overall closeout remains incomplete.
 
 ## Evidence and boundaries
 
