@@ -136,12 +136,16 @@ def main(paths):
     findings = [finding for path in paths for finding in inspect(Path(path), readback)]
     for finding in findings:
         print(f'{finding}: review this saved cell/confirmation basis before delivery')
-    if not findings:
-        print('No targeted cell/confirmation issues found. Formula calculation, source/content readback and visual inspection are still required.')
     if incomplete is not None:
         # ponytail: use the existing Python reader for larger files, no paging API.
         print(f'Readback incomplete from {incomplete}; this row and all later content were omitted. Read the remaining files/sheets in bounded sections before delivery.')
-    print('Review every saved sheet/table against the sources: derive price differences from the actual amounts, and verify claims about others\' work. Missing evidence means unverified, not that work was not done.')
+    print(json.dumps({'technical_findings': len(findings), 'business_review': 'pending'}))
+    print('Next, use a separate read-only tool call to reopen the saved file and check its claims, '
+          'including unchanged narrative. Record concise evidence: statement location -> saved operands '
+          'or source -> independent calculation/evidence -> consistent or needs correction. '
+          'Generation-script constants and old wording are not evidence. Missing evidence means unverified, '
+          'not that work was not done. Correct mismatches and reread changed cells before delivery; '
+          'this technical scan does not perform that review or visual inspection.')
     return bool(findings) or incomplete is not None
 
 
