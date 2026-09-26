@@ -42,7 +42,7 @@ extraction directory. Run the installed helper as one command:
 ```sh
 /opt/team-files/bin/python /usr/local/libexec/team_file_render.py \
   --work-root '<current work root: parent of output_dir>' \
-  --input '<selected DOCX, PPTX or PDF path>' \
+  --input '<selected DOCX, XLSX, PPTX or PDF path>' \
   --output-dir '<output_dir/new unique render directory>'
 ```
 
@@ -59,7 +59,8 @@ choose a new name; this input error does not require broader permissions.
 The helper validates Office content through the existing gateway binary before
 conversion. For DOCX it refreshes fields and indexes, saves a new editable DOCX,
 then exports PDF. PPTX exports PDF without flattening or replacing its editable
-original. PDF input is retained unchanged. Every PDF page receives a PNG preview;
+original. XLSX produces a recalculated editable copy and a PDF with page previews;
+the input workbook stays unchanged. PDF input is retained unchanged. Every PDF page receives a PNG preview;
 `render.json` records hashes and page count. It deliberately says
 `rendered_not_visually_verified`: this is preparation, not acceptance.
 
@@ -70,26 +71,32 @@ confirm editability. For Word, compare the saved DOCX's TOC entries, page fields
 and total pages with the exported PDF after added content moves headings. A
 successful export alone is not proof of correct pagination. Inspect the reopened
 Excel's formulas, rows and totals as well as the slide/Word/PDF summary amounts.
-Reopen Excel with formulas and cached values separately. Check stored error cells
-and explanation cells accidentally typed as formulas. A blank formula cache is
-not an error and is not evidence of a calculated result. Independently recompute
+Reopen Excel with formulas and cached values separately. Inspect each intended
+calculation cell's saved `data_type`: it must be `f`, not a text string that only
+looks like a formula. Explanation cells, including those beginning with `=`, must
+remain text. Check stored error cells. A blank formula cache is not an error and
+is not evidence of a calculated result. Independently recompute
 table count × unit price, item totals, verified receipts and balance from the
 current cited inputs; compare the actual saved cells and each document's summary.
-Do not claim Excel was recalculated or visually checked by this renderer: it does
-not support XLSX. Keep this limitation explicit until the workbook is opened.
+Reopen the helper's returned XLSX and check its formulas and cached results;
+deliver that checked copy. Inspect every rendered sheet/page for long titles,
+notes, wrapping, row heights, clipping and unreadable scaling. A successful Calc
+export is not a visual check, and its print layout does not establish Feishu's
+interactive display. If rendering is unavailable, state the remaining limit.
 
 For Word tables, repeat header rows, prevent splitting short rows across pages,
 and keep headings with their next paragraph/table. Allow long tables to span
 pages. Inspect all page images for isolated headings, unnecessary blank space,
 clipped text and missing repeated headers; fix only observed layout defects.
 
-Before delivery and the final reply, reopen the saved outputs and enumerate their
-cited source names, IDs and versions. Match each against materials actually read
+Before delivery, internally compare the saved outputs' cited source names, IDs
+and versions with materials actually read
 in this work. For an absent attachment only mentioned in another document, write
 “据<已读材料>转述，原件未提供／未读取”. Label your new drawing “根据本次需求新绘”;
 an unread image cannot be its production source. Keep original source IDs and
 versions separate from the output revision. Correct mismatches in the files and
-reply, then reread before delivery; citing an ID alone does not verify its source.
+any planned reply, then reread before delivery. Keep this audit in tool work;
+the employee receives the useful result and actual limits, not a checking log.
 
 If installed tools or fonts are missing, preserve the prepared originals and
 report the missing runtime capability. Do not install packages or substitute a
@@ -100,7 +107,9 @@ different model/provider from inside an employee task.
 On a changed table count, package or visual style, list all affected outputs,
 revise their editable sources, then regenerate dependent PDFs/PNGs. Compare
 amounts, table counts, selected items, status and source versions across the saved
-set. Preserve earlier files; write revisions under new names/directories.
+set. Check the new revision label in every title, overview sheet, header/footer
+and filename; keep historical source versions unchanged. Preserve earlier files;
+write revisions under new names/directories.
 An imported colleague's artifact is the selected source, not access to their
 private history. Ask for an absent editable original when required for revision.
 
