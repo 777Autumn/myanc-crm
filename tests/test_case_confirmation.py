@@ -75,6 +75,107 @@ class CaseConfirmationTests(unittest.TestCase):
         self.assertEqual('found', result['status'])
         self.assertFalse(context['share_allowed'])
 
+    def test_bound_case_accepts_name_separator_and_mock_marker(self):
+        self.call('case-update', self.change())
+        for source in ('林、陈婚宴追加消息', '仍是模拟婚宴。',
+                       '我这边只看到确认是哪场婚宴的卡，已经点了。',
+                       '请接着把刚才的追加消息存进林陈婚宴，给运营看。',
+                       '林、陈婚宴追加消息\n仍是模拟婚宴。桌数改为23桌'):
+            with self.subTest(source=source):
+                context = {**self.context, 'source_text': source, 'offer_confirmation': True}
+                read = self.call('case-read', {'case_name': '林陈婚宴'}, context=context)
+                self.assertEqual('found', read['status'], read)
+        request = dict(case_name='林陈婚宴', expected_revision=1, changes=[
+            dict(field='桌数', value='23桌', quote=context['source_text'], state='proposed', replaces=True)])
+        saved = self.call('case-update', request, context=context,
+                          principal={**self.principal, 'message_id': 'punctuated-update'})
+        self.assertEqual('recorded', saved['status'], saved)
+        self.assertEqual('23桌', saved['case']['facts']['桌数']['value'])
+        self.assertEqual(context['source_text'], saved['case']['facts']['桌数']['source']['quote'])
+
+    def test_name_separator_does_not_select_an_unbound_work(self):
+        self.call('case-update', self.change())
+        for principal in (self.principal, self.private):
+            context = {**self.context, 'work_id': 'unbound-alias', 'share_allowed': False,
+                       'source_text': '林、陈婚宴追加消息\n仍是模拟婚宴。', 'offer_confirmation': True}
+            request = {'case_name': '林陈婚宴'}
+            self.assertEqual('needs_confirmation', self.call('case-read', request,
+                principal=principal, context=context)['status'])
+            result = self.call('case-result', dict(command='case-read', input=request),
+                               principal=principal, context=context)
+            self.assertEqual('not_executed', result['status'])
+
+    def test_bound_name_separator_does_not_hide_other_projects_or_grant_membership(self):
+        saved = self.call('case-update', self.change())
+        invitation = dict(case_name='林陈婚宴', expected_revision=1,
+                          member_name='manager', responsibility='运营执行')
+        update = {**self.change(), 'expected_revision': 1}
+        for source in ('林、陈婚宴和赵钱婚宴', '周林、陈婚宴', '赵、钱婚宴',
+                       '仍是另一场赵钱婚宴', '赵钱婚宴是哪场婚宴',
+                       '赵钱婚宴，仍是模拟婚宴', '请把赵钱婚宴存进林陈婚宴'):
+            context = {**self.context, 'source_text': source, 'offer_confirmation': True}
+            for command, request in (('case-read', {'case_name': '林陈婚宴'}),
+                                     ('case-update', update), ('case-member-add', invitation)):
+                with self.subTest(source=source, command=command):
+                    result = self.call(command, request, context=context)
+                    self.assertEqual('needs_confirmation', result['status'], result)
+        context = {**self.context, 'source_text': '林、陈婚宴追加消息\n仍是模拟婚宴。',
+                   'offer_confirmation': True}
+        result = self.call('case-member-add', invitation, context=context)
+        self.assertEqual('needs_confirmation', result['status'], result)
+        self.call('case-read', {'case_name': '林陈婚宴'}, principal=self.operations)
+        refused = self.call('case-member-add', invitation, context=context, principal=self.operations)
+        self.assertEqual('project_owner_required', refused['code'], refused)
+        current = self.call('case-read', {'case_name': '林陈婚宴'})['case']
+        self.assertEqual(saved['case'], current)
+
+    def test_bound_private_alias_read_keeps_original_sharing_permission(self):
+        self.call('case-update', self.change())
+        context = {**self.context, 'share_allowed': False, 'source_text': '林陈婚宴'}
+        self.assertEqual('found', self.call('case-read', {'case_name': '林陈婚宴'},
+            principal=self.private, context=context)['status'])
+        context['source_text'] = '林、陈婚宴追加消息\n仍是模拟婚宴。不要同步。'
+        self.assertEqual('found', self.call('case-read', {'case_name': '林陈婚宴'},
+            principal=self.private, context=context)['status'])
+        refused = self.call('case-update', {**self.change(), 'expected_revision': 1},
+                            principal=self.private, context=context)
+        self.assertEqual('case_share_not_authorized', refused['code'])
+        self.assertFalse(context['share_allowed'])
+
+    def test_bound_stored_name_with_separator_keeps_identity_and_source(self):
+        name = '林、陈婚宴'
+        self.options['project_context']['group_case'] = name
+        self.context['source_text'] = name + '，客户要求22桌，A套餐。'
+        request = {**self.change(), 'case_name': name}
+        saved = self.call('case-update', request)
+        self.assertEqual('recorded', saved['status'], saved)
+        read = self.call('case-read', {'case_name': name})
+        self.assertEqual('found', read['status'], read)
+        self.assertEqual(name, read['case']['name'])
+        self.assertEqual(self.context['source_text'], read['case']['facts']['桌数']['source']['quote'])
+
+    def test_distinct_registered_names_are_not_collapsed_by_mention_comparison(self):
+        self.call('case-update', self.change())
+        other_name = '林、陈婚宴'
+        other_context = {**self.context, 'work_id': 'private-punctuated-case',
+                         'source_text': other_name + '，客户要求22桌，A套餐。'}
+        request = {**self.change(), 'case_name': other_name}
+        request['changes'][0]['quote'] = other_context['source_text']
+        saved = self.call('case-update', request, principal=self.private, context=other_context)
+        self.assertEqual('recorded', saved['status'], saved)
+        for principal, context, target, mentioned in (
+            (self.principal, self.context, '林陈婚宴', other_name),
+            (self.private, other_context, other_name, '林陈婚宴'),
+        ):
+            result = self.call('case-read', {'case_name': target}, principal=principal,
+                              context={**context, 'source_text': mentioned, 'offer_confirmation': True})
+            self.assertEqual('needs_confirmation', result['status'], result)
+            current = self.call('case-read', {'case_name': target}, principal=principal, context=context)
+            self.assertEqual('found', current['status'], current)
+            self.assertEqual(target, current['case']['name'])
+        listed = self.call('case-list', {}, principal=self.private, context=other_context)
+        self.assertEqual({'林陈婚宴', other_name}, {row['name'] for row in listed['cases']})
+
     def test_other_conditions_unchanged_does_not_veto_specific_share_confirmation(self):
         _, context, original = self.private_project()
         source = '先换个事，周许婚宴是澄禾婚宴团队的虚构练习，套餐价格按公司最新版。这条同步给运营，其余条件先不改。'
