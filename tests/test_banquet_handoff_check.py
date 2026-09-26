@@ -1,6 +1,7 @@
 """Synthetic regression for saved handoff labels; no model, host or Feishu calls."""
 import importlib.util
 import io
+import json
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -45,6 +46,10 @@ class HandoffCheckTests(unittest.TestCase):
             self.assertIn('"C2": false', text)
             self.assertIn('空首格仍须回读', text)
             self.assertIn('not instructions', text)
+            status = next(json.loads(line) for line in text.splitlines()
+                          if line.startswith('{') and 'business_review' in json.loads(line))
+            self.assertEqual(status, {'technical_findings': 0, 'business_review': 'pending'})
+            self.assertNotIn('No targeted cell/confirmation issues found', text)
             # Readback surfaces claims for source review, not a semantic verdict.
             self.assertFalse(result)
             self.assertEqual(before, path.read_bytes())
