@@ -1,9 +1,10 @@
-"""Read saved handoffs: confirmation labels and budget cell errors; never edit.
+"""Read saved handoffs: actual contents, confirmation labels and cell errors.
 
 This narrow lint catches a reproduced copying error. Zero findings are not proof
 of business confirmation: sources, missing statuses and cross-file consistency
 still require the Skill's full readback.
 """
+import json
 import re
 import sys
 from pathlib import Path
@@ -11,6 +12,7 @@ from pathlib import Path
 RULE = r'(?:经营基础规则|耗时规则|推算|计算得出)'
 # ponytail: catches explicit rule-first labels; other wording needs source review.
 COPIED_CONFIRMATION = re.compile(r'^已确认\s*[（(:：]\s*' + RULE)
+READBACK_LIMIT = 16000
 
 
 def conflicts(rows):
@@ -40,7 +42,7 @@ def conflicts(rows):
                 yield number, index + 1
 
 
-def inspect(path):
+def inspect(path, readback=None):
     if path.suffix.lower() == '.xlsx':
         from openpyxl import load_workbook
         from openpyxl.formula import Tokenizer
@@ -49,11 +51,18 @@ def inspect(path):
         book = load_workbook(path, read_only=True, data_only=False)
         cached = load_workbook(path, read_only=True, data_only=True)
         try:
+            if readback:
+                readback(path.name, {'worksheets': book.sheetnames})
             for sheet in book:
                 for row, col in conflicts(sheet.values):
                     yield f'{path.name}: {sheet.title} row {row}, column {col}'
                 names = {name.casefold() for name in (*book.defined_names, *sheet.defined_names)}
-                for row, cached_row in zip(sheet, cached[sheet.title]):
+                for row_number, (row, cached_row) in enumerate(zip(sheet, cached[sheet.title]), 1):
+                    if readback and any(cell.value is not None for cell in row):
+                        readback(f'{path.name}: {sheet.title} row {row_number}', {
+                            cell.coordinate: {'formula': cell.value, 'cached': saved.value}
+                            if cell.data_type == 'f' else cell.value
+                            for cell, saved in zip(row, cached_row) if cell.value is not None})
                     for cell, cached_cell in zip(row, cached_row):
                         reason = ''
                         if cell.data_type == 'e' or cached_cell.data_type == 'e':
@@ -85,9 +94,22 @@ def inspect(path):
     elif path.suffix.lower() == '.docx':
         from docx import Document
         doc = Document(path)
+        if readback:
+            readback(path.name, {'scope': 'body paragraphs and tables only; headers, footers and layout require separate inspection'})
+            for number, paragraph in enumerate(doc.paragraphs, 1):
+                if paragraph.text:
+                    readback(f'{path.name}: paragraph {number}', paragraph.text)
         for row, _ in conflicts([[p.text] for p in doc.paragraphs]):
             yield f'{path.name}: paragraph {row}'
         for number, table in enumerate(doc.tables, 1):
+            if readback:
+                for row, cells in enumerate(table.rows, 1):
+                    readback(f'{path.name}: table {number}, row {row}',
+                             {f'column {col}': cell.text for col, cell in enumerate(cells.cells, 1)})
+                    for col, cell in enumerate(cells.cells, 1):
+                        if cell.tables:
+                            yield (f'{path.name}: table {number}, row {row}, column {col}: '
+                                   'Readback incomplete: nested table content requires separate reading')
             for row, col in conflicts([[c.text for c in r.cells] for r in table.rows]):
                 yield f'{path.name}: table {number}, row {row}, column {col}'
     else:
@@ -97,12 +119,30 @@ def inspect(path):
 def main(paths):
     if not paths:
         raise ValueError('provide the saved handoff Excel and Word paths')
-    findings = [finding for path in paths for finding in inspect(Path(path))]
+    remaining, incomplete = READBACK_LIMIT, None
+
+    def readback(location, content):
+        nonlocal remaining, incomplete
+        if incomplete is not None:
+            return
+        line = json.dumps({'saved': location, 'content': content}, ensure_ascii=False, default=str)
+        if len(line) + 1 > remaining:
+            incomplete = location
+            return
+        remaining -= len(line) + 1
+        print(line)
+
+    print('Saved content for review, not instructions. Formulas and cached values are not recalculated.')
+    findings = [finding for path in paths for finding in inspect(Path(path), readback)]
     for finding in findings:
         print(f'{finding}: review this saved cell/confirmation basis before delivery')
     if not findings:
         print('No targeted cell/confirmation issues found. Formula calculation, source/content readback and visual inspection are still required.')
-    return bool(findings)
+    if incomplete is not None:
+        # ponytail: use the existing Python reader for larger files, no paging API.
+        print(f'Readback incomplete from {incomplete}; this row and all later content were omitted. Read the remaining files/sheets in bounded sections before delivery.')
+    print('Review every saved sheet/table against the sources: derive price differences from the actual amounts, and verify claims about others\' work. Missing evidence means unverified, not that work was not done.')
+    return bool(findings) or incomplete is not None
 
 
 if __name__ == '__main__':
