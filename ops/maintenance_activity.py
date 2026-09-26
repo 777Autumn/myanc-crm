@@ -6,6 +6,7 @@ host access or permission to stop a service is provided by this function.
 """
 import hashlib
 import json
+import re
 import shlex
 
 
@@ -15,28 +16,95 @@ EVENTS = {'message received', 'turn complete', 'processing message',
           'file work intake rejected'}
 
 
-def activity(journal, now):
-    """Unknown/ambiguous events remain unfinished; malformed input raises."""
+def _object(pairs):
+    fields = {}
+    for key, value in pairs:
+        if key in fields:
+            raise ValueError('duplicate_log_field')
+        fields[key] = value
+    return fields
+
+
+def log_fields(message):
+    """Parse a complete gateway/SDK message; never turn missing data into {}."""
+    if not isinstance(message, str) or not message.strip():
+        raise ValueError('unsupported_journal_message')
+    try:
+        if message.lstrip().startswith('{'):
+            fields = json.loads(message, object_pairs_hook=_object)
+        else:
+            # Go's default slog handler is used before the configured handler.
+            text = re.fullmatch(r'\d{4}/\d\d/\d\d \d\d:\d\d:\d\d (DEBUG|INFO|WARN|ERROR) (.+)', message)
+            sdk = re.fullmatch(r'(?:\d{4}/\d\d/\d\d \d\d:\d\d:\d\d )?\[(Debug|Info|Warn|Error)\] (.+)', message)
+            if sdk:
+                return dict(level=sdk[1].upper(), msg=sdk[2], format='sdk')
+            tokens = shlex.split(text[2] if text else message)
+            pairs = []
+            words = []
+            for token in tokens:
+                if '=' in token:
+                    key, value = token.split('=', 1)
+                    if not key:
+                        raise ValueError('invalid_log_field')
+                    pairs.append((key, value))
+                elif text and not pairs:
+                    words.append(token)
+                else:
+                    raise ValueError('unsupported_journal_message')
+            fields = _object(pairs)
+            if text:
+                if 'level' in fields or 'msg' in fields or not words:
+                    raise ValueError('invalid_text_log')
+                fields.update(level=text[1], msg=' '.join(words))
+        if not isinstance(fields, dict) or not isinstance(fields.get('msg'), str) or not fields['msg']:
+            raise ValueError('unsupported_journal_message')
+        if 'level' in fields:
+            if not isinstance(fields['level'], str) or fields['level'].upper() not in {'DEBUG', 'INFO', 'WARN', 'ERROR'}:
+                raise ValueError('unsupported_log_level')
+            fields['level'] = fields['level'].upper()
+        return fields
+    except (TypeError, ValueError):
+        # Never include message content or decoder excerpts in diagnostics.
+        raise ValueError('unsupported_journal_message') from None
+
+
+def log_key(fields):
+    """Exact reviewed fields; only the emission time is allowed to vary."""
+    return hashlib.sha256(json.dumps({k: v for k, v in fields.items() if k != 'time'},
+                                    sort_keys=True).encode()).hexdigest()
+
+
+def parse_journal(journal, now):
+    """Require full journalctl JSON output (--all), ordered and not in future."""
     rows = []
     previous = 0
     for line in journal.splitlines():
-        record = json.loads(line)
-        message = record.get('MESSAGE')
-        if not isinstance(message, str):
-            continue  # journald metadata, not a gateway message
-        fields = (json.loads(message) if message.startswith('{') else
-                  dict(part.split('=', 1) for part in shlex.split(message) if '=' in part))
-        if fields.get('msg') not in EVENTS:
-            continue
-        stamp = int(record['__REALTIME_TIMESTAMP'])
+        try:
+            record = json.loads(line, object_pairs_hook=_object)
+            if not isinstance(record, dict):
+                raise ValueError('unsupported_journal_record')
+            stamp = int(record['__REALTIME_TIMESTAMP'])
+            fields = log_fields(record.get('MESSAGE'))
+        except (KeyError, TypeError, ValueError):
+            raise ValueError('unsupported_journal_record') from None
         if not previous <= stamp <= now * 1000000:
             raise ValueError('activity_time_order')
         previous = stamp
         rows.append((stamp, fields))
+    return rows
+
+
+def activity(journal, now, *, known_messages=()):
+    """Unknown/ambiguous events remain unfinished; malformed input raises."""
+    all_rows = parse_journal(journal, now)
+    known = {log_key(fields) for fields in known_messages}
+    rows = [(stamp, fields) for stamp, fields in all_rows if fields['msg'] in EVENTS]
 
     active, questions = {}, {}
     received, completed, rejected = set(), set(), set()
-    unknown = 0
+    unknown = sum(fields.get('level') in {'WARN', 'ERROR'} or
+                  (fields['msg'] not in EVENTS and log_key(fields) not in known)
+                  for _, fields in all_rows)
     callbacks = []
     for stamp, fields in rows:
         event = fields['msg']
@@ -125,4 +193,4 @@ def activity(journal, now):
                 received=len(received), completed=len(completed), rejected=len(rejected),
                 reconciled_callbacks=reconciled,
                 unclassified=len(active) + unknown + unresolved + len(callbacks) - reconciled,
-                fingerprint=hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest())
+                fingerprint=hashlib.sha256(json.dumps(all_rows, sort_keys=True).encode()).hexdigest())
