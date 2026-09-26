@@ -8,10 +8,14 @@ One small workflow inside a general Feishu Claude assistant:
 4. let the host execute the original approved proposal once;
 5. read back, show the actual result, and continue discussing it with Claude.
 
-**The new customer-trial changes are not deployed. Real CRM switching is paused.**
-Implementation/review scope and the preserved Owner canary baseline are in
-[the trial release gate](docs/real-crm-trial.md). Merge requires review and green CI;
-real CRM creation/selection still needs a separate confirmation after merge.
+Current delivery, acceptance and remaining limitations are indexed in
+[ops/FOLLOWUPS.md](ops/FOLLOWUPS.md). The latest
+[two-account simulated work record](ops/releases/2026-09-26-natural-work-live.md)
+separates completed journeys and feedback repairs from failed autonomous review.
+[The original customer-trial gate](docs/real-crm-trial.md) preserves the earlier
+development-only checkpoint; its deployment pause is not the current global status.
+New CRM creation/selection and deployment still require the authorization and
+checks in [ops/RELEASE.md](ops/RELEASE.md).
 The current Agent contract is in [CLAUDE.md](CLAUDE.md). The older request-file /
 PermissionRequest route remains legacy code, not the selected tools workflow.
 This package does not replace other Feishu skills, implement general Base CRUD,
