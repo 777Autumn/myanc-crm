@@ -12,6 +12,8 @@ import re
 import stat
 import subprocess
 
+from maintenance_start import require
+
 LABEL = 'com.myanc.cc-connect'
 PLIST = Path('/Library/LaunchDaemons/com.myanc.cc-connect.plist')
 EXE = '/usr/local/bin/cc-connect-anc'
@@ -21,11 +23,6 @@ CWD = '/var/lib/cc-connect'
 CONFIG = '/usr/local/etc/cc-connect/config.toml'
 STDOUT = '/var/log/anc-gateway/stdout.log'
 STDERR = '/var/log/anc-gateway/stderr.log'
-
-
-def require(condition, category):
-    if not condition:
-        raise RuntimeError(category)  # controlled strings; never include command output
 
 
 class BSDInfo(ctypes.Structure):

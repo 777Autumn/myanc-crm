@@ -1,7 +1,6 @@
 """Fictional native state; no production launchctl mutations."""
 import copy
 import hashlib
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -14,15 +13,9 @@ import uuid
 from unittest.mock import patch
 
 
-def load(name):
-    spec = importlib.util.spec_from_file_location(name, Path(__file__).parents[1] / 'ops' / (name + '.py'))
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-m = load('maintenance_start')
-n = load('maintenance_launchd')
+sys.path.insert(0, str(Path(__file__).parents[1] / 'ops'))
+import maintenance_start as m
+import maintenance_launchd as n
 
 
 def sample(loaded=True, **changes):
@@ -151,6 +144,20 @@ class LaunchdTests(unittest.TestCase):
             m.start_once(lambda *_: (_ for _ in ()).throw(OSError('full')), lambda: None,
                          backend=backend)
         self.assertEqual(backend.commands, [])
+
+    def test_controlled_native_failure_survives_in_receipt(self):
+        backend = FakeLaunchd([])
+        def observe():
+            if backend.commands:
+                n.require(False, 'loaded_launchd_identity_mismatch')
+            return sample(False)
+        backend.sample = observe
+        with self.assertRaises(m.StartError):
+            self.start(backend)
+        failure = self.receipts['start-failed.json']
+        self.assertEqual(failure['reason'], 'loaded_launchd_identity_mismatch')
+        self.assertEqual(failure['pause_error'], 'loaded_launchd_identity_mismatch')
+        self.assertEqual(backend.commands, ['start'])
 
     def test_native_print_parser_ignores_nested_fields_rejects_ambiguity(self):
         parsed = n.parse_print(PRINT)
