@@ -144,6 +144,17 @@ Errors preserve the last safe sample and separate pause failure category, withou
 printing command output, command arguments, arbitrary executable paths or business
 content. Keep the original failed and successful observational receipts distinct.
 
+Name-matched receiver diagnostics additionally retain up to 32 PIDs and their
+PPID, UID, process state/start ticks, observation time, executable-path and cgroup
+hashes before protective stop. The full count still controls rejection; truncation
+is explicit. Disappearing, unreadable or changing processes remain name matches,
+with an uncertainty category rather than a benign classification. No environment,
+command line or raw cgroup/executable path is collected. These observations are
+best-effort, non-atomic evidence, not permission to ignore a child process: fork
+can inherit a name and executable before exec. An isolated Linux regression
+demonstrates that mechanism; it does not identify the missing second process in
+either historical failed startup. Existing consumed attempts stay consumed.
+
 ## Verification scope
 
 The historical failure is consistent with `Type=simple` returning before process
