@@ -189,7 +189,7 @@ class LaunchdTests(unittest.TestCase):
                 n.Launchd().sample()
 
     def test_sampler_reads_loaded_state_and_refuses_different_arguments(self):
-        output = subprocess.CompletedProcess([], 0, PRINT, '')
+        output = subprocess.CompletedProcess([], 0, PRINT.replace('\truns = 1', '\tlast exit code = 78\n\truns = 1'), '')
         detail = dict(exe='/usr/libexec/xpcproxy', process_start='123.000001')
         with patch.object(n, 'frozen_plist', return_value=sample()['identity']), \
                 patch.object(n.subprocess, 'check_output', side_effect=[sample()['boot_session'], '42 /usr/libexec/xpcproxy\n']), \
@@ -198,6 +198,7 @@ class LaunchdTests(unittest.TestCase):
             result = n.Launchd().sample()
             self.assertEqual(result['coalition'], '100')
             self.assertEqual(result['process_start'], '123.000001')
+            self.assertEqual(n.Launchd.diagnostic(result)['last_exit_code'], 78)
             self.assertFalse(n.Launchd.view(result)['stopped'])
         output.stdout = PRINT.replace('\t\t-config\n', '\t\t-other\n')
         with patch.object(n, 'frozen_plist', return_value=sample()['identity']), \

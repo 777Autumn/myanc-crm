@@ -18,6 +18,10 @@ as `_ancgateway` with its own group, no desktop session, no automatic restart an
 no abandoned process group. It is not an installer: freeze and verify all paths,
 accounts, credentials, permissions and binaries before copying anything. KeepAlive
 must stay false so a failed start cannot silently retry outside the receipt gate.
+Pre-create the two log files owned by `_ancgateway` and its dedicated group with
+mode `0640`; verify parent traversal and file writability as that ordinary user.
+The frozen installation list includes these ownership/mode checks. A root-created
+test directory alone does not demonstrate that launchd can open logs after changing UID.
 
 Mac start requires an unloaded service and zero matching receivers, then issues
 one `launchctl bootstrap`. Stop targets only the verified service with `bootout`.
