@@ -110,6 +110,10 @@ versions separate from the output revision. Correct mismatches in the files and
 any planned reply, then reread before delivery. Keep this audit in tool work;
 the employee receives the useful result and actual limits, not a checking log.
 
+Check negative business claims against their sources too: absent payment or
+contract evidence means “未提供凭证，实际状态待核实”, not “未付款／未发生”.
+Use a definite negative only when the supplied evidence establishes it.
+
 If installed tools or fonts are missing, preserve the prepared originals and
 report the missing runtime capability. Do not install packages or substitute a
 different model/provider from inside an employee task.
