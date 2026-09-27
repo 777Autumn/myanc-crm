@@ -8,7 +8,7 @@ import tarfile
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 OPS = Path(__file__).parents[1] / "ops"
 sys.path.insert(0, str(OPS))
@@ -33,6 +33,16 @@ class CandidateTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unsupported candidate target"):
                 builder.build("a" * 40, "b" * 40, "unused.tgz", target="darwin/amd64")
             gate.assert_not_called()
+
+    def test_mac_missing_crm_native_ci_blocks_even_with_gateway_green(self):
+        with tempfile.TemporaryDirectory() as temp, \
+             patch.object(builder.gate, "ordinary_allowed"), \
+             patch.object(builder.gate, "released", return_value={}), \
+             patch.object(builder.gate, "ci", side_effect=[{}, ValueError("missing CRM native CI")]), \
+             patch.object(builder, "export") as export:
+            with self.assertRaisesRegex(ValueError, "missing CRM native CI"):
+                builder.build("a" * 40, "b" * 40, Path(temp) / "mac.tgz", target="darwin/arm64")
+            export.assert_not_called()
 
     def test_old_gateway_has_no_file_runtime_and_partial_runtime_is_refused(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -98,9 +108,11 @@ class CandidateTests(unittest.TestCase):
                 self.assertTrue(result["target"].startswith(target + " "))
                 build_env = next(env for args, _, env in commands if args[:2] == ["go", "build"])
                 self.assertEqual((build_env["GOOS"], build_env["GOARCH"]), tuple(target.split("/")))
-                self.assertEqual(native_ci.call_count, 2 if target == "darwin/arm64" else 0)
+                self.assertEqual(native_ci.call_count, 4 if target == "darwin/arm64" else 0)
                 if target == "darwin/arm64":
-                    native_ci.assert_called_with("77AutumN/cc-connect-anc", "b" * 40, "push", required_jobs=builder.MAC_JOBS)
+                    self.assertEqual(native_ci.call_args_list, [
+                        call("77AutumN/cc-connect-anc", "b" * 40, "push", required_jobs=builder.MAC_JOBS),
+                        call("77AutumN/myanc-crm", "a" * 40, "push", required_jobs=builder.MAC_CRM_JOBS)] * 2)
                 self.assertIn(["pnpm", "install", "--frozen-lockfile"], [args for args, _, _ in commands])
                 with tarfile.open(output) as archive:
                     names = archive.getnames()

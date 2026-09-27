@@ -15,6 +15,7 @@ import mock_wiki
 
 TARGETS = ("linux/amd64", "darwin/arm64")
 MAC_JOBS = ("mac-codex (ubuntu-latest)", "mac-codex (macos-latest)")
+MAC_CRM_JOBS = ("mac-maintenance",)
 
 
 def run(args, cwd, env=None):
@@ -112,6 +113,8 @@ def build(crm_sha, gateway_sha, output, knowledge_sha=None, target="linux/amd64"
     if target == "darwin/arm64":
         evidence["77AutumN/cc-connect-anc"]["native_ci"] = gate.ci(
             "77AutumN/cc-connect-anc", gateway_sha, "push", required_jobs=MAC_JOBS)
+        evidence["77AutumN/myanc-crm"]["native_ci"] = gate.ci(
+            "77AutumN/myanc-crm", crm_sha, "push", required_jobs=MAC_CRM_JOBS)
     versions = {name: gate.command("pnpm.cmd" if os.name == "nt" and name == "pnpm" else name, *args) for name, args in
                 (("go", ("version",)), ("node", ("--version",)), ("pnpm", ("--version",)),
                  ("python", ("--version",)))}
@@ -182,6 +185,7 @@ def build(crm_sha, gateway_sha, output, knowledge_sha=None, target="linux/amd64"
                 gate.released(repo, commit)
             if target == "darwin/arm64":
                 gate.ci("77AutumN/cc-connect-anc", gateway_sha, "push", required_jobs=MAC_JOBS)
+                gate.ci("77AutumN/myanc-crm", crm_sha, "push", required_jobs=MAC_CRM_JOBS)
             (bundle / "candidate.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
             output.parent.mkdir(parents=True, exist_ok=True)
             with output.open("xb") as stream:

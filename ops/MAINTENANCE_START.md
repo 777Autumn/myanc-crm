@@ -5,6 +5,38 @@ candidate's `ops/` directory. Keep historical one-time installers immutable. Thi
 module replaces their immediate process-name startup check and pre-exec pause
 check; it is not a deployment CLI, a Bot tool, or permission to restart production.
 
+## Native Mac backend
+
+Use `maintenance_launchd.Launchd()` with the same `start_once`, `pause_verified`
+and `recover_once` callbacks. Capture the configuration identity with
+`backend.identity(backend.sample())`. Existing Linux callers and receipt shapes
+remain unchanged. Mac receipts identify `system/com.myanc.cc-connect` and include
+the native sample; they do not invent systemd states or a `/proc` start time.
+
+The frozen template is `runtime/com.myanc.cc-connect.plist`. It runs the gateway
+as `_ancgateway` with its own group, no desktop session, no automatic restart and
+no abandoned process group. It is not an installer: freeze and verify all paths,
+accounts, credentials, permissions and binaries before copying anything. KeepAlive
+must stay false so a failed start cannot silently retry outside the receipt gate.
+
+Mac start requires an unloaded service and zero matching receivers, then issues
+one `launchctl bootstrap`. Stop targets only the verified service with `bootout`.
+The helper pins the boot-session UUID and resource coalition, PID and the native
+microsecond process start identity from libproc. More than one run, an unexpected
+loaded command, ambiguous query output, another receiver or changed identity
+blocks success. A replacement registration is not stopped. An unloaded service
+with a lingering receiver is not considered stopped. `started.json` remains a
+process check, not application or Feishu readiness.
+
+`launchctl print` is a diagnostic text interface, so this bounded parser accepts
+the observed required fields and rejects unknown state/ambiguous results. Validate
+it again after macOS changes. Source references: [Apple's process ABI](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/sys/proc_info.h)
+and the installed `launchctl(1)` manual. The Mac CI job creates a temporary,
+random-labelled LaunchDaemon with a compiled sleeping fixture, uses root only for
+service setup/control and verifies the daemon's ordinary UID. It has no model,
+Bot, network or credentials. This evidence cannot replace the installed candidate's
+permissions, unique-receiver and 125-second application stability checks.
+
 ## Integration
 
 After the existing install phase has stopped the service, backed up business state

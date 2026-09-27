@@ -53,6 +53,8 @@ For the approved native Mac migration, use the same entrance with
 in the manifest and selects the Go cross-build platform. Mac candidates also
 require successful `mac-codex (ubuntu-latest)` and `mac-codex (macos-latest)` jobs
 on the exact gateway merge-SHA push CI, checked before and after the build.
+They also require `mac-maintenance` on the exact CRM merge-SHA push CI, before
+and after the build. Verify that job on the PR head before merging the Mac changes.
 These checks add to the existing Linux and paired-source gates; they never replace
 them. Cross-compilation and candidate packaging do not prove native Office,
 launchd, installed permissions, authentication or Feishu acceptance. Freeze and
