@@ -27,6 +27,32 @@ def require(condition, reason):
         raise StartError(reason)
 
 
+def receiver_detail(proc):
+    """Best-effort evidence, never a reason to ignore a name-matched process."""
+    detail = {'pid': proc.name, 'observed_monotonic_ns': time.monotonic_ns()}
+    try:
+        fields = (proc / 'stat').read_text().rsplit(')', 1)[1].split()
+        detail.update(process_start=fields[19], ppid=fields[1], state=fields[0])
+        status = (proc / 'status').read_text().splitlines()
+        detail['uid'] = int(next(line for line in status if line.startswith('Uid:')).split()[1])
+        exe = str((proc / 'exe').resolve(strict=True))
+        detail.update(expected_exe=exe == EXE,
+                      exe_path_sha256=hashlib.sha256(exe.encode()).hexdigest(),
+                      cgroup_sha256=hashlib.sha256((proc / 'cgroup').read_bytes()).hexdigest())
+        after = (proc / 'stat').read_text().rsplit(')', 1)[1].split()
+        detail['process_start_after'] = after[19]
+        detail['observation'] = ('complete' if fields[19] == after[19]
+                                 and str((proc / 'exe').resolve(strict=True)) == exe
+                                 else 'changed_during_read')
+    except (FileNotFoundError, ProcessLookupError):
+        detail['observation'] = 'disappeared_during_read'
+    except PermissionError:
+        detail['observation'] = 'permission_denied'
+    except (OSError, ValueError, IndexError, StopIteration):
+        detail['observation'] = 'unreadable'
+    return detail
+
+
 class Systemd:
     def command(self, verb):
         require(verb in ('start', 'stop'), 'unsupported_verb')
@@ -61,6 +87,12 @@ class Systemd:
             except (FileNotFoundError, ProcessLookupError):
                 continue
         state['receivers'] = sorted(receivers)
+        # Capture before any protective stop; exits remain in the original count.
+        # Bound extra diagnostic I/O, never the receiver count/guard.
+        # Normal samples retain their schema and equality for frozen health callers.
+        if state['receivers'] and state['receivers'] != [pid]:
+            state['receiver_details'] = [receiver_detail(Path('/proc') / p)
+                                         for p in state['receivers'][:32]]
         return state
 
 
@@ -90,7 +122,10 @@ def diagnostic(state):
     return {k: state[k] for k in ('MainPID', 'InvocationID', 'ActiveState', 'SubState', 'NRestarts')} | {
         'sample_available': True, 'expected_exe': state['exe'] == EXE,
         'exe_available': state['exe'] is not None,
-        'process_start': state['process_start'], 'receiver_count': len(state['receivers'])}
+        'process_start': state['process_start'], 'receiver_count': len(state['receivers']),
+        'receiver_pids': state['receivers'][:32],
+        'receiver_details': state.get('receiver_details', []),
+        'receiver_details_truncated': len(state['receivers']) > 32}
 
 
 def pause_verified(backend, identity, invocation, verify_controls):

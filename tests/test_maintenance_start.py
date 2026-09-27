@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import sys
 import unittest
 from unittest.mock import patch
 
@@ -121,6 +122,117 @@ class LifecycleTests(unittest.TestCase):
                 with self.assertRaisesRegex(m.StartError, reason):
                     self.start(backend)
                 self.assertEqual(backend.commands, ['start', 'stop'])
+
+    def test_duplicate_failure_retains_second_identity_after_protective_stop(self):
+        details = [{'pid': '43', 'observation': 'complete', 'ppid': '42',
+                    'process_start': '456', 'state': 'S', 'uid': 1001,
+                    'expected_exe': True, 'exe_path_sha256': 'a' * 64,
+                    'cgroup_sha256': 'b' * 64}]
+        backend = FakeSystemd([sample(receivers=['42', '43'], receiver_details=details)])
+        with self.assertRaisesRegex(m.StartError, 'duplicate_receiver'):
+            self.start(backend)
+        self.assertEqual(backend.commands, ['start', 'stop'])
+        failure = self.receipts['start-failed.json']['last_sample']
+        self.assertEqual(failure['receiver_pids'], ['42', '43'])
+        self.assertEqual(failure['receiver_details'], details)
+        self.assertEqual(backend.state['receivers'], [])
+
+    def test_receiver_detail_errors_preserve_pid_without_private_error_text(self):
+        for error, category in ((FileNotFoundError('private path'), 'disappeared_during_read'),
+                                (PermissionError('private path'), 'permission_denied'),
+                                (OSError('private path'), 'unreadable')):
+            with self.subTest(category=category), patch.object(Path, 'read_text', side_effect=error):
+                detail = m.receiver_detail(Path('/proc/43'))
+                self.assertEqual(detail['pid'], '43')
+                self.assertEqual(detail['observation'], category)
+                self.assertNotIn('private', json.dumps(detail))
+
+    def test_healthy_samples_remain_identical_for_existing_stable_window(self):
+        state = sample()
+        output = '\n'.join(key + '=' + state[key] for key in m.CONFIG_KEYS + m.STATE_KEYS)
+        proc_stat = '42 (cc-connect-anc) S 1 ' + '0 ' * 17 + '123'
+        def read(path):
+            return 'cc-connect-anc' if path.name == 'comm' else proc_stat
+        with patch.object(m.subprocess, 'check_output', return_value=output), \
+                patch.object(Path, 'glob', return_value=[Path('/proc/42/comm')]), \
+                patch.object(Path, 'read_text', autospec=True, side_effect=read), \
+                patch.object(Path, 'resolve', return_value=Path(m.EXE)), \
+                patch.object(m, 'receiver_detail', side_effect=[{'time': 1}, {'time': 2}]) as detail:
+            first, second = m.Systemd().sample(), m.Systemd().sample()
+        self.assertEqual(first, second)  # Existing running() compares whole samples.
+        self.assertNotIn('receiver_details', first)  # Frozen normal schema unchanged.
+        detail.assert_not_called()
+
+    def test_receiver_detail_detects_pid_reuse_and_hashes_private_paths(self):
+        before = '43 (name with spaces) S 42 ' + '0 ' * 17 + '456'
+        after = before.replace('456', '789')
+        with patch.object(Path, 'read_text', side_effect=[before, 'Uid:\t1001\t1001', after]), \
+                patch.object(Path, 'resolve', return_value=Path('/private/executable')), \
+                patch.object(Path, 'read_bytes', return_value=b'0::/private/service'):
+            detail = m.receiver_detail(Path('/proc/43'))
+        self.assertEqual(detail['observation'], 'changed_during_read')
+        self.assertEqual(detail['process_start'], '456')
+        self.assertEqual(detail['process_start_after'], '789')
+        self.assertEqual(detail['ppid'], '42')
+        self.assertEqual(detail['uid'], 1001)
+        self.assertNotIn('private', json.dumps(detail))
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Linux fork/exec evidence fixture')
+    def test_real_fork_inherits_comm_then_exec_changes_identity(self):
+        # No gateway, network or actual systemctl. Pipes freeze the pre-exec child.
+        import ctypes
+        import select
+        import signal
+        libc = ctypes.CDLL(None, use_errno=True)
+        old_name = Path('/proc/self/comm').read_bytes().strip()
+        self.assertEqual(libc.prctl(15, b'cc-connect-anc', 0, 0, 0), 0)
+        go_read, go_write = os.pipe()
+        ack_read, ack_write = os.pipe()
+        child = None
+        try:
+            os.set_inheritable(go_read, True)
+            os.set_inheritable(ack_write, True)
+            child = os.fork()
+            if child == 0:
+                try:
+                    os.read(go_read, 1)
+                    code = f'import os; os.write({ack_write}, b"x"); os.read({go_read}, 1)'
+                    os.execv(sys.executable, [sys.executable, '-c', code])
+                finally:
+                    os._exit(99)
+            os.close(ack_write)
+            ack_write = None
+            state = sample(pid=str(os.getpid()))
+            output = '\n'.join(key + '=' + state[key] for key in m.CONFIG_KEYS + m.STATE_KEYS)
+            with patch.object(m.subprocess, 'check_output', return_value=output):
+                inherited = m.Systemd().sample()
+                self.assertIn(str(child), inherited['receivers'])
+                self.assertIn(str(os.getpid()), inherited['receivers'])
+                details = {d['pid']: d for d in inherited['receiver_details']}
+                parent_detail, child_detail = details[str(os.getpid())], details[str(child)]
+                self.assertEqual(child_detail['observation'], 'complete')
+                self.assertEqual(child_detail['ppid'], str(os.getpid()))
+                self.assertEqual(child_detail['exe_path_sha256'], parent_detail['exe_path_sha256'])
+                self.assertEqual(child_detail['cgroup_sha256'], parent_detail['cgroup_sha256'])
+                self.assertIn(str(child), m.diagnostic(inherited)['receiver_pids'])
+                os.write(go_write, b'x')
+                self.assertTrue(select.select([ack_read], [], [], 5)[0], 'exec acknowledgement timeout')
+                self.assertEqual(os.read(ack_read, 1), b'x')
+                after = m.Systemd().sample()
+                self.assertNotIn(str(child), after['receivers'])
+                self.assertEqual(m.receiver_detail(Path('/proc') / str(child))['process_start'],
+                                 child_detail['process_start'])
+        finally:
+            if child:
+                try:
+                    os.kill(child, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                os.waitpid(child, 0)
+            libc.prctl(15, old_name, 0, 0, 0)
+            for fd in (go_read, go_write, ack_read, ack_write):
+                if fd is not None:
+                    os.close(fd)
 
     def test_pid_change_and_pid_reuse_fail(self):
         for changed, reason in ((sample(pid='43'), 'startup_pid_changed'),
