@@ -147,6 +147,22 @@ class LifecycleTests(unittest.TestCase):
                 self.assertEqual(detail['observation'], category)
                 self.assertNotIn('private', json.dumps(detail))
 
+    def test_healthy_samples_remain_identical_for_existing_stable_window(self):
+        state = sample()
+        output = '\n'.join(key + '=' + state[key] for key in m.CONFIG_KEYS + m.STATE_KEYS)
+        proc_stat = '42 (cc-connect-anc) S 1 ' + '0 ' * 17 + '123'
+        def read(path):
+            return 'cc-connect-anc' if path.name == 'comm' else proc_stat
+        with patch.object(m.subprocess, 'check_output', return_value=output), \
+                patch.object(Path, 'glob', return_value=[Path('/proc/42/comm')]), \
+                patch.object(Path, 'read_text', autospec=True, side_effect=read), \
+                patch.object(Path, 'resolve', return_value=Path(m.EXE)), \
+                patch.object(m, 'receiver_detail', side_effect=[{'time': 1}, {'time': 2}]) as detail:
+            first, second = m.Systemd().sample(), m.Systemd().sample()
+        self.assertEqual(first, second)  # Existing running() compares whole samples.
+        self.assertNotIn('receiver_details', first)  # Frozen normal schema unchanged.
+        detail.assert_not_called()
+
     def test_receiver_detail_detects_pid_reuse_and_hashes_private_paths(self):
         before = '43 (name with spaces) S 42 ' + '0 ' * 17 + '456'
         after = before.replace('456', '789')

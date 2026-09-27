@@ -144,7 +144,7 @@ Errors preserve the last safe sample and separate pause failure category, withou
 printing command output, command arguments, arbitrary executable paths or business
 content. Keep the original failed and successful observational receipts distinct.
 
-Name-matched receiver diagnostics additionally retain up to 32 PIDs and their
+Unexpected name-matched receiver sets additionally retain up to 32 PIDs and their
 PPID, UID, process state/start ticks, observation time, executable-path and cgroup
 hashes before protective stop. The full count still controls rejection; truncation
 is explicit. Disappearing, unreadable or changing processes remain name matches,
@@ -154,6 +154,8 @@ best-effort, non-atomic evidence, not permission to ignore a child process: fork
 can inherit a name and executable before exec. An isolated Linux regression
 demonstrates that mechanism; it does not identify the missing second process in
 either historical failed startup. Existing consumed attempts stay consumed.
+Normal single-receiver/stopped samples keep their original shape and equality so
+existing whole-sample stable-window checks need no changes.
 
 ## Verification scope
 

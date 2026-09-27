@@ -89,8 +89,10 @@ class Systemd:
         state['receivers'] = sorted(receivers)
         # Capture before any protective stop; exits remain in the original count.
         # Bound extra diagnostic I/O, never the receiver count/guard.
-        state['receiver_details'] = [receiver_detail(Path('/proc') / p)
-                                     for p in state['receivers'][:32]]
+        # Normal samples retain their schema and equality for frozen health callers.
+        if state['receivers'] and state['receivers'] != [pid]:
+            state['receiver_details'] = [receiver_detail(Path('/proc') / p)
+                                         for p in state['receivers'][:32]]
         return state
 
 
