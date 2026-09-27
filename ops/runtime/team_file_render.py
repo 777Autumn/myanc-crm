@@ -245,6 +245,15 @@ def office_worker(source, destination, stem, scratch):
         scripts.mkdir(parents=True, mode=0o700)
         (scripts / 'anc_render.py').write_bytes(Path(__file__).read_bytes())
         (scripts / 'job.json').write_text(json.dumps([source, destination, stem]), encoding='utf-8')
+        # Headless Office uses Fontconfig rather than the desktop font catalog.
+        # Reuse installed system fonts, with all cache writes inside this work.
+        fonts = ET.Element('fontconfig')
+        for directory in ('/System/Library/Fonts', '/Library/Fonts'):
+            ET.SubElement(fonts, 'dir').text = directory
+        ET.SubElement(fonts, 'cachedir').text = str(profile / 'font-cache')
+        font_config = profile / 'fonts.conf'
+        ET.ElementTree(fonts).write(font_config, encoding='utf-8', xml_declaration=True)
+        os.environ['FONTCONFIG_FILE'] = str(font_config)
         binary = '/Applications/LibreOffice.app/Contents/MacOS/soffice'
         os.execv(binary, [binary, '--headless', '--nologo', '--nodefault', '--norestore',
                          '-env:UserInstallation=' + profile.as_uri(),

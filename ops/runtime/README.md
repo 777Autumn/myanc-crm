@@ -96,5 +96,11 @@ versions, not a completed dependency lock or installed runtime. An ordinary
 identity converted fictional DOCX/XLSX through the signed read-only Office bundle,
 retaining originals and seven cached formulas; this does not cover Poppler,
 all native dependencies, model sandbox execution or employee visual acceptance.
+The first export lacked Chinese glyphs. The worker now explicitly includes
+`/System/Library/Fonts` and `/Library/Fonts` in its private Fontconfig file; its
+cache stays in the disposable profile. A subsequent native export rendered the
+Chinese text using installed system fonts. The failed PDFs remain as evidence;
+no new font package was installed. Freeze the actual fonts used with the final
+installation list, and do not assume a requested font family is installed.
 Sources: [Office package/hash](https://download.documentfoundation.org/libreoffice/stable/26.8.0/mac/aarch64/LibreOffice_26.8.0_MacOS_aarch64.dmg.mirrorlist),
 [Python package/hash](https://www.python.org/downloads/release/python-31315/).

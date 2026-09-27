@@ -8,6 +8,7 @@ import sys
 import tempfile
 import time
 import unittest
+import xml.etree.ElementTree as ET
 from unittest.mock import MagicMock, patch
 
 import team_file_pdf
@@ -38,8 +39,13 @@ class MacOfficeTests(unittest.TestCase):
             root = Path(directory)
             source = str(root / 'fictional "quoted".xlsx')
             with patch.object(sys, 'platform', 'darwin'), patch.object(render, 'worker_limits'), \
+                    patch.dict(os.environ, {}, clear=True), \
                     patch.object(render.os, 'execv', create=True) as execute:
                 render.office_worker(source, str(root / 'output'), 'fictional', str(root))
+                self.assertEqual(os.environ['FONTCONFIG_FILE'], str(root / 'profile/fonts.conf'))
+            fonts = ET.parse(root / 'profile/fonts.conf').getroot()
+            self.assertEqual([item.text for item in fonts.findall('dir')], ['/System/Library/Fonts', '/Library/Fonts'])
+            self.assertEqual(fonts.find('cachedir').text, str(root / 'profile/font-cache'))
             scripts = root / 'profile/user/Scripts/python'
             self.assertEqual((scripts / 'anc_render.py').read_bytes(), Path(render.__file__).read_bytes())
             self.assertEqual(json.loads((scripts / 'job.json').read_text()), [source, str(root / 'output'), 'fictional'])
