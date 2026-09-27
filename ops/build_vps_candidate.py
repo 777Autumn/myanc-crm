@@ -13,6 +13,9 @@ from pathlib import Path
 import release_gate as gate
 import mock_wiki
 
+TARGETS = ("linux/amd64", "darwin/arm64")
+MAC_JOBS = ("mac-codex (ubuntu-latest)", "mac-codex (macos-latest)")
+
 
 def run(args, cwd, env=None):
     if os.name == "nt" and args[0] == "pnpm":
@@ -99,12 +102,16 @@ def copy_file_runtime_templates(gateway, bundle):
         shutil.copy2(path, destination / path.name)
 
 
-def build(crm_sha, gateway_sha, output, knowledge_sha=None):
+def build(crm_sha, gateway_sha, output, knowledge_sha=None, target="linux/amd64"):
+    gate.require(target in TARGETS, "unsupported candidate target")
     output = Path(output).resolve()
     gate.require(not output.exists(), "candidate output already exists")
     gate.ordinary_allowed()
     sources = gate.source_commits(crm_sha, gateway_sha, knowledge_sha)
     evidence = {repo: gate.released(repo, commit) for repo, commit in sources.items()}
+    if target == "darwin/arm64":
+        evidence["77AutumN/cc-connect-anc"]["native_ci"] = gate.ci(
+            "77AutumN/cc-connect-anc", gateway_sha, "push", required_jobs=MAC_JOBS)
     versions = {name: gate.command("pnpm.cmd" if os.name == "nt" and name == "pnpm" else name, *args) for name, args in
                 (("go", ("version",)), ("node", ("--version",)), ("pnpm", ("--version",)),
                  ("python", ("--version",)))}
@@ -127,7 +134,8 @@ def build(crm_sha, gateway_sha, output, knowledge_sha=None):
         if knowledge is not None:
             run(["python", "-m", "unittest", "discover", "-s", "tests"], knowledge, env)
         journeys = paired_tests(gateway, env)
-        env.update(GOOS="linux", GOARCH="amd64", CGO_ENABLED="0")
+        goos, goarch = target.split("/")
+        env.update(GOOS=goos, GOARCH=goarch, CGO_ENABLED="0")
         binary = root / "cc-connect-anc"
         build_args = ["go", "build", "-trimpath", "-buildvcs=false", "-o", str(binary),
                       "./cmd/cc-connect"]
@@ -135,7 +143,7 @@ def build(crm_sha, gateway_sha, output, knowledge_sha=None):
         manifest = {"created_at": datetime.now(timezone.utc).isoformat(),
                     "sources": sources,
                     "github": evidence, "toolchain": versions, "build": build_args[:-3] + build_args[-1:],
-                    "target": "linux/amd64 CGO_ENABLED=0 GOENV=off GOWORK=off GOFLAGS=",
+                    "target": f"{target} CGO_ENABLED=0 GOENV=off GOWORK=off GOFLAGS=",
                     "vcs": "exported source; buildvcs=false",
                     "paired_tests": {"crm_sha": crm_sha, "gateway_sha": gateway_sha,
                                      "MYANC_SPIKE_CRM_ROOT": "fresh CRM export", "passed": journeys},
@@ -172,10 +180,12 @@ def build(crm_sha, gateway_sha, output, knowledge_sha=None):
             gate.check_debt()
             for repo, commit in manifest["sources"].items():
                 gate.released(repo, commit)
+            if target == "darwin/arm64":
+                gate.ci("77AutumN/cc-connect-anc", gateway_sha, "push", required_jobs=MAC_JOBS)
             (bundle / "candidate.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
             output.parent.mkdir(parents=True, exist_ok=True)
-            with output.open("xb") as target:
-                with tarfile.open(fileobj=target, mode="w:gz") as archive:
+            with output.open("xb") as stream:
+                with tarfile.open(fileobj=stream, mode="w:gz") as archive:
                     archive.add(bundle, arcname="candidate")
     return manifest
 
@@ -186,5 +196,6 @@ if __name__ == "__main__":
     parser.add_argument("gateway_sha", type=gate.sha)
     parser.add_argument("--knowledge-sha", type=gate.sha)
     parser.add_argument("--output", required=True)
+    parser.add_argument("--target", choices=TARGETS, default="linux/amd64")
     args = parser.parse_args()
-    print(json.dumps(build(args.crm_sha, args.gateway_sha, args.output, args.knowledge_sha), indent=2))
+    print(json.dumps(build(args.crm_sha, args.gateway_sha, args.output, args.knowledge_sha, args.target), indent=2))

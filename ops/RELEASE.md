@@ -48,6 +48,17 @@ cross-builds Linux/amd64. Full Linux suites remain required in exact-SHA CI.
 It packages code and versioned runtime templates, never production configuration,
 credentials, SQLite ledgers, real chats or historical research binaries.
 
+For the approved native Mac migration, use the same entrance with
+`--target darwin/arm64`; the default remains `linux/amd64`. The target is recorded
+in the manifest and selects the Go cross-build platform. Mac candidates also
+require successful `mac-codex (ubuntu-latest)` and `mac-codex (macos-latest)` jobs
+on the exact gateway merge-SHA push CI, checked before and after the build.
+These checks add to the existing Linux and paired-source gates; they never replace
+them. Cross-compilation and candidate packaging do not prove native Office,
+launchd, installed permissions, authentication or Feishu acceptance. Freeze and
+verify the Mac-specific installation list before using any runtime template;
+packaged historical Linux service/launcher files are not Mac installation steps.
+
 For a knowledge change, also supply `--knowledge-sha <full-merged-SHA>` to both
 the release check and candidate builder. The original two-SHA interface remains
 for candidates that do not change knowledge; it does not verify or package a
