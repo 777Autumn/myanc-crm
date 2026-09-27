@@ -36,13 +36,8 @@ description: 读取员工选定的文档、表格、PDF和图片，制作或修�
    user's examples guide content; they are not fixed workflows or fixed answers.
    If a helper file is needed, keep it in the current
    allowed workspace, separate from delivered artifacts.
-4. Reopen the saved output and check requested content, tables/formulas, dates and
-   layout with available tools. Read all relevant sheets/cells, Word paragraphs
-   and table cells, including changed rows, totals, statuses and sources. File
-   dimensions, a hash or a first-rows preview cannot establish content correctness.
-   Apply the production reference's saved-cell and visual checks, including Excel.
-   Fix omissions and reread the saved revision before delivery; distinguish inspected
-   output from any part whose rendering remains unverified. For byte hashes,
+4. Complete the saved-output readback and final-page inspection in
+   [document production](references/production.md) before delivery. For byte hashes,
    use the installed `sha256sum -- '<absolute artifact path>'` on paths belonging
    to this work; shell-quote each path. Reuse that result until the file changes,
    then deliver the exact file/version through the controlled client. Avoid

@@ -64,8 +64,20 @@ the input workbook stays unchanged. PDF input is retained unchanged. Every PDF p
 `render.json` records hashes and page count. It deliberately says
 `rendered_not_visually_verified`: this is preparation, not acceptance.
 
-Open every page/slide preview. Fix missing Chinese glyphs, clipped text, overflow,
-overlaps, distortion and inconsistent spacing/style; rerender after changes.
+Before delivery, reopen the saved outputs and read all relevant cells,
+paragraphs, tables, summaries, statuses and sources. If readback is truncated or
+reports omitted content, read the remainder in bounded sections. Use each final
+`render.json`'s `pages` count and `files` entries named `page-*.png` to account for
+every page, including source pages. Count a page only after an actual Read call
+returns its image and you visually inspect it; reuse an earlier inspection only
+when its preview hash matches the final image. Fix missing Chinese glyphs,
+clipped text, overflow, overlaps, distortion, spacing and pagination defects,
+then rerender and reconcile the final page list again. Inspection is complete
+only when saved-content readback has no gaps and every final page is covered.
+Rendering and technical checks do not establish visual correctness. Keep this
+reconciliation internal; explain actual blocked or unverified parts in ordinary
+language under the existing permission and delivery rules.
+
 Check poster prices and small-print legibility. Inspect saved PPTX text/shapes to
 confirm editability. For Word, compare the saved DOCX's TOC entries, page fields
 and total pages with the exported PDF after added content moves headings. A
@@ -79,15 +91,15 @@ is not evidence of a calculated result. Independently recompute
 table count × unit price, item totals, verified receipts and balance from the
 current cited inputs; compare the actual saved cells and each document's summary.
 Reopen the helper's returned XLSX and check its formulas and cached results;
-deliver that checked copy. Inspect every rendered sheet/page for long titles,
-notes, wrapping, row heights, clipping and unreadable scaling. A successful Calc
-export is not a visual check, and its print layout does not establish Feishu's
-interactive display. If rendering is unavailable, state the remaining limit.
+deliver that checked copy. Check long titles, notes, wrapping, row heights and
+readable scaling in the final page inspection above. Print layout does not
+establish Feishu's interactive display. If rendering is unavailable, state the
+remaining limit.
 
 For Word tables, repeat header rows, prevent splitting short rows across pages,
 and keep headings with their next paragraph/table. Allow long tables to span
-pages. Inspect all page images for isolated headings, unnecessary blank space,
-clipped text and missing repeated headers; fix only observed layout defects.
+pages. In the final page inspection, check isolated headings, unnecessary blank
+space and missing repeated headers; fix only observed layout defects.
 
 Before delivery, internally compare the saved outputs' cited source names, IDs
 and versions with materials actually read
