@@ -289,6 +289,12 @@ class LaunchdTests(unittest.TestCase):
                             '/bin/test', '-x', str(exe)], check=True, timeout=5)
             config = root / 'fictional.toml'
             config.write_text('# no bot, network or credentials\n')
+            for name in ('stdout', 'stderr'):
+                log = root / name
+                log.touch(mode=0o640)
+                os.chown(log, account.pw_uid, account.pw_gid)
+                subprocess.run(['/usr/bin/sudo', '-n', '-u', account.pw_name,
+                                '/bin/test', '-w', str(log)], check=True, timeout=5)
             values = dict(LABEL=label, PLIST=plist, EXE=str(exe), USER=account.pw_name,
                           GROUP=grp.getgrgid(account.pw_gid).gr_name, CWD=str(root),
                           CONFIG=str(config), STDOUT=str(root / 'stdout'), STDERR=str(root / 'stderr'))

@@ -121,7 +121,7 @@ class Launchd:
                                capture_output=True, timeout=5, env={'LC_ALL': 'C', 'PATH': '/usr/bin:/bin'})
         state = dict(manager='launchd', identity=identity, boot_session=boot, loaded=False,
                      state='unloaded', runs=0, pid='0', coalition=None, exe=None,
-                     process_start=None, receivers=[], receiver_details=[])
+                     process_start=None, receivers=[], receiver_details=[], last_exit_code=None)
         if query.returncode != 0:
             require(query.returncode == 113 and not query.stdout
                     and query.stderr.strip() == 'Bad request.\nCould not find service "'
@@ -138,6 +138,9 @@ class Launchd:
                     and fields.get('pid', '0').isdecimal(), 'invalid_launchd_counters')
             state.update(loaded=True, state=fields.get('state'), runs=int(fields['runs']),
                          pid=fields.get('pid', '0'), coalition=fields['coalition'])
+            exit_code = fields.get('last exit code', '').split(':', 1)[0]
+            if re.fullmatch(r'-?\d+', exit_code):
+                state['last_exit_code'] = int(exit_code)
             require(state['state'] in ('running', 'spawn scheduled', 'waiting', 'not running'),
                     'unknown_launchd_state')
             require(state['pid'] == '0' or state['coalition'], 'missing_launchd_coalition')
@@ -192,5 +195,6 @@ class Launchd:
         return {key: state[key] for key in ('manager', 'boot_session', 'loaded', 'state',
                 'runs', 'pid', 'coalition', 'process_start', 'receiver_details')} | dict(
             sample_available=True, expected_exe=state['exe'] == EXE,
+            last_exit_code=state.get('last_exit_code'),
             receiver_count=len(state['receivers']), receiver_pids=state['receivers'][:32],
             receiver_details_truncated=len(state['receivers']) > 32)
