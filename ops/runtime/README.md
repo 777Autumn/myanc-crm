@@ -65,3 +65,34 @@ binary setting as a privileged fixture initializer. It creates temporary numeric
 identities, renders/revises as the ordinary model UID and reads every completed
 artifact as a different ordinary gateway UID. It also checks that the legacy
 private directory and an unrelated UID are denied. No accounts or services change.
+
+### Native macOS candidate (not installed)
+
+The Mac worker uses `/Applications/LibreOffice.app/Contents/MacOS/soffice` and
+the caller's pinned Python. A private one-shot profile contains a copy of this
+fixed renderer and a JSON job; Office runs that fixed script with its embedded
+Python/UNO. This avoids externally launching its signed helper, whose parent
+launch constraint rejects a shell. No signature changes, document macro enablement,
+UNO listening socket or persistent Office process are needed. The same
+`office_update` handles Word fields/indexes, XLSX recalculation and PDF export.
+Poppler's Apple Silicon path is `/opt/homebrew/bin/pdftoppm`; availability and its
+exact dependencies still require a frozen native install list.
+
+macOS rejects `RLIMIT_AS`. The one-shot supervisor checks its process group's
+aggregate RSS every 100 ms while waiting (2 GiB for conversion, 512 MiB for the
+PDF parser), kills the group on excess or accounting failure, and retains the
+CPU, file-size, wall-time and core-dump limits. This is a sampled memory budget,
+not Linux's hard allocation ceiling: transient excess between samples is possible.
+The Mac PDF validator requires the adjacent protected `team_file_render.py`.
+
+Package exploration used official LibreOffice 26.8.0 ARM64 (reported 26.8.0.3),
+SHA256 `8858d8058da4f862f47559486814e65efc27294da67c5e4bb56b006b1ee59f89`,
+and Python 3.13.15 universal2 installer, SHA256
+`3b7eaf7f29825f796e8267024435540ddf1f17fc9a97ad58095daa7a75bfdcd3`.
+Both hashes and Apple signatures were checked. These are explored candidate
+versions, not a completed dependency lock or installed runtime. An ordinary
+identity converted fictional DOCX/XLSX through the signed read-only Office bundle,
+retaining originals and seven cached formulas; this does not cover Poppler,
+all native dependencies, model sandbox execution or employee visual acceptance.
+Sources: [Office package/hash](https://download.documentfoundation.org/libreoffice/stable/26.8.0/mac/aarch64/LibreOffice_26.8.0_MacOS_aarch64.dmg.mirrorlist),
+[Python package/hash](https://www.python.org/downloads/release/python-31315/).

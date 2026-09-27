@@ -86,13 +86,30 @@ def validate_pdf(data):
 
 
 def main():
-    # Limits precede parser import/decompression. The production host is Linux.
+    if sys.platform == 'darwin' and len(sys.argv) == 1:
+        # Use the same bounded one-shot process group as Office. macOS rejects
+        # RLIMIT_AS; sampled RSS is not a hard allocation ceiling.
+        from pathlib import Path
+        import subprocess
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from team_file_render import run
+        try:
+            output = run([sys.executable, '-I', str(Path(__file__).resolve()), '--bounded-worker'],
+                         data=sys.stdin.buffer.read(MAX_BYTES + 1), timeout=15, memory_limit=512 << 20)
+        except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
+            return 1
+        if output != b'PDF_OK_V1\n':
+            return 1
+        sys.stdout.buffer.write(output)
+        return 0
+    # Limits precede parser import/decompression.
     import resource
-    resource.setrlimit(resource.RLIMIT_AS, (512 << 20, 512 << 20))
+    if sys.platform != 'darwin':
+        resource.setrlimit(resource.RLIMIT_AS, (512 << 20, 512 << 20))
     resource.setrlimit(resource.RLIMIT_CPU, (10, 10))
     resource.setrlimit(resource.RLIMIT_FSIZE, (0, 0))
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-    if len(sys.argv) != 1:
+    if len(sys.argv) != 1 and not (sys.platform == 'darwin' and sys.argv[1:] == ['--bounded-worker']):
         return 2
     try:
         import pypdf  # noqa: F401 -- distinguish missing runtime from invalid input
