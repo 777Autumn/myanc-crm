@@ -268,7 +268,9 @@ class LaunchdTests(unittest.TestCase):
         self.assertNotEqual(account.pw_uid, 0)
         label = 'com.myanc.maintenance-fixture-' + uuid.uuid4().hex
         plist = Path('/Library/LaunchDaemons') / (label + '.plist')
-        with tempfile.TemporaryDirectory(prefix='anc-launchd-') as tmp:
+        # sudo's default TMPDIR can have root-only ancestors; use the shared
+        # system temp parent, then verify traversal as the actual daemon user.
+        with tempfile.TemporaryDirectory(prefix='anc-launchd-', dir='/private/tmp') as tmp:
             root = Path(tmp).resolve()
             root.chmod(0o755)
             source = root / 'fixture.c'
@@ -276,6 +278,8 @@ class LaunchdTests(unittest.TestCase):
             exe = root / 'cc-connect-anc'
             subprocess.run(['/usr/bin/clang', str(source), '-o', str(exe)], check=True, timeout=30)
             exe.chmod(0o755)
+            subprocess.run(['/usr/bin/sudo', '-n', '-u', account.pw_name,
+                            '/bin/test', '-x', str(exe)], check=True, timeout=5)
             config = root / 'fictional.toml'
             config.write_text('# no bot, network or credentials\n')
             values = dict(LABEL=label, PLIST=plist, EXE=str(exe), USER=account.pw_name,
