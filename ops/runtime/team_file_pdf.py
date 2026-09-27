@@ -11,6 +11,7 @@ import sys
 MAX_BYTES = 20 << 20
 MAX_EXPANDED = 100 << 20
 MAX_PAGES = 200
+MAX_MEMORY = 512 << 20
 FORBIDDEN = frozenset({
     '/AA', '/JS', '/JavaScript', '/EmbeddedFiles', '/EF',
     '/AcroForm', '/XFA', '/RichMedia', '/RichMediaContent', '/Launch',
@@ -85,23 +86,30 @@ def validate_pdf(data):
     return len(reader.pages)
 
 
-def main():
-    if sys.platform == 'darwin' and len(sys.argv) == 1:
-        # Use the same bounded one-shot process group as Office. macOS rejects
-        # RLIMIT_AS; sampled RSS is not a hard allocation ceiling.
-        from pathlib import Path
-        import subprocess
-        sys.path.insert(0, str(Path(__file__).resolve().parent))
-        from team_file_render import run
+def mac_memory_guard():
+    """Keep parsing in the host-owned process, so host cancellation kills it.
+
+    Darwin ru_maxrss is bytes. Sampling cannot prevent transient allocations or
+    run while a native parser holds the GIL; the host wall timeout still applies.
+    """
+    import os
+    import resource
+    import threading
+    done = threading.Event()
+
+    def watch():
         try:
-            output = run([sys.executable, '-I', str(Path(__file__).resolve()), '--bounded-worker'],
-                         data=sys.stdin.buffer.read(MAX_BYTES + 1), timeout=15, memory_limit=512 << 20)
-        except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
-            return 1
-        if output != b'PDF_OK_V1\n':
-            return 1
-        sys.stdout.buffer.write(output)
-        return 0
+            while not done.wait(.1):
+                if resource.getrusage(resource.RUSAGE_SELF).ru_maxrss > MAX_MEMORY:
+                    os._exit(2)
+        except Exception:
+            os._exit(2)  # Missing accounting cannot silently disable the guard.
+
+    threading.Thread(target=watch, daemon=True).start()
+    return done
+
+
+def main():
     # Limits precede parser import/decompression.
     import resource
     if sys.platform != 'darwin':
@@ -109,19 +117,24 @@ def main():
     resource.setrlimit(resource.RLIMIT_CPU, (10, 10))
     resource.setrlimit(resource.RLIMIT_FSIZE, (0, 0))
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-    if len(sys.argv) != 1 and not (sys.platform == 'darwin' and sys.argv[1:] == ['--bounded-worker']):
+    if len(sys.argv) != 1:
         return 2
+    guard = mac_memory_guard() if sys.platform == 'darwin' else None
     try:
-        import pypdf  # noqa: F401 -- distinguish missing runtime from invalid input
-    except ImportError:
-        return 2
-    try:
-        validate_pdf(sys.stdin.buffer.read(MAX_BYTES + 1))
-    except Exception:
-        # Never put received document content in host or CI logs.
-        return 1
-    sys.stdout.write('PDF_OK_V1\n')
-    return 0
+        try:
+            import pypdf  # noqa: F401 -- distinguish missing runtime from invalid input
+        except ImportError:
+            return 2
+        try:
+            validate_pdf(sys.stdin.buffer.read(MAX_BYTES + 1))
+        except Exception:
+            # Never put received document content in host or CI logs.
+            return 1
+        sys.stdout.write('PDF_OK_V1\n')
+        return 0
+    finally:
+        if guard is not None:
+            guard.set()
 
 
 if __name__ == '__main__':

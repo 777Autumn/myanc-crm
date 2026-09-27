@@ -78,12 +78,14 @@ UNO listening socket or persistent Office process are needed. The same
 Poppler's Apple Silicon path is `/opt/homebrew/bin/pdftoppm`; availability and its
 exact dependencies still require a frozen native install list.
 
-macOS rejects `RLIMIT_AS`. The one-shot supervisor checks its process group's
-aggregate RSS every 100 ms while waiting (2 GiB for conversion, 512 MiB for the
-PDF parser), kills the group on excess or accounting failure, and retains the
-CPU, file-size, wall-time and core-dump limits. This is a sampled memory budget,
-not Linux's hard allocation ceiling: transient excess between samples is possible.
-The Mac PDF validator requires the adjacent protected `team_file_render.py`.
+macOS rejects `RLIMIT_AS`. The one-shot conversion supervisor checks its process
+group's aggregate RSS every 100 ms while waiting (2 GiB), and kills the group on
+excess or accounting failure. The PDF parser stays in its caller-owned process;
+a thread samples its high-water RSS (512 MiB) and terminates that process on
+excess or accounting failure. Host cancellation therefore cannot orphan a parser
+subprocess. CPU, file-size, wall-time and core-dump limits remain. These are
+sampled memory budgets, not Linux's hard allocation ceiling: transient excess
+is possible, and the PDF monitor cannot run while native code holds the GIL.
 
 Package exploration used official LibreOffice 26.8.0 ARM64 (reported 26.8.0.3),
 SHA256 `8858d8058da4f862f47559486814e65efc27294da67c5e4bb56b006b1ee59f89`,
