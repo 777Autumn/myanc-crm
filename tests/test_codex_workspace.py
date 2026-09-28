@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import queue
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -144,6 +145,23 @@ print('exact Office socket only')
                         'timeoutMs': 10000})
                     self.assertEqual(checked['exitCode'], 0, checked)
                     self.assertIn('exact Office socket only', checked['stdout'])
+                    # A real, listening synthetic management socket must remain
+                    # unreachable, not merely unavailable because nobody listens.
+                    management = office_socket + '-admin'
+                    with socket.socket(socket.AF_UNIX) as listener:
+                        listener.bind(management)
+                        listener.listen(1)
+                        try:
+                            program = ('import socket,sys; s=socket.socket(socket.AF_UNIX); '
+                                       's.settimeout(2); s.connect(sys.argv[1])')
+                            checked = request(6, 'command/exec', {
+                                'permissionProfile': 'anc-work', 'cwd': str(workspace),
+                                'command': ['/usr/bin/env', *python_env, sys.executable, '-I', '-c', program, management],
+                                'timeoutMs': 10000})
+                            self.assertNotEqual(checked['exitCode'], 0)
+                            self.assertIn('PermissionError', checked['stderr'])
+                        finally:
+                            os.unlink(management)
                 finally:
                     process.stdin.close()
                     try:
