@@ -5,6 +5,8 @@ The gateway's shared Office validator runs before LibreOffice; the PDF boundary
 runs before Poppler. No receiver, network listener, delivery or dependency setup.
 """
 import argparse
+import ctypes
+import errno
 import hashlib
 import io
 import json
@@ -79,6 +81,36 @@ def check_xlsx_result(before, data):
             'equals_text_requires_task_review': bool(text_cells)}
 
 
+def mac_group_memory(group):
+    """Sample only this one-shot group without macOS's setuid /bin/ps.
+
+    Darwin proc_info.h: PROC_PGRP_ONLY=2, PROC_PIDTASKINFO=4 (96 bytes).
+    """
+    lib = ctypes.CDLL('/usr/lib/libproc.dylib', use_errno=True)
+    lib.proc_listpids.argtypes = [ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p, ctypes.c_int]
+    lib.proc_pidinfo.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_uint64, ctypes.c_void_p, ctypes.c_int]
+    # ponytail: cap a one-shot document group at 128 processes; fail closed if full.
+    pids = (ctypes.c_int * 128)()
+    size = lib.proc_listpids(2, group, pids, ctypes.sizeof(pids))
+    if size < 0 or size >= ctypes.sizeof(pids) or size % ctypes.sizeof(ctypes.c_int):
+        raise RuntimeError('document process accounting unavailable')
+    resident = []
+    for pid in pids[:size // ctypes.sizeof(ctypes.c_int)]:
+        if not pid:
+            continue
+        # First two uint64 fields are virtual and resident bytes; remaining
+        # fields are four uint64 time counters and twelve int32 counters.
+        info = (ctypes.c_uint64 * 12)()
+        ctypes.set_errno(0)
+        count = lib.proc_pidinfo(pid, 4, 0, info, ctypes.sizeof(info))
+        if count != ctypes.sizeof(info):
+            if count == 0 and ctypes.get_errno() == errno.ESRCH:
+                continue  # A group member can exit between enumeration and read.
+            raise RuntimeError('document process accounting unavailable')
+        resident.append(info[1])
+    return resident
+
+
 def run(command, *, data=None, timeout=30, env=None, memory_limit=2 << 30):
     proc = subprocess.Popen(command, stdin=subprocess.PIPE if data is not None else subprocess.DEVNULL,
                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
@@ -98,9 +130,7 @@ def run(command, *, data=None, timeout=30, env=None, memory_limit=2 << 30):
                     break
                 except subprocess.TimeoutExpired:
                     first = False
-                    usage = subprocess.check_output(['/bin/ps', '-axo', 'pgid=,rss='], timeout=2)
-                    members = [int(rss) * 1024 for group, rss in
-                               (line.split() for line in usage.splitlines()) if int(group) == proc.pid]
+                    members = mac_group_memory(proc.pid)
                     if not members and proc.poll() is None:
                         raise RuntimeError('document process accounting unavailable')
                     resident = sum(members)

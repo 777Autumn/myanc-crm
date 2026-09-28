@@ -16,6 +16,36 @@ import team_file_render as render
 
 
 class MacOfficeTests(unittest.TestCase):
+    def test_native_accounting_is_group_scoped_and_rejects_uncertainty(self):
+        for returned, info_size, error, expected in ((8, 96, 0, [1234, 1234]),
+                                                   (4, 0, render.errno.ESRCH, []),
+                                                   (4, 0, render.errno.EPERM, None),
+                                                   (-1, 96, 0, None), (512, 96, 0, None),
+                                                   (3, 96, 0, None)):
+            with self.subTest(returned=returned, info_size=info_size, error=error):
+                lib = MagicMock()
+
+                def list_pids(kind, group, pids, size):
+                    self.assertEqual((kind, group, size), (2, 42, 512))
+                    pids[0], pids[1] = 42, 43
+                    return returned
+
+                def pid_info(pid, flavor, arg, info, size):
+                    self.assertIn(pid, (42, 43))
+                    self.assertEqual((flavor, arg, size), (4, 0, 96))
+                    info[1] = 1234
+                    render.ctypes.set_errno(error)
+                    return info_size
+
+                lib.proc_listpids.side_effect = list_pids
+                lib.proc_pidinfo.side_effect = pid_info
+                with patch.object(render.ctypes, 'CDLL', return_value=lib):
+                    if expected is None:
+                        with self.assertRaisesRegex(RuntimeError, 'accounting unavailable'):
+                            render.mac_group_memory(42)
+                    else:
+                        self.assertEqual(render.mac_group_memory(42), expected)
+
     @unittest.skipUnless(sys.platform == 'darwin', 'requires native macOS process accounting')
     def test_actual_mac_memory_and_timeout_cleanup(self):
         self.assertNotEqual(os.geteuid(), 0)
@@ -57,15 +87,14 @@ class MacOfficeTests(unittest.TestCase):
             self.assertFalse(any('--accept' in item for item in argv))
 
     def test_memory_monitor_counts_only_own_group_and_cleans_up(self):
-        for usage, rejects in ((b'42 300\n42 300\n9 9000000\n', True),
-                               (b'42 100\n9 9000000\n', False),
-                               (b'unparseable\n', True), (b'', True)):
+        for usage, rejects in (([300 << 10, 300 << 10], True),
+                               ([100 << 10], False), ([], True)):
             with self.subTest(usage=usage):
                 proc = MagicMock(pid=42, returncode=0)
                 proc.poll.return_value = None
                 proc.communicate.side_effect = [subprocess.TimeoutExpired('fixture', .1), (b'done', b'')]
                 with patch.object(sys, 'platform', 'darwin'), patch.object(render.subprocess, 'Popen', return_value=proc), \
-                        patch.object(render.subprocess, 'check_output', return_value=usage), \
+                        patch.object(render, 'mac_group_memory', return_value=usage), \
                         patch.object(render.signal, 'SIGKILL', 9, create=True), \
                         patch.object(render.os, 'killpg', create=True) as kill:
                     if rejects:

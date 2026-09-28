@@ -104,6 +104,20 @@ printf 'protected workspace passed\n'
                     self.assertIn("protected workspace passed", result["stdout"])
                     self.assertEqual((workspace / "CLAUDE.md").read_bytes(), (OPS / "CLAUDE.vps.md").read_bytes())
                     self.assertEqual((auth / "config.toml").read_bytes(), TEMPLATE.read_bytes())
+                    # Exercise the production monitor inside the actual sandbox:
+                    # macOS's setuid ps is forbidden even though libproc is usable.
+                    program = ("import sys; sys.path.insert(0, " + repr(str(OPS / "runtime")) + "); "
+                               "import team_file_render as r; "
+                               "assert r.run(['/bin/sleep', '.3']) == b''; "
+                               "r.run(['/bin/sleep', '5'], memory_limit=1)")
+                    python_env = [key + "=" + os.environ[key] for key in
+                                  ("PYTHONHOME", "DYLD_FRAMEWORK_PATH") if key in os.environ]
+                    checked = request(4, "command/exec", {
+                        "permissionProfile": "anc-work", "cwd": str(workspace),
+                        "command": ["/usr/bin/env", *python_env, sys.executable, "-I", "-c", program],
+                        "timeoutMs": 10000})
+                    self.assertNotEqual(checked["exitCode"], 0)
+                    self.assertIn("document process group exceeded memory budget", checked["stderr"])
                 finally:
                     process.stdin.close()
                     try:
