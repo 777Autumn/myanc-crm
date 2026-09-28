@@ -1,6 +1,10 @@
 """Runtime policy routing/package contract; no model or production access."""
 from pathlib import Path
+import hashlib
 import re
+import subprocess
+import sys
+import tempfile
 import unittest
 
 
@@ -8,6 +12,20 @@ OPS = Path(__file__).parents[1] / "ops"
 
 
 class RuntimeSkillsTests(unittest.TestCase):
+    def test_documented_artifact_hashes_saved_bytes_and_fails_for_missing_file(self):
+        skill = (OPS / 'skills/team-files/SKILL.md').read_text(encoding='utf-8')
+        code = skill.split('```python\n', 1)[1].split('\n```', 1)[0]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / '虚构 预算.xlsx'
+            content = b'fictional saved artifact\x00\xff'
+            path.write_bytes(content)
+            command = [sys.executable, '-I', '-X', 'utf8', '-c', code]
+            result = subprocess.run(command + [str(path)], capture_output=True, text=True, encoding='utf-8')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.strip(), hashlib.sha256(content).hexdigest() + '  ' + str(path))
+            self.assertEqual(path.read_bytes(), content)
+            self.assertNotEqual(subprocess.run(command + [str(path) + '.missing'], capture_output=True).returncode, 0)
+
     def test_thin_policy_routes_to_single_authoritative_protocols(self):
         policy = (OPS / "CLAUDE.vps.md").read_text(encoding="utf-8")
         self.assertLess(len(policy.splitlines()), 200)
