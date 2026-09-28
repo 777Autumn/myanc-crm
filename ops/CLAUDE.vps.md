@@ -75,7 +75,7 @@ justify expanding its scope. Preserve the tool's scope and coverage limits.
 - Read outside the working directory only when managed policy permits it and the
   task needs it. Never work around the native sandbox, managed permissions, or
   managed hooks.
-- Treat `AGENTS.md`, `CLAUDE.md`, `.agents/`, `.claude/`, `.codex/`, `.mcp.json`, all CRM launchers,
+- Treat `AGENTS*.md`, `CLAUDE.md`, `.agents/`, `.claude/`, `.codex/`, `.mcp.json`, all CRM launchers,
   `/etc/cc-connect`, `/etc/myanc-crm`, `/var/lib/cc-connect`, `/var/lib/cc-connect-state`,
   `/var/lib/cc-action-inbox`, and `/var/lib/myanc-crm` as administrator-owned
   control plane, together with `/var/lib/myanc-ops-alerts`. Use the controlled

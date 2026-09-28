@@ -17,6 +17,7 @@ extends = ":workspace"
 "~/.codex" = "deny"
 
 [permissions.anc-work.filesystem.":workspace_roots"]
+"AGENTS.override.md" = "read"
 "AGENTS.md" = "read"
 "CLAUDE.md" = "read"
 ".agents" = "read"

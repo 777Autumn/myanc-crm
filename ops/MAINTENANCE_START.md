@@ -55,7 +55,7 @@ The matching `runtime/codex.config.example.toml` uses the `anc-work` named nativ
 permission profile. Select that same profile in the gateway agent options. Keep
 each entry's HOME and CODEX_HOME private and install the config as root-owned;
 device login remains per identity. The tool sandbox denies the authentication
-directory and protects both rule paths and link anchors. OS ownership, dedicated
+directory and protects rule paths, `AGENTS.override.md` and link anchors. OS ownership, dedicated
 groups and the existing host capabilities remain required. The loopback network
 rule is hostname-wide, not a port ACL, and does not authorize an administration
 socket. Do not add unrestricted network/HOME access to make a failed tool work.

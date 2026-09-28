@@ -88,7 +88,7 @@ grep -q REMOTE_WORKSPACE_BOUNDARY_V3 AGENTS.md
 cat .agents/skills/team-files/SKILL.md > /dev/null
 printf 'fictional result v1' > result-v1.txt
 printf 'fictional result v2' > result-v2.txt
-for file in AGENTS.md CLAUDE.md .agents/new.md .claude/new.md .codex/new.md .mcp.json; do
+for file in AGENTS.override.md AGENTS.md CLAUDE.md .agents/new.md .claude/new.md .codex/new.md .mcp.json; do
   if (mkdir -p "$(dirname "$file")"; printf forbidden > "$file") 2>/dev/null; then exit 11; fi
 done
 if mv .claude renamed-rules 2>/dev/null; then exit 12; fi
