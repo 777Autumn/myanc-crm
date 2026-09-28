@@ -60,6 +60,25 @@ groups and the existing host capabilities remain required. The loopback network
 rule is hostname-wide, not a port ACL, and does not authorize an administration
 socket. Do not add unrestricted network/HOME access to make a failed tool work.
 
+For the paired gateway's optional `shared_app_server=true`, select `anc-shared`
+instead. Its base allows only system/tool reads; the gateway adds each fixed
+entrance's workspace and current file work to that thread. All four approved
+entrances use one exact `run_as_user`, `codex_home`, pinned CLI and process proxy
+configuration. The one native app-server owns the login; do not copy auth files
+or put session capability tokens into its process environment. The native
+sandbox and trusted host scope isolate entrances under this common ordinary
+identity; this does not claim separate OS users for those model threads.
+
+Freeze the actual ordinary gateway/owner identities, dedicated handoff group,
+root-owned rules/configuration and workspace paths before installing. Never use
+`staff` or a readable shared HOME. Dynamic chat workspace creation is unsupported
+in this fixed-entrance mode. Native thread unload must be confirmed before a cold
+resume refreshes its work capabilities; uncertain unload blocks that entrance.
+Process failure requires inspection, not an automatic new authentication owner.
+The opt-in profile does not change the legacy default. Final native boundary and
+paired installation evidence remain required; changing this template alone
+neither enables the Bot nor proves an employee journey.
+
 Run `ANC_CODEX_BIN=/path/to/pinned/codex python -m unittest discover -s tests -p
 test_codex_workspace.py -v` as an ordinary Mac identity. The test uses temporary
 fictional files, calls the actual CLI's `skills/list` and sandboxed `command/exec`,

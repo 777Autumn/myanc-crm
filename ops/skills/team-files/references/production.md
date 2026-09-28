@@ -56,6 +56,11 @@ Let the helper create the new render directory; pass a path that does not yet
 exist. If it reports an existing output directory, preserve that directory and
 choose a new name; this input error does not require broader permissions.
 
+On macOS, convert files within the same work one at a time. Wait for each
+converter to finish before starting the next; the work has one protected Office
+profile. A busy or stale profile is a stop condition, not permission to delete
+its lock or bypass the helper. This does not serialize different employees' work.
+
 The helper validates Office content through the existing gateway binary before
 conversion. For DOCX it refreshes fields and indexes, saves a new editable DOCX,
 then exports PDF. PPTX exports PDF without flattening or replacing its editable
