@@ -38,8 +38,9 @@ description: 读取员工选定的文档、表格、PDF和图片，制作或修�
    allowed workspace, separate from delivered artifacts.
 4. Complete the saved-output readback and final-page inspection in
    [document production](references/production.md) before delivery. For byte hashes,
-   use the installed `sha256sum -- '<absolute artifact path>'` on paths belonging
-   to this work; shell-quote each path. Reuse that result until the file changes,
+   use `sha256sum -- '<absolute artifact path>'` on Linux or the native
+   `/usr/bin/shasum -a 256 -- '<absolute artifact path>'` on macOS, only on paths
+   belonging to this work; shell-quote each path. Reuse that result until the file changes,
    then deliver the exact file/version through the controlled client. Avoid
    repeated inline Python programs just to compute or recount the same hash.
    This changes no permission rule: if a tool requests approval, keep the request

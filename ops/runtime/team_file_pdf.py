@@ -11,6 +11,7 @@ import sys
 MAX_BYTES = 20 << 20
 MAX_EXPANDED = 100 << 20
 MAX_PAGES = 200
+MAX_MEMORY = 512 << 20
 FORBIDDEN = frozenset({
     '/AA', '/JS', '/JavaScript', '/EmbeddedFiles', '/EF',
     '/AcroForm', '/XFA', '/RichMedia', '/RichMediaContent', '/Launch',
@@ -85,26 +86,55 @@ def validate_pdf(data):
     return len(reader.pages)
 
 
-def main():
-    # Limits precede parser import/decompression. The production host is Linux.
+def mac_memory_guard():
+    """Keep parsing in the host-owned process, so host cancellation kills it.
+
+    Darwin ru_maxrss is bytes. Sampling cannot prevent transient allocations or
+    run while a native parser holds the GIL; the host wall timeout still applies.
+    """
+    import os
     import resource
-    resource.setrlimit(resource.RLIMIT_AS, (512 << 20, 512 << 20))
+    import threading
+    done = threading.Event()
+
+    def watch():
+        try:
+            while not done.wait(.1):
+                if resource.getrusage(resource.RUSAGE_SELF).ru_maxrss > MAX_MEMORY:
+                    os._exit(2)
+        except Exception:
+            os._exit(2)  # Missing accounting cannot silently disable the guard.
+
+    threading.Thread(target=watch, daemon=True).start()
+    return done
+
+
+def main():
+    # Limits precede parser import/decompression.
+    import resource
+    if sys.platform != 'darwin':
+        resource.setrlimit(resource.RLIMIT_AS, (512 << 20, 512 << 20))
     resource.setrlimit(resource.RLIMIT_CPU, (10, 10))
     resource.setrlimit(resource.RLIMIT_FSIZE, (0, 0))
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     if len(sys.argv) != 1:
         return 2
+    guard = mac_memory_guard() if sys.platform == 'darwin' else None
     try:
-        import pypdf  # noqa: F401 -- distinguish missing runtime from invalid input
-    except ImportError:
-        return 2
-    try:
-        validate_pdf(sys.stdin.buffer.read(MAX_BYTES + 1))
-    except Exception:
-        # Never put received document content in host or CI logs.
-        return 1
-    sys.stdout.write('PDF_OK_V1\n')
-    return 0
+        try:
+            import pypdf  # noqa: F401 -- distinguish missing runtime from invalid input
+        except ImportError:
+            return 2
+        try:
+            validate_pdf(sys.stdin.buffer.read(MAX_BYTES + 1))
+        except Exception:
+            # Never put received document content in host or CI logs.
+            return 1
+        sys.stdout.write('PDF_OK_V1\n')
+        return 0
+    finally:
+        if guard is not None:
+            guard.set()
 
 
 if __name__ == '__main__':

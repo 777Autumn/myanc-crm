@@ -15,6 +15,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 import zipfile
 import xml.etree.ElementTree as ET
 
@@ -78,12 +79,35 @@ def check_xlsx_result(before, data):
             'equals_text_requires_task_review': bool(text_cells)}
 
 
-def run(command, *, data=None, timeout=30, env=None):
+def run(command, *, data=None, timeout=30, env=None, memory_limit=2 << 30):
     proc = subprocess.Popen(command, stdin=subprocess.PIPE if data is not None else subprocess.DEVNULL,
                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                             env=env, start_new_session=True)
     try:
-        stdout, _ = proc.communicate(data, timeout=timeout)
+        if sys.platform == 'darwin':
+            # macOS rejects RLIMIT_AS. Bound the whole one-shot process group
+            # by sampled RSS instead; this is not a hard allocation ceiling.
+            deadline = time.monotonic() + timeout
+            first = True
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise subprocess.TimeoutExpired(command, timeout)
+                try:
+                    stdout, _ = proc.communicate(data if first else None, timeout=min(.1, remaining))
+                    break
+                except subprocess.TimeoutExpired:
+                    first = False
+                    usage = subprocess.check_output(['/bin/ps', '-axo', 'pgid=,rss='], timeout=2)
+                    members = [int(rss) * 1024 for group, rss in
+                               (line.split() for line in usage.splitlines()) if int(group) == proc.pid]
+                    if not members and proc.poll() is None:
+                        raise RuntimeError('document process accounting unavailable')
+                    resident = sum(members)
+                    if resident > memory_limit:
+                        raise RuntimeError('document process group exceeded memory budget')
+        else:
+            stdout, _ = proc.communicate(data, timeout=timeout)
         if proc.returncode:
             raise RuntimeError('document tool failed; preserve original and inspect runtime')
         return stdout
@@ -131,7 +155,7 @@ def prepare_paths(work_root, source, destination):
 
 def render(work_root, source, destination, gateway):
     if os.name != 'posix' or os.geteuid() == 0:
-        raise ValueError('render as the ordinary employee runtime account on Linux')
+        raise ValueError('render as the ordinary employee runtime account')
     source, target, outputs = prepare_paths(work_root, source, destination)
     with source.open('rb') as stream:
         data = stream.read(MAX_BYTES + 1)
@@ -157,7 +181,8 @@ def render(work_root, source, destination, gateway):
                 # Bound Calc's import pool on many-core hosts under the same 2 GiB
                 # worker limit; do not relax the sandbox or start an Office server.
                 env['MAX_CONCURRENCY'] = '1'
-            run(['/usr/bin/python3', '-I', str(Path(__file__).resolve()), '--office-worker',
+            worker_python = sys.executable if sys.platform == 'darwin' else '/usr/bin/python3'
+            run([worker_python, '-I', str(Path(__file__).resolve()), '--office-worker',
                  str(frozen), str(target), source.stem, str(scratch)], timeout=120, env=env)
             updated = target / (source.stem + '.docx')
             if source.suffix.lower() == '.docx':
@@ -170,7 +195,8 @@ def render(work_root, source, destination, gateway):
         else:
             pdf.write_bytes(data)
         pdf_check(pdf.read_bytes())
-        run(['/usr/bin/python3', '-I', str(Path(__file__).resolve()), '--preview-worker',
+        preview_python = sys.executable if sys.platform == 'darwin' else '/usr/bin/python3'
+        run([preview_python, '-I', str(Path(__file__).resolve()), '--preview-worker',
              str(pdf), str(target / 'page')], timeout=120)
     from pypdf import PdfReader
     page_count = len(PdfReader(pdf).pages)
@@ -195,7 +221,8 @@ def worker_limits():
     import resource
     if os.geteuid() == 0:
         raise ValueError('ordinary identity required')
-    resource.setrlimit(resource.RLIMIT_AS, (2 << 30, 2 << 30))
+    if sys.platform != 'darwin':
+        resource.setrlimit(resource.RLIMIT_AS, (2 << 30, 2 << 30))
     resource.setrlimit(resource.RLIMIT_CPU, (90, 90))
     resource.setrlimit(resource.RLIMIT_FSIZE, (128 << 20, 128 << 20))
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
@@ -203,11 +230,35 @@ def worker_limits():
 
 def preview_worker(pdf, prefix):
     worker_limits()
-    os.execv('/usr/bin/pdftoppm', ['pdftoppm', '-png', '-r', '100', '-scale-to', '1800', pdf, prefix])
+    binary = '/opt/homebrew/bin/pdftoppm' if sys.platform == 'darwin' else '/usr/bin/pdftoppm'
+    os.execv(binary, ['pdftoppm', '-png', '-r', '100', '-scale-to', '1800', pdf, prefix])
 
 
 def office_worker(source, destination, stem, scratch):
     worker_limits()
+    if sys.platform == 'darwin':
+        # Signed macOS helpers cannot be launched from an external shell.
+        # Run only our fixed script inside the signed Office process, with a
+        # private one-shot profile. Received document macros remain disabled.
+        profile = Path(scratch) / 'profile'
+        scripts = profile / 'user/Scripts/python'
+        scripts.mkdir(parents=True, mode=0o700)
+        (scripts / 'anc_render.py').write_bytes(Path(__file__).read_bytes())
+        (scripts / 'job.json').write_text(json.dumps([source, destination, stem]), encoding='utf-8')
+        # Headless Office uses Fontconfig rather than the desktop font catalog.
+        # Reuse installed system fonts, with all cache writes inside this work.
+        fonts = ET.Element('fontconfig')
+        for directory in ('/System/Library/Fonts', '/Library/Fonts'):
+            ET.SubElement(fonts, 'dir').text = directory
+        ET.SubElement(fonts, 'cachedir').text = str(profile / 'font-cache')
+        font_config = profile / 'fonts.conf'
+        ET.ElementTree(fonts).write(font_config, encoding='utf-8', xml_declaration=True)
+        os.environ['FONTCONFIG_FILE'] = str(font_config)
+        binary = '/Applications/LibreOffice.app/Contents/MacOS/soffice'
+        os.execv(binary, [binary, '--headless', '--nologo', '--nodefault', '--norestore',
+                         '-env:UserInstallation=' + profile.as_uri(),
+                         'vnd.sun.star.script:anc_render.py$mac_office_job?language=Python&location=user'])
+        return
     import ctypes as c
 
     # The installed LibreOfficeKit initializes Office in this worker. Claude's
@@ -226,6 +277,26 @@ def office_worker(source, destination, stem, scratch):
     office = library.libreofficekit_hook_2(b'/usr/lib/libreoffice/program', (scratch / 'profile').as_uri().encode())
     if not office or office.contents.methods.contents.size < c.sizeof(OfficeClass):
         raise RuntimeError('LibreOffice initialization failed')
+
+    try:
+        office_update(source, target, stem)
+    finally:
+        office.contents.methods.contents.destroy(office)
+
+
+def mac_office_job(*_args):
+    import uno
+    # LibreOffice's script provider supplies a file URL, not a filesystem path.
+    script = Path(uno.fileUrlToSystemPath(__file__))
+    source, destination, stem = json.loads(script.with_name('job.json').read_text(encoding='utf-8'))
+    office_update(source, destination, stem)
+
+
+g_exportedScripts = (mac_office_job,)
+
+
+def office_update(source, destination, stem):
+    source, target = Path(source), Path(destination)
 
     import uno
     from com.sun.star.beans import PropertyValue
@@ -270,11 +341,8 @@ def office_worker(source, destination, stem, scratch):
         doc.close(True)
         doc = None
     finally:
-        try:
-            if doc is not None:
-                doc.dispose()
-        finally:
-            office.contents.methods.contents.destroy(office)
+        if doc is not None:
+            doc.dispose()
 
 
 def main():
@@ -296,7 +364,7 @@ def main():
         parser.exit(1, 'Output directory already exists; preserve it and choose a new directory name '
                     'inside this work outputs; do not create it beforehand. No delivery was attempted.\n')
     except (OSError, ValueError, RuntimeError, KeyError, IndexError, TypeError,
-            zipfile.BadZipFile, ET.ParseError, subprocess.TimeoutExpired):
+            zipfile.BadZipFile, ET.ParseError, subprocess.SubprocessError):
         parser.exit(1, 'Document preparation failed; originals retained. No delivery was attempted.\n')
     print(json.dumps(result, ensure_ascii=False))
 

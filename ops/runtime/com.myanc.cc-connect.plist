@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>com.myanc.cc-connect</string>
+    <key>ProgramArguments</key><array>
+        <string>/usr/local/bin/cc-connect-anc</string>
+        <string>-config</string>
+        <string>/usr/local/etc/cc-connect/config.toml</string>
+    </array>
+    <key>UserName</key><string>_ancgateway</string>
+    <key>GroupName</key><string>_ancgateway</string>
+    <key>WorkingDirectory</key><string>/var/lib/cc-connect</string>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><false/>
+    <key>AbandonProcessGroup</key><false/>
+    <key>ProcessType</key><string>Background</string>
+    <key>ExitTimeOut</key><integer>30</integer>
+    <key>Umask</key><integer>63</integer>
+    <key>StandardOutPath</key><string>/var/log/anc-gateway/stdout.log</string>
+    <key>StandardErrorPath</key><string>/var/log/anc-gateway/stderr.log</string>
+    <key>EnvironmentVariables</key><dict>
+        <key>HOME</key><string>/var/lib/cc-connect</string>
+        <key>PATH</key><string>/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+</dict>
+</plist>

@@ -128,6 +128,16 @@ def diagnostic(state):
         'receiver_details_truncated': len(state['receivers']) > 32}
 
 
+def systemd_view(state):
+    """Lifecycle decisions; the original systemd sample/receipts stay unchanged."""
+    return dict(pid=state['MainPID'], epoch=state['InvocationID'] or None,
+                stopped=state['ActiveState'] == 'inactive' and state['MainPID'] == '0',
+                alive=state['ActiveState'] in ('active', 'activating'),
+                running=state['ActiveState'] == 'active' and state['SubState'] == 'running',
+                no_restarts=state['NRestarts'] == '0', exe=state['exe'],
+                process_start=state['process_start'], receivers=state['receivers'])
+
+
 def pause_verified(backend, identity, invocation, verify_controls):
     """Stop the unchanged unit, including before its child exec has completed.
 
@@ -136,15 +146,17 @@ def pause_verified(backend, identity, invocation, verify_controls):
     """
     verify_controls()
     state = backend.sample()
-    require(unit_identity(state) == identity, 'pause_unit_changed')
-    if state['ActiveState'] == 'inactive' and state['MainPID'] == '0':
-        require(not state['receivers'], 'receiver_outside_stopped_unit')
+    require(getattr(backend, 'identity', unit_identity)(state) == identity, 'pause_unit_changed')
+    view = getattr(backend, 'view', systemd_view)(state)
+    if view['stopped']:
+        require(not view['receivers'], 'receiver_outside_stopped_unit')
         return 'already_stopped'
-    require(invocation and state['InvocationID'] == invocation, 'pause_invocation_changed')
+    require(invocation and view['epoch'] == invocation, 'pause_invocation_changed')
     backend.command('stop')
     stopped = backend.sample()
-    require(unit_identity(stopped) == identity and stopped['ActiveState'] == 'inactive'
-            and stopped['MainPID'] == '0' and not stopped['receivers'], 'pause_not_stopped')
+    view = getattr(backend, 'view', systemd_view)(stopped)
+    require(getattr(backend, 'identity', unit_identity)(stopped) == identity
+            and view['stopped'] and not view['receivers'], 'pause_not_stopped')
     return 'paused'
 
 
@@ -157,12 +169,14 @@ def start_once(record, verify_controls, *, backend=None, timeout=40,
     """
     require(0 < timeout <= 40, 'invalid_timeout')
     backend = backend or Systemd()
+    identify = getattr(backend, 'identity', unit_identity)
+    inspect = getattr(backend, 'view', systemd_view)
     verify_controls()
     state = backend.sample()
-    identity = unit_identity(state)
-    require(state['ActiveState'] == 'inactive' and state['MainPID'] == '0'
-            and not state['receivers'], 'service_not_stopped')
-    record('start-requested.json', {'time': time.time(), 'unit': UNIT,
+    identity = identify(state)
+    view = inspect(state)
+    require(view['stopped'] and not view['receivers'], 'service_not_stopped')
+    record('start-requested.json', {'time': time.time(), 'unit': getattr(backend, 'unit', UNIT),
            'identity_sha256': hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()})
     invocation = None
     last = state
@@ -174,33 +188,36 @@ def start_once(record, verify_controls, *, backend=None, timeout=40,
         ready_identity = None
         while True:
             last = backend.sample()
-            require(unit_identity(last) == identity, 'startup_unit_changed')
-            current_invocation = last['InvocationID'] or None
+            require(identify(last) == identity, 'startup_unit_changed')
+            view = inspect(last)
+            current_invocation = view['epoch']
             if invocation is None:
                 invocation = current_invocation
             require(invocation == current_invocation, 'startup_invocation_changed')
-            require(last['NRestarts'] == '0', 'unexpected_restart')
-            require(last['ActiveState'] in ('active', 'activating'), 'startup_exited')
-            pid = last['MainPID']
+            require(view['no_restarts'], 'unexpected_restart')
+            require(view['alive'], 'startup_exited')
+            pid = view['pid']
             if pid != '0':
                 pinned_pid = pinned_pid or pid
             require(pinned_pid is None or pinned_pid == pid, 'startup_pid_changed')
-            if last['process_start'] is not None:
-                pinned_start = pinned_start or last['process_start']
-            require(last['process_start'] is None or pinned_start == last['process_start'], 'startup_pid_reused')
-            require(not last['receivers'] or (pid != '0' and last['receivers'] == [pid]), 'duplicate_receiver')
+            if view['process_start'] is not None:
+                pinned_start = pinned_start or view['process_start']
+            require(view['process_start'] is None or pinned_start == view['process_start'], 'startup_pid_reused')
+            require(not view['receivers'] or (pid != '0' and view['receivers'] == [pid]), 'duplicate_receiver')
             require(clock() < deadline, 'startup_timeout')
-            ready = (invocation and pid != '0' and last['process_start'] is not None
-                     and last['ActiveState'] == 'active' and last['SubState'] == 'running'
-                     and last['exe'] == EXE and last['receivers'] == [pid])
-            current_identity = (invocation, pid, last['process_start']) if ready else None
+            ready = (invocation and pid != '0' and view['process_start'] is not None
+                     and view['running'] and view['exe'] == getattr(backend, 'exe', EXE)
+                     and view['receivers'] == [pid])
+            current_identity = (invocation, pid, view['process_start']) if ready else None
             if current_identity is not None and current_identity == ready_identity:
                 break
             ready_identity = current_identity
             sleep(min(0.25, max(0, deadline - clock())))
         verify_controls()
-        result = {'time': time.time(), 'pid': last['MainPID'], 'invocation': invocation,
-                  'process_start': last['process_start'], 'process_identity_ready': True}
+        result = {'time': time.time(), 'pid': view['pid'], 'invocation': invocation,
+                  'process_start': view['process_start'], 'process_identity_ready': True}
+        if hasattr(backend, 'diagnostic'):
+            result['native_sample'] = backend.diagnostic(last)
         record('started.json', result)
         return result
     except BaseException as exc:
@@ -210,14 +227,15 @@ def start_once(record, verify_controls, *, backend=None, timeout=40,
         try:
             if invocation is None:
                 current = backend.sample()
-                require(unit_identity(current) == identity, 'pause_unit_changed')
-                invocation = current['InvocationID'] or None
+                require(identify(current) == identity, 'pause_unit_changed')
+                invocation = inspect(current)['epoch']
             safety = pause_verified(backend, identity, invocation, verify_controls)
         except BaseException as pause_exc:
             pause_error = str(pause_exc) if isinstance(pause_exc, StartError) else type(pause_exc).__name__
         failure = {'failed': True, 'category': type(exc).__name__,
                    'reason': str(exc) if isinstance(exc, StartError) else 'start_or_receipt_failed',
-                   'last_sample': diagnostic(last), 'safety': safety, 'pause_error': pause_error}
+                   'last_sample': getattr(backend, 'diagnostic', diagnostic)(last),
+                   'safety': safety, 'pause_error': pause_error}
         try:
             record('start-failed.json', failure)
         except BaseException:
@@ -249,6 +267,7 @@ def recover_once(record, read_record, verify_controls, verify_reconciled, *, exp
     require(expected['failure_receipt'] in ('failed.json', 'start-failed.json'),
             'invalid_failure_receipt')
     require(0 < timeout <= 40, 'invalid_timeout')
+    backend = backend or Systemd()
     try:
         read_record('recovery-requested.json')
     except FileNotFoundError:
@@ -274,7 +293,8 @@ def recover_once(record, read_record, verify_controls, verify_reconciled, *, exp
     require(all(attempt.get(key) == expected[key] for key in
                 ('candidate_sha256', 'manifest_sha256', 'installed_manifest_sha256')),
             'recovery_candidate_changed')
-    require(request.get('unit') == UNIT and isinstance(request.get('identity_sha256'), str),
+    require(request.get('unit') == getattr(backend, 'unit', UNIT)
+            and isinstance(request.get('identity_sha256'), str),
             'invalid_original_start_request')
     require(isinstance(failure.get('category'), str) and bool(failure['category']),
             'invalid_original_failure')
@@ -286,7 +306,6 @@ def recover_once(record, read_record, verify_controls, verify_reconciled, *, exp
                  ('controls_sha256', 'business_state_sha256', 'installed_manifest_sha256')}
     require(all(isinstance(value, str) and re.fullmatch('[0-9a-f]{64}', value)
                 for value in snapshots.values()), 'invalid_reconciliation_snapshot')
-    backend = backend or Systemd()
 
     def reconciled():
         # Recheck the immutable bindings as well as live state immediately before
@@ -299,16 +318,17 @@ def recover_once(record, read_record, verify_controls, verify_reconciled, *, exp
         verify_controls()
         require(verify_reconciled() == snapshots, 'reconciliation_changed')
         state = backend.sample()
-        identity = unit_identity(state)
+        identity = getattr(backend, 'identity', unit_identity)(state)
         identity_sha = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
         require(identity_sha == request['identity_sha256'], 'recovery_unit_changed')
-        require(state['ActiveState'] == 'inactive' and state['MainPID'] == '0'
-                and not state['receivers'], 'service_not_stopped')
+        view = getattr(backend, 'view', systemd_view)(state)
+        require(view['stopped'] and not view['receivers'], 'service_not_stopped')
 
     reconciled()
     # Atomic non-overwrite creation is the concurrency guard. Never remove this
     # marker, even if its writer raises after persistence or the process dies.
-    record('recovery-requested.json', dict(expected, **snapshots, time=time.time(), unit=UNIT))
+    record('recovery-requested.json', dict(expected, **snapshots, time=time.time(),
+                                         unit=getattr(backend, 'unit', UNIT)))
     try:
         reconciled()
         return start_once(lambda name, payload: record('recovery-' + name, payload),

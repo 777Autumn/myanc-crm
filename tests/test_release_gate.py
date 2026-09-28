@@ -23,6 +23,19 @@ class ReleaseGateTests(unittest.TestCase):
     def test_complete_exact_run_passes(self):
         gate.validate_run(self.repo, self.sha, "push", self.run, self.jobs)
 
+    def test_native_candidate_cannot_substitute_linux_only_or_skipped_ci(self):
+        required = ("mac-codex (ubuntu-latest)", "mac-codex (macos-latest)")
+        with self.assertRaises(ValueError):
+            gate.validate_run(self.repo, self.sha, "push", self.run, self.jobs, required)
+        jobs = self.jobs + [dict(name=name, status="completed", conclusion="success") for name in required]
+        gate.validate_run(self.repo, self.sha, "push", self.run, jobs, required)
+        for outcome in ("skipped", "failure", None):
+            with self.assertRaises(ValueError):
+                gate.validate_run(self.repo, self.sha, "push", self.run,
+                                  jobs[:-1] + [dict(jobs[-1], conclusion=outcome)], required)
+        with self.assertRaises(ValueError):
+            gate.validate_run(self.repo, self.sha, "push", self.run, jobs[1:], required)
+
     def test_knowledge_requires_all_four_exact_matrix_jobs(self):
         repo = "77AutumN/myanc-team-brain"
         jobs = [dict(name=f"test ({os_name}, {python})", status="completed", conclusion="success")

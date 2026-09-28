@@ -8,7 +8,7 @@ import tarfile
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 OPS = Path(__file__).parents[1] / "ops"
 sys.path.insert(0, str(OPS))
@@ -18,6 +18,32 @@ SPEC.loader.exec_module(builder)
 
 
 class CandidateTests(unittest.TestCase):
+    def test_mac_missing_native_ci_blocks_before_export(self):
+        with tempfile.TemporaryDirectory() as temp, \
+             patch.object(builder.gate, "ordinary_allowed"), \
+             patch.object(builder.gate, "released", return_value={}), \
+             patch.object(builder.gate, "ci", side_effect=ValueError("missing native CI")), \
+             patch.object(builder, "export") as export:
+            with self.assertRaisesRegex(ValueError, "missing native CI"):
+                builder.build("a" * 40, "b" * 40, Path(temp) / "mac.tgz", target="darwin/arm64")
+            export.assert_not_called()
+
+    def test_unsupported_target_blocks_before_github_or_export(self):
+        with patch.object(builder.gate, "ordinary_allowed") as gate:
+            with self.assertRaisesRegex(ValueError, "unsupported candidate target"):
+                builder.build("a" * 40, "b" * 40, "unused.tgz", target="darwin/amd64")
+            gate.assert_not_called()
+
+    def test_mac_missing_crm_native_ci_blocks_even_with_gateway_green(self):
+        with tempfile.TemporaryDirectory() as temp, \
+             patch.object(builder.gate, "ordinary_allowed"), \
+             patch.object(builder.gate, "released", return_value={}), \
+             patch.object(builder.gate, "ci", side_effect=[{}, ValueError("missing CRM native CI")]), \
+             patch.object(builder, "export") as export:
+            with self.assertRaisesRegex(ValueError, "missing CRM native CI"):
+                builder.build("a" * 40, "b" * 40, Path(temp) / "mac.tgz", target="darwin/arm64")
+            export.assert_not_called()
+
     def test_old_gateway_has_no_file_runtime_and_partial_runtime_is_refused(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -31,8 +57,8 @@ class CandidateTests(unittest.TestCase):
                 builder.copy_file_runtime_templates(gateway, bundle)
 
     def test_build_packages_only_explicit_fresh_sources_with_all_hashes(self):
-        for knowledge_sha in (None, "c" * 40):
-            with self.subTest(knowledge=knowledge_sha), tempfile.TemporaryDirectory() as temp:
+        for knowledge_sha, target in ((None, "linux/amd64"), ("c" * 40, "linux/amd64"), ("c" * 40, "darwin/arm64")):
+            with self.subTest(knowledge=knowledge_sha, target=target), tempfile.TemporaryDirectory() as temp:
                 root = Path(temp)
                 state = root / "state.json"
                 state.write_text(json.dumps(dict(version=1, reconciliation="fixture", incidents=[])), encoding="utf-8")
@@ -71,13 +97,22 @@ class CandidateTests(unittest.TestCase):
                 output = root / "candidate.tgz"
                 with patch.object(builder.gate, "STATE", state), \
                      patch.object(builder.gate, "released", return_value={}) as released, \
+                     patch.object(builder.gate, "ci", return_value={}) as native_ci, \
                      patch.object(builder.gate, "command", side_effect=version), \
                      patch.object(builder, "export", side_effect=export), patch.object(builder, "run", side_effect=run), \
                      patch.object(builder, "paired_tests", return_value=["fixture-journey"]):
-                    result = builder.build("a" * 40, "b" * 40, output, knowledge_sha)
+                    result = builder.build("a" * 40, "b" * 40, output, knowledge_sha, target)
                 self.assertEqual(result["sources"], {repo: commit for repo, commit, _ in exported})
                 self.assertEqual(len(exported), 3 if knowledge_sha else 2)
                 self.assertEqual(released.call_count, 2 * len(exported))
+                self.assertTrue(result["target"].startswith(target + " "))
+                build_env = next(env for args, _, env in commands if args[:2] == ["go", "build"])
+                self.assertEqual((build_env["GOOS"], build_env["GOARCH"]), tuple(target.split("/")))
+                self.assertEqual(native_ci.call_count, 4 if target == "darwin/arm64" else 0)
+                if target == "darwin/arm64":
+                    self.assertEqual(native_ci.call_args_list, [
+                        call("77AutumN/cc-connect-anc", "b" * 40, "push", required_jobs=builder.MAC_JOBS),
+                        call("77AutumN/myanc-crm", "a" * 40, "push", required_jobs=builder.MAC_CRM_JOBS)] * 2)
                 self.assertIn(["pnpm", "install", "--frozen-lockfile"], [args for args, _, _ in commands])
                 with tarfile.open(output) as archive:
                     names = archive.getnames()

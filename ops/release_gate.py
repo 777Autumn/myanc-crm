@@ -62,7 +62,7 @@ def pages(path, field):
     raise ValueError("GitHub pagination exceeded safe bound")
 
 
-def validate_run(repo, commit, event, run, jobs):
+def validate_run(repo, commit, event, run, jobs, required_jobs=()):
     require(repo in REPOS, "repository is not supported")
     require(run.get("head_sha") == sha(commit), "CI SHA mismatch")
     require(run.get("path") == WORKFLOW, "wrong workflow")
@@ -72,7 +72,7 @@ def validate_run(repo, commit, event, run, jobs):
     require(run.get("status") == "completed" and run.get("conclusion") == "success",
             "CI is incomplete or unsuccessful")
     names = [job.get("name") for job in jobs]
-    for name in REPOS[repo]:
+    for name in REPOS[repo] | set(required_jobs):
         require(names.count(name) == 1, f"missing or duplicate required job: {name}")
         job = next(job for job in jobs if job.get("name") == name)
         require(job.get("status") == "completed" and job.get("conclusion") == "success",
@@ -81,7 +81,7 @@ def validate_run(repo, commit, event, run, jobs):
                 for job in jobs), "incomplete or skipped check in CI job set")
 
 
-def ci(repo, commit, event, pr_number=None, base=None):
+def ci(repo, commit, event, pr_number=None, base=None, required_jobs=()):
     require(repo in REPOS, "repository is not supported")
     sha(commit)
     runs = pages(f"repos/{repo}/actions/workflows/ci.yml/runs?head_sha={commit}&event={event}",
@@ -98,7 +98,7 @@ def ci(repo, commit, event, pr_number=None, base=None):
                     for pr in run.get("pull_requests", [])), "CI base mismatch")
     attempt = run["run_attempt"]
     jobs = pages(f"repos/{repo}/actions/runs/{run['id']}/attempts/{attempt}/jobs", "jobs")
-    validate_run(repo, commit, event, run, jobs)
+    validate_run(repo, commit, event, run, jobs, required_jobs)
     current = api(f"repos/{repo}/actions/runs/{run['id']}")
     require(current.get("run_attempt") == attempt and current.get("status") == "completed"
             and current.get("conclusion") == "success", "CI changed while checking")
