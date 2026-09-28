@@ -478,7 +478,7 @@ def _changes(request, context, principal, config, interpreted=False):
             raise ValueError('invalid replacement')
         if replaces and not interpreted:
             clause = _source_clause(source, quote, value)
-            if not any(word in clause for word in ('改为', '调整为', '以此为准', '确认采用', '更正为')) or any(
+            if not any(word in clause for word in ('改为', '改成', '调整为', '以此为准', '确认采用', '更正为')) or any(
                     word in clause for word in UNCERTAIN):
                 raise ValueError('explicit_correction_required')
         seen.add(field)
