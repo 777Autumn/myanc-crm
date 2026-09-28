@@ -111,10 +111,10 @@ def build(crm_sha, gateway_sha, output, knowledge_sha=None, target="linux/amd64"
     sources = gate.source_commits(crm_sha, gateway_sha, knowledge_sha)
     evidence = {repo: gate.released(repo, commit) for repo, commit in sources.items()}
     if target == "darwin/arm64":
-        evidence["77AutumN/cc-connect-anc"]["native_ci"] = gate.ci(
-            "77AutumN/cc-connect-anc", gateway_sha, "push", required_jobs=MAC_JOBS)
-        evidence["77AutumN/myanc-crm"]["native_ci"] = gate.ci(
-            "77AutumN/myanc-crm", crm_sha, "push", required_jobs=MAC_CRM_JOBS)
+        evidence["robinavery6784-spec/cc-connect-anc"]["native_ci"] = gate.ci(
+            "robinavery6784-spec/cc-connect-anc", gateway_sha, "push", required_jobs=MAC_JOBS)
+        evidence["robinavery6784-spec/myanc-crm"]["native_ci"] = gate.ci(
+            "robinavery6784-spec/myanc-crm", crm_sha, "push", required_jobs=MAC_CRM_JOBS)
     versions = {name: gate.command("pnpm.cmd" if os.name == "nt" and name == "pnpm" else name, *args) for name, args in
                 (("go", ("version",)), ("node", ("--version",)), ("pnpm", ("--version",)),
                  ("python", ("--version",)))}
@@ -122,11 +122,11 @@ def build(crm_sha, gateway_sha, output, knowledge_sha=None, target="linux/amd64"
     with tempfile.TemporaryDirectory(prefix="vps-candidate-") as scratch:
         root = Path(scratch)
         crm, gateway = root / "crm", root / "gateway"
-        export("77AutumN/myanc-crm", crm_sha, crm)
-        export("77AutumN/cc-connect-anc", gateway_sha, gateway)
+        export("robinavery6784-spec/myanc-crm", crm_sha, crm)
+        export("robinavery6784-spec/cc-connect-anc", gateway_sha, gateway)
         knowledge = root / "knowledge" if knowledge_sha is not None else None
         if knowledge is not None:
-            export("77AutumN/myanc-team-brain", knowledge_sha, knowledge)
+            export("robinavery6784-spec/myanc-team-brain", knowledge_sha, knowledge)
         # No worktree or pre-existing ignored web assets are consulted.
         run(["pnpm", "install", "--frozen-lockfile"], gateway / "web")
         run(["pnpm", "build"], gateway / "web")
@@ -184,8 +184,8 @@ def build(crm_sha, gateway_sha, output, knowledge_sha=None, target="linux/amd64"
             for repo, commit in manifest["sources"].items():
                 gate.released(repo, commit)
             if target == "darwin/arm64":
-                gate.ci("77AutumN/cc-connect-anc", gateway_sha, "push", required_jobs=MAC_JOBS)
-                gate.ci("77AutumN/myanc-crm", crm_sha, "push", required_jobs=MAC_CRM_JOBS)
+                gate.ci("robinavery6784-spec/cc-connect-anc", gateway_sha, "push", required_jobs=MAC_JOBS)
+                gate.ci("robinavery6784-spec/myanc-crm", crm_sha, "push", required_jobs=MAC_CRM_JOBS)
             (bundle / "candidate.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
             output.parent.mkdir(parents=True, exist_ok=True)
             with output.open("xb") as stream:

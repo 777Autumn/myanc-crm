@@ -1,8 +1,15 @@
 # CRM / gateway delivery contract
 
 This is the authoritative development handoff and VPS release contract for the
-private repositories `77AutumN/myanc-crm`, `77AutumN/cc-connect-anc` and
-`77AutumN/myanc-team-brain` when the knowledge runtime is in the candidate.
+private repositories `robinavery6784-spec/myanc-crm`, `robinavery6784-spec/cc-connect-anc` and
+`robinavery6784-spec/myanc-team-brain` when the knowledge runtime is in the candidate.
+
+These repositories were formally transferred from `77AutumN` on 2026-09-28.
+Use the current owner for new checks and candidate manifests. Keep historical
+receipts, links and review records unchanged. If reusing a pre-transfer review,
+retain it and record the repository-ID and exact base/head equivalence alongside
+the review bound to the current name. The transfer does not waive any CI or review
+requirement.
 
 ## Completion
 

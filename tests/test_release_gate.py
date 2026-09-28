@@ -13,7 +13,7 @@ SPEC.loader.exec_module(gate)
 
 class ReleaseGateTests(unittest.TestCase):
     def setUp(self):
-        self.repo = "77AutumN/cc-connect-anc"
+        self.repo = "robinavery6784-spec/cc-connect-anc"
         self.sha = "a" * 40
         self.run = dict(head_sha=self.sha, head_branch="main", path=gate.WORKFLOW, event="push",
                         status="completed", conclusion="success")
@@ -22,6 +22,27 @@ class ReleaseGateTests(unittest.TestCase):
 
     def test_complete_exact_run_passes(self):
         gate.validate_run(self.repo, self.sha, "push", self.run, self.jobs)
+
+    def test_transferred_repository_keeps_exact_merge_target_and_review_checks(self):
+        repo = "robinavery6784-spec/cc-connect-anc"
+        base = "b" * 40
+        pr = dict(head=dict(sha=self.sha), base=dict(sha=base, ref="main",
+                  repo=dict(full_name=repo)), state="open", draft=False)
+        with patch.object(gate, "api", side_effect=[pr, {"sha": base}, pr, {"sha": base}]), \
+             patch.object(gate, "review") as review, patch.object(gate, "ci", return_value={}) as ci, \
+             patch.object(gate, "command") as command:
+            gate.merge_check(repo, 1, "external-review.json", True)
+            review.assert_called_once_with("external-review.json", repo, self.sha, base)
+            ci.assert_called_once_with(repo, self.sha, "pull_request", 1, base)
+            command.assert_called_once_with("gh", "pr", "merge", "1", "--repo", repo,
+                                            "--squash", "--match-head-commit", self.sha)
+        wrong_target = copy.deepcopy(pr)
+        wrong_target["base"]["repo"]["full_name"] = "unrelated-owner/cc-connect-anc"
+        with patch.object(gate, "api", return_value=wrong_target), \
+             patch.object(gate, "command") as command:
+            with self.assertRaisesRegex(ValueError, "wrong merge target"):
+                gate.merge_check(repo, 1, "external-review.json", True)
+            command.assert_not_called()
 
     def test_native_candidate_cannot_substitute_linux_only_or_skipped_ci(self):
         required = ("mac-codex (ubuntu-latest)", "mac-codex (macos-latest)")
@@ -37,7 +58,7 @@ class ReleaseGateTests(unittest.TestCase):
             gate.validate_run(self.repo, self.sha, "push", self.run, jobs[1:], required)
 
     def test_knowledge_requires_all_four_exact_matrix_jobs(self):
-        repo = "77AutumN/myanc-team-brain"
+        repo = "robinavery6784-spec/myanc-team-brain"
         jobs = [dict(name=f"test ({os_name}, {python})", status="completed", conclusion="success")
                 for os_name in ("ubuntu-latest", "windows-latest") for python in ("3.11", "3.13")]
         gate.validate_run(repo, self.sha, "push", self.run, jobs)
@@ -49,10 +70,10 @@ class ReleaseGateTests(unittest.TestCase):
                 gate.validate_run(repo, self.sha, "push", self.run, [dict(jobs[0], **changed), *jobs[1:]])
 
     def test_explicit_source_mapping_supports_legacy_and_three_repositories(self):
-        old = {"77AutumN/myanc-crm": "a" * 40, "77AutumN/cc-connect-anc": "b" * 40}
+        old = {"robinavery6784-spec/myanc-crm": "a" * 40, "robinavery6784-spec/cc-connect-anc": "b" * 40}
         self.assertEqual(gate.source_commits("a" * 40, "b" * 40), old)
         self.assertEqual(gate.source_commits("a" * 40, "b" * 40, "c" * 40),
-                         {**old, "77AutumN/myanc-team-brain": "c" * 40})
+                         {**old, "robinavery6784-spec/myanc-team-brain": "c" * 40})
         with self.assertRaises(ValueError):
             gate.source_commits("a" * 40, "b" * 40, "")
 
@@ -75,10 +96,10 @@ class ReleaseGateTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     gate.state_change("close", evidence)
                 self.assertEqual(gate.read_state()["incidents"][0]["status"], "open")
-                mappings["77AutumN/myanc-team-brain"] = dict(original="c" * 40, merged="f" * 40, evidence="audited")
+                mappings["robinavery6784-spec/myanc-team-brain"] = dict(original="c" * 40, merged="f" * 40, evidence="audited")
                 evidence.write_text(json.dumps(resolution), encoding="utf-8")
                 self.assertEqual(gate.state_change("close", evidence)["incidents"][0]["status"], "closed")
-                released.assert_any_call("77AutumN/myanc-team-brain", "f" * 40)
+                released.assert_any_call("robinavery6784-spec/myanc-team-brain", "f" * 40)
 
     def test_stale_sha_wrong_workflow_event_or_incomplete_run_rejected(self):
         for key, value in [("head_sha", "b" * 40), ("path", ".github/workflows/stale.yml"),
