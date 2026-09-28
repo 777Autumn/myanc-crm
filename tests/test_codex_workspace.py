@@ -29,7 +29,8 @@ class CodexWorkspaceTests(unittest.TestCase):
         self.assertEqual(profile['filesystem'][':minimal'], 'read')
         self.assertEqual(set(profile['filesystem'].values()), {'read'})
         for path in profile['filesystem']:
-            self.assertTrue(path == ':minimal' or path.startswith(('/opt/', '/Library/', '/Applications/')))
+            self.assertTrue(path == ':minimal' or path.startswith(('/opt/', '/Library/', '/Applications/', '/System/Library/Fonts')))
+        self.assertEqual(profile['filesystem']['/System/Library/Fonts'], 'read')
         self.assertEqual(profile['network']['domains'], {'127.0.0.1': 'allow'})
         for flag in ('enable_socks5', 'allow_upstream_proxy', 'allow_local_binding'):
             self.assertFalse(profile['network'][flag])
@@ -135,6 +136,11 @@ if (printf forbidden > "$HOME/.codex/config.toml") 2>/dev/null; then exit 15; fi
 test -s result-v1.txt && test -s result-v2.txt
 printf 'protected workspace passed\n'
 '''
+                    # The Mac converter's fontconfig reads this system tree.
+                    # :minimal and /Library/Fonts alone silently lose CJK glyphs.
+                    font = Path('/System/Library/Fonts/Supplemental/Arial Unicode.ttf')
+                    self.assertTrue(font.is_file(), 'native CJK fixture font missing')
+                    script += '\nhead -c 4 "' + str(font) + '" >/dev/null\n'
                     result = request(3, "command/exec", {"permissionProfile": profile, "cwd": str(workspace),
                                                          "command": ["/bin/sh", "-c", script], "timeoutMs": 10000})
                     self.assertEqual(result["exitCode"], 0, result)
