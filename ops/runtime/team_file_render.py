@@ -33,6 +33,14 @@ def mac_office_socket(profile, uid):
     return Path('/private/tmp') / ('OSL_PIPE_%d_SingleOfficeIPC_' % uid + ''.join(format(b, 'x') for b in digest))
 
 
+def mac_path_present(path):
+    try:
+        path.lstat()
+    except FileNotFoundError:
+        return False
+    return True  # Permission/I/O uncertainty propagates; never infer absence.
+
+
 @contextmanager
 def mac_office_profile(outputs):
     """One work's fixed IPC name, fresh profile; stale state needs maintenance."""
@@ -46,7 +54,7 @@ def mac_office_profile(outputs):
             raise ValueError('unsafe Office profile lock')
         # ponytail: one conversion per work; a busy work fails instead of queuing.
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        if os.path.lexists(profile) or os.path.lexists(socket):
+        if mac_path_present(profile) or mac_path_present(socket):
             raise RuntimeError('stale Office profile/socket; preserve for maintenance')
         profile.mkdir(mode=0o700)
         try:
@@ -55,7 +63,7 @@ def mac_office_profile(outputs):
             # A killed parent or uncertain conversion must not silently reuse it.
             raise
         else:
-            if os.path.lexists(socket):
+            if mac_path_present(socket):
                 raise RuntimeError('Office socket remained after exit; preserve for maintenance')
             shutil.rmtree(profile)
     finally:

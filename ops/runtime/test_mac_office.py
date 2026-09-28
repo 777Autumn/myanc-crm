@@ -48,7 +48,7 @@ class MacOfficeTests(unittest.TestCase):
                     self.fail('symlink profile accepted')
             profile.unlink()
             socket = render.mac_office_socket(profile, os.geteuid())
-            with patch.object(render.os.path, 'lexists', side_effect=lambda p: p == socket):
+            with patch.object(render, 'mac_path_present', side_effect=lambda p: p == socket):
                 with self.assertRaisesRegex(RuntimeError, 'stale Office'):
                     with render.mac_office_profile(outputs):
                         self.fail('stale socket accepted')
@@ -58,6 +58,28 @@ class MacOfficeTests(unittest.TestCase):
             with self.assertRaises(OSError):
                 with render.mac_office_profile(outputs):
                     self.fail('symlink lock accepted')
+
+    def test_metadata_uncertainty_is_not_absence(self):
+        for error in (PermissionError, OSError):
+            with patch.object(Path, 'lstat', side_effect=error('synthetic metadata failure')):
+                with self.assertRaises(error):
+                    render.mac_path_present(Path('/fictional'))
+        with patch.object(Path, 'lstat', side_effect=FileNotFoundError):
+            self.assertFalse(render.mac_path_present(Path('/fictional')))
+
+    @unittest.skipUnless(sys.platform == 'darwin', 'requires native profile lifecycle')
+    def test_socket_metadata_failure_preserves_profile_and_stops(self):
+        for code in (render.errno.EACCES, render.errno.EIO):
+            for at_exit in (False, True):
+                with self.subTest(code=code, at_exit=at_exit), tempfile.TemporaryDirectory() as directory:
+                    outputs = Path(directory).resolve()
+                    error = OSError(code, 'synthetic metadata failure')
+                    checks = [False, False, error] if at_exit else [False, error]
+                    with patch.object(render, 'mac_path_present', side_effect=checks):
+                        with self.assertRaises(OSError):
+                            with render.mac_office_profile(outputs):
+                                self.assertTrue(at_exit)
+                    self.assertEqual((outputs / '.office-profile').exists(), at_exit)
 
     def test_native_accounting_is_group_scoped_and_rejects_uncertainty(self):
         for returned, info_size, error, expected in ((8, 96, 0, [1234, 1234]),
