@@ -100,6 +100,67 @@ class LaunchdTests(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             self.start(FakeLaunchd([]))
 
+    def test_observed_xpcproxy_transition_waits_for_actual_executable(self):
+        backend = FakeLaunchd([sample(state='xpcproxy', exe='/usr/libexec/xpcproxy', receivers=[]),
+                               sample(), sample()])
+        self.assertEqual(self.start(backend)['pid'], '42')
+        self.assertGreater(self.now, 0)
+
+    def test_unknown_state_is_preserved_but_never_ready(self):
+        backend = FakeLaunchd([sample(state='fictional-unknown')])
+        with self.assertRaisesRegex(m.StartError, 'unknown_launchd_state'):
+            self.start(backend)
+        self.assertEqual(self.receipts['start-failed.json']['last_sample']['state'], 'fictional-unknown')
+        self.assertEqual(backend.commands, ['start'])
+
+    def test_diagnostic_failure_does_not_replace_original_error(self):
+        backend = FakeLaunchd([sample(state='fictional-unknown')])
+        backend.diagnostic = lambda _: (_ for _ in ()).throw(OSError('fictional diagnostic failure'))
+        with self.assertRaisesRegex(m.StartError, 'unknown_launchd_state'):
+            self.start(backend)
+        failure = self.receipts['start-failed.json']
+        self.assertEqual(failure['last_sample'], {'sample_available': False, 'error_type': 'OSError'})
+        self.assertEqual(failure['pause_error'], 'unknown_launchd_state')
+
+    def test_stop_waits_once_for_sigtermed_then_unloaded(self):
+        backend = FakeLaunchd([])
+        backend.state = sample()
+        states = iter([sample(), sample(state='SIGTERMed'), sample(False)])
+        backend.sample = lambda: next(states)
+        result = m.pause_verified(backend, sample()['identity'],
+            n.Launchd.view(sample())['epoch'], lambda: None,
+            clock=lambda: self.now, sleep=self.sleep)
+        self.assertEqual(result, 'paused')
+        self.assertEqual(backend.commands, ['stop'])
+        self.assertGreater(self.now, 0)
+
+    def test_stop_transition_cannot_hide_replacement_or_orphan(self):
+        for changed in (sample(coalition='101'), sample(pid='43', receivers=['43']),
+                        sample(process_start='124.000001'), sample(runs=2),
+                        sample(receivers=['42', '43']), sample(False, receivers=['42']),
+                        sample(state='fictional-unknown'), sample(False, boot_session='replacement')):
+            with self.subTest(changed=changed):
+                backend = FakeLaunchd([])
+                states = iter([sample(), changed])
+                backend.sample = lambda: next(states)
+                with self.assertRaises(m.StartError):
+                    m.pause_verified(backend, sample()['identity'],
+                        n.Launchd.view(sample())['epoch'], lambda: None,
+                        clock=lambda: self.now, sleep=self.sleep)
+                self.assertEqual(backend.commands, ['stop'])
+
+    def test_stop_timeout_or_changed_controls_never_repeats_stop(self):
+        for drift in (False, True):
+            backend = FakeLaunchd([])
+            backend.sample = lambda: sample(state='SIGTERMed')
+            def controls():
+                if drift and backend.commands:
+                    raise m.StartError('control_changed')
+            with self.assertRaisesRegex(m.StartError, 'control_changed' if drift else 'pause_timeout'):
+                m.pause_verified(backend, sample()['identity'], n.Launchd.view(sample())['epoch'],
+                    controls, timeout=1, clock=lambda: self.now, sleep=self.sleep)
+            self.assertEqual(backend.commands, ['stop'])
+
     def test_restart_duplicate_pid_reuse_and_exit_fail_then_stop(self):
         for changed, reason in ((sample(runs=2), 'unexpected_restart'),
                                 (sample(receivers=['42', '43']), 'duplicate_receiver'),
@@ -206,6 +267,21 @@ class LaunchdTests(unittest.TestCase):
                 patch.object(n.subprocess, 'run', return_value=output):
             with self.assertRaisesRegex(RuntimeError, 'arguments_mismatch'):
                 n.Launchd().sample()
+
+    def test_sampler_retains_transitions_and_unknown_native_state(self):
+        for status in ('xpcproxy', 'SIGTERMed', 'fictional-unknown'):
+            output = subprocess.CompletedProcess([], 0, PRINT.replace('state = running', 'state = ' + status), '')
+            with patch.object(n, 'frozen_plist', return_value=sample()['identity']), \
+                    patch.object(n.subprocess, 'check_output', side_effect=[sample()['boot_session'], '']), \
+                    patch.object(n.subprocess, 'run', return_value=output), \
+                    patch.object(n, 'process', return_value=None):
+                result = n.Launchd().sample()
+            self.assertEqual(result['state'], status)
+            if status == 'fictional-unknown':
+                with self.assertRaisesRegex(m.StartError, 'unknown_launchd_state'):
+                    n.Launchd.view(result)
+            else:
+                self.assertFalse(n.Launchd.view(result)['running'])
 
     def test_native_recovery_uses_original_receipts_once(self):
         snapshots = dict(controls_sha256='a'*64, business_state_sha256='b'*64,
@@ -331,7 +407,11 @@ class LaunchdTests(unittest.TestCase):
             root = Path(tmp).resolve()
             root.chmod(0o755)
             source = root / 'fixture.c'
-            source.write_text('#include <unistd.h>\nint main(void) { for (;;) pause(); }\n')
+            source.write_text('#include <unistd.h>\n#include <signal.h>\n'
+                'static volatile sig_atomic_t done;\n'
+                'static void stop(int sig) { (void)sig; done = 1; }\n'
+                'int main(void) { signal(SIGTERM, stop); while (!done) pause(); '
+                'usleep(700000); return 0; }\n')
             exe = root / 'cc-connect-anc'
             subprocess.run(['/usr/bin/clang', str(source), '-o', str(exe)], check=True, timeout=30)
             exe.chmod(0o755)

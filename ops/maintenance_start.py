@@ -138,12 +138,14 @@ def systemd_view(state):
                 process_start=state['process_start'], receivers=state['receivers'])
 
 
-def pause_verified(backend, identity, invocation, verify_controls):
+def pause_verified(backend, identity, invocation, verify_controls, *, timeout=40,
+                   clock=time.monotonic, sleep=time.sleep):
     """Stop the unchanged unit, including before its child exec has completed.
 
     The stop target is the verified unit, not an arbitrary process/PID. A different
     invocation or changed control plane requires manual reconciliation.
     """
+    require(0 < timeout <= 40, 'invalid_pause_timeout')
     verify_controls()
     state = backend.sample()
     require(getattr(backend, 'identity', unit_identity)(state) == identity, 'pause_unit_changed')
@@ -152,12 +154,28 @@ def pause_verified(backend, identity, invocation, verify_controls):
         require(not view['receivers'], 'receiver_outside_stopped_unit')
         return 'already_stopped'
     require(invocation and view['epoch'] == invocation, 'pause_invocation_changed')
+    pid, process_start = view['pid'], view['process_start']
     backend.command('stop')
-    stopped = backend.sample()
-    view = getattr(backend, 'view', systemd_view)(stopped)
-    require(getattr(backend, 'identity', unit_identity)(stopped) == identity
-            and view['stopped'] and not view['receivers'], 'pause_not_stopped')
-    return 'paused'
+    deadline = clock() + timeout
+    while True:
+        verify_controls()
+        stopped = backend.sample()
+        require(getattr(backend, 'identity', unit_identity)(stopped) == identity, 'pause_unit_changed')
+        require(stopped.get('boot_session') == state.get('boot_session'), 'pause_boot_changed')
+        view = getattr(backend, 'view', systemd_view)(stopped)
+        require(clock() < deadline, 'pause_timeout')
+        if view['stopped']:
+            require(not view['receivers'], 'receiver_outside_stopped_unit')
+            return 'paused'
+        require(view['epoch'] == invocation and view['no_restarts'], 'pause_invocation_changed')
+        if view['pid'] != '0':
+            pid = view['pid'] if pid == '0' else pid
+            require(view['pid'] == pid, 'pause_pid_changed')
+        if view['process_start'] is not None:
+            process_start = process_start or view['process_start']
+            require(view['process_start'] == process_start, 'pause_pid_reused')
+        require(not view['receivers'] or view['receivers'] == [pid], 'duplicate_receiver')
+        sleep(min(0.25, max(0, deadline - clock())))
 
 
 def start_once(record, verify_controls, *, backend=None, timeout=40,
@@ -232,9 +250,14 @@ def start_once(record, verify_controls, *, backend=None, timeout=40,
             safety = pause_verified(backend, identity, invocation, verify_controls)
         except BaseException as pause_exc:
             pause_error = str(pause_exc) if isinstance(pause_exc, StartError) else type(pause_exc).__name__
+        try:
+            last_diagnostic = getattr(backend, 'diagnostic', diagnostic)(last)
+        except BaseException as diagnostic_error:
+            last_diagnostic = {'sample_available': False,
+                               'error_type': type(diagnostic_error).__name__}
         failure = {'failed': True, 'category': type(exc).__name__,
                    'reason': str(exc) if isinstance(exc, StartError) else 'start_or_receipt_failed',
-                   'last_sample': getattr(backend, 'diagnostic', diagnostic)(last),
+                   'last_sample': last_diagnostic,
                    'safety': safety, 'pause_error': pause_error}
         try:
             record('start-failed.json', failure)

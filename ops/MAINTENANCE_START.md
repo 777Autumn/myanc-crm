@@ -47,6 +47,13 @@ blocks success. A replacement registration is not stopped. An unloaded service
 with a lingering receiver is not considered stopped. `started.json` remains a
 process check, not application or Feishu readiness.
 
+The observed `xpcproxy` and `SIGTERMed` states are transitions, never readiness.
+After the one stop command, wait at most 40 seconds for unload and zero receivers;
+every sample rechecks controls, registration and any pinned PID/start identity.
+A replacement, duplicate receiver, unknown state or failed query still blocks.
+Unknown native states remain in failure diagnostics instead of discarding the
+observation. A diagnostic failure must not replace the original start error.
+
 `launchctl print` is a diagnostic text interface, so this bounded parser accepts
 the observed required fields and rejects unknown state/ambiguous results. Validate
 it again after macOS changes. Source references: [Apple's process ABI](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/sys/proc_info.h)
