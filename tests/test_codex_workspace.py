@@ -1,5 +1,6 @@
 """Native discovery and sandbox checks; fictional files, no login or model turn."""
 import json
+import hashlib
 import os
 from pathlib import Path
 import queue
@@ -147,14 +148,30 @@ printf 'protected workspace passed\n'
                     self.assertIn("protected workspace passed", result["stdout"])
                     self.assertEqual((workspace / "CLAUDE.md").read_bytes(), (OPS / "CLAUDE.vps.md").read_bytes())
                     self.assertEqual((auth / "config.toml").read_bytes(), TEMPLATE.read_bytes())
+                    # Run the documented hash code under the same native profile.
+                    # The former shasum/Perl path fails here on the deployed Mac.
+                    hash_code = (OPS / 'skills/team-files/SKILL.md').read_text().split('```python\n', 1)[1].split('\n```', 1)[0]
+                    python_env = [key + "=" + os.environ[key] for key in
+                                  ("PYTHONHOME", "DYLD_FRAMEWORK_PATH") if key in os.environ]
+                    for i, artifact, allowed in ((7, workspace / 'result-v1.txt', True),
+                                                 (8, auth / 'private-fixture', False)):
+                        checked = request(i, 'command/exec', {
+                            'permissionProfile': profile, 'cwd': str(workspace),
+                            'command': ['/usr/bin/env', *python_env, sys.executable, '-I', '-X', 'utf8', '-c', hash_code, str(artifact)],
+                            'timeoutMs': 10000})
+                        if allowed:
+                            self.assertEqual(checked['exitCode'], 0, checked)
+                            self.assertEqual(checked['stdout'].strip(), hashlib.sha256(b'fictional result v1').hexdigest() + '  ' + str(artifact))
+                            self.assertEqual(artifact.read_bytes(), b'fictional result v1')
+                        else:
+                            self.assertNotEqual(checked['exitCode'], 0)
+                            self.assertIn('PermissionError', checked['stderr'])
                     # Exercise the production monitor inside the actual sandbox:
                     # macOS's setuid ps is forbidden even though libproc is usable.
                     program = ("import sys; sys.path.insert(0, " + repr(str(OPS / "runtime")) + "); "
                                "import team_file_render as r; "
                                "assert r.run(['/bin/sleep', '.3']) == b''; "
                                "r.run(['/bin/sleep', '5'], memory_limit=1)")
-                    python_env = [key + "=" + os.environ[key] for key in
-                                  ("PYTHONHOME", "DYLD_FRAMEWORK_PATH") if key in os.environ]
                     checked = request(4, "command/exec", {
                         "permissionProfile": profile, "cwd": str(workspace),
                         "command": ["/usr/bin/env", *python_env, sys.executable, "-I", "-c", program],

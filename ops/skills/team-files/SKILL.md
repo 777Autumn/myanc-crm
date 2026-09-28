@@ -38,9 +38,10 @@ description: 读取员工选定的文档、表格、PDF和图片，制作或修�
    allowed workspace, separate from delivered artifacts.
 4. Complete the saved-output readback and final-page inspection in
    [document production](references/production.md) before delivery. For byte hashes,
-   use `sha256sum -- '<absolute artifact path>'` on Linux or the native
-   `/usr/bin/shasum -a 256 -- '<absolute artifact path>'` on macOS, only on paths
-   belonging to this work; shell-quote each path. Reuse that result until the file changes,
+   use `sha256sum -- '<absolute artifact path>'` on Linux. On macOS, run the
+   Python snippet below with the installed `/opt/team-files/bin/python -I -X utf8`,
+   passing this work's artifact paths as arguments; shell-quote each path.
+   Reuse that result until the file changes,
    then deliver the exact file/version through the controlled client. Avoid
    repeated inline Python programs just to compute or recount the same hash.
    This changes no permission rule: if a tool requests approval, keep the request
@@ -61,3 +62,13 @@ description: 读取员工选定的文档、表格、PDF和图片，制作或修�
    evidence resolves it; a status read alone does not prove non-delivery.
    Continue safe preparation when delivery is disabled;
    explain the missing delivery capability without claiming completion.
+
+macOS saved-byte hashes (supply this code on stdin with `-`, then path arguments):
+the installed Python avoids the system Perl runtime that the native sandbox cannot load.
+
+```python
+import hashlib, sys
+for path in sys.argv[1:]:
+    with open(path, 'rb') as stream:
+        print(hashlib.file_digest(stream, 'sha256').hexdigest() + '  ' + path)
+```
