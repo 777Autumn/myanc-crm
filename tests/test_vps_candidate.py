@@ -65,16 +65,16 @@ class CandidateTests(unittest.TestCase):
                 exported, commands = [], []
                 def export(repo, commit, destination):
                     exported.append((repo, commit, destination))
-                    files = {"77AutumN/myanc-crm": ["myanc_crm/cli.py", "ops/runtime.py",
+                    files = {"robinavery6784-spec/myanc-crm": ["myanc_crm/cli.py", "ops/runtime.py",
                                  "ops/CLAUDE.vps.md", "ops/skills/team-crm/SKILL.md",
                                  "ops/skills/team-crm/references/tools.md",
                                  "ops/skills/team-reminders/SKILL.md",
                                  "ops/skills/team-reminders/references/tools.md",
                                  "ops/skills/team-files/SKILL.md",
                                  "ops/skills/team-files/references/tools.md"],
-                             "77AutumN/cc-connect-anc": ["web/pnpm-lock.yaml", "ops/file_tool.py",
+                             "robinavery6784-spec/cc-connect-anc": ["web/pnpm-lock.yaml", "ops/file_tool.py",
                                  "ops/work_sandbox.py", "ops/config.local.json", "ops/private.sqlite"],
-                             "77AutumN/myanc-team-brain": ["team_brain/tool.py", "team_brain/host.py",
+                             "robinavery6784-spec/myanc-team-brain": ["team_brain/tool.py", "team_brain/host.py",
                                  "skills/team-brain/SKILL.md", "skills/team-brain/references/tools.md",
                                  "ops/team-brain-host.example", "ops/host.example.json",
                                  "ops/install.py", "ops/bootstrap.py", "team_brain/__pycache__/old.pyc"]}
@@ -82,7 +82,7 @@ class CandidateTests(unittest.TestCase):
                         path = destination / name
                         path.parent.mkdir(parents=True, exist_ok=True)
                         path.write_text(commit, encoding="utf-8")
-                    if repo == '77AutumN/myanc-crm' and knowledge_sha:
+                    if repo == 'robinavery6784-spec/myanc-crm' and knowledge_sha:
                         wiki = destination / 'ops' / builder.mock_wiki.RELATIVE_ROOT
                         wiki.mkdir(parents=True)
                         (wiki / 'index.md').write_text('fictional source', encoding='utf-8')
@@ -111,8 +111,8 @@ class CandidateTests(unittest.TestCase):
                 self.assertEqual(native_ci.call_count, 4 if target == "darwin/arm64" else 0)
                 if target == "darwin/arm64":
                     self.assertEqual(native_ci.call_args_list, [
-                        call("77AutumN/cc-connect-anc", "b" * 40, "push", required_jobs=builder.MAC_JOBS),
-                        call("77AutumN/myanc-crm", "a" * 40, "push", required_jobs=builder.MAC_CRM_JOBS)] * 2)
+                        call("robinavery6784-spec/cc-connect-anc", "b" * 40, "push", required_jobs=builder.MAC_JOBS),
+                        call("robinavery6784-spec/myanc-crm", "a" * 40, "push", required_jobs=builder.MAC_CRM_JOBS)] * 2)
                 self.assertIn(["pnpm", "install", "--frozen-lockfile"], [args for args, _, _ in commands])
                 with tarfile.open(output) as archive:
                     names = archive.getnames()
@@ -246,7 +246,7 @@ class CandidateTests(unittest.TestCase):
             (root / "old-dist.js").write_text("ignored stale output", encoding="utf-8")
             with patch.object(builder, "run", side_effect=self.fake_run) as commands, \
                  patch.object(builder.gate, "command", return_value="a" * 40):
-                builder.export("77AutumN/myanc-crm", "a" * 40, root / "export")
+                builder.export("robinavery6784-spec/myanc-crm", "a" * 40, root / "export")
             self.assertEqual(["source.py"], [path.name for path in (root / "export").iterdir()])
             self.assertTrue(any(call.args[0][-1] == "a" * 40 for call in commands.call_args_list))
 
@@ -256,7 +256,7 @@ class CandidateTests(unittest.TestCase):
              patch.object(builder, "run", side_effect=self.fake_run), \
              patch.object(builder.gate, "command", return_value="a" * 40):
             with self.assertRaises(ValueError):
-                builder.export("77AutumN/myanc-crm", "a" * 40, Path(temp) / "export")
+                builder.export("robinavery6784-spec/myanc-crm", "a" * 40, Path(temp) / "export")
 
     def test_existing_output_never_overwritten(self):
         with tempfile.TemporaryDirectory() as temp:
