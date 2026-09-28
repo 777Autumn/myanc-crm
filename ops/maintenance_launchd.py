@@ -165,8 +165,6 @@ class Launchd:
             exit_code = fields.get('last exit code', '').split(':', 1)[0]
             if re.fullmatch(r'-?\d+', exit_code):
                 state['last_exit_code'] = int(exit_code)
-            require(state['state'] in ('running', 'spawn scheduled', 'waiting', 'not running'),
-                    'unknown_launchd_state')
             require(state['pid'] == '0' or state['coalition'], 'missing_launchd_coalition')
             if state['pid'] != '0':
                 detail = process(int(state['pid']))
@@ -201,13 +199,19 @@ class Launchd:
 
     @staticmethod
     def view(state):
+        # Preserve the native observation before rejecting an unknown state so
+        # failure receipts retain the state/PID that actually caused rejection.
+        require(state['state'] in ('unloaded', 'running', 'xpcproxy', 'SIGTERMed',
+                                  'spawn scheduled', 'waiting', 'not running'),
+                'unknown_launchd_state')
         # A boot-session + resource-coalition pair is native evidence, not a
         # fabricated systemd InvocationID. A second run is always rejected.
         epoch = ([state['boot_session'], state['coalition']]
                  if state['coalition'] else None)
         return dict(pid=state['pid'], epoch=epoch,
                     stopped=not state['loaded'] and state['pid'] == '0',
-                    alive=state['loaded'] and (state['pid'] != '0' or state['runs'] == 0),
+                    alive=state['loaded'] and state['state'] != 'SIGTERMed'
+                          and (state['pid'] != '0' or state['runs'] == 0),
                     running=state['state'] == 'running', no_restarts=state['runs'] <= 1,
                     exe=state['exe'], process_start=state['process_start'],
                     receivers=state['receivers'])
