@@ -168,6 +168,44 @@ class SharedCaseTests(unittest.TestCase):
             self.assertEqual('blocked',self.call('case-update',update,principal=self.operations,
                              context={**self.context,'source_text':'林陈婚宴，'+text})['status'])
 
+    def test_colloquial_correction_updates_complete_batch_without_fixed_phrase(self):
+        self.context['source_text'] = '林陈婚宴，22桌220人，预算11万元。'
+        initial = self.change()
+        initial['changes'].append(dict(field='人数', value='220人', state='proposed', quote='22桌220人'))
+        self.assertEqual('recorded', self.call('case-update', initial)['status'])
+        update = dict(case_name='林陈婚宴', expected_revision=1, changes=[
+            dict(field=field, value=value, state='proposed', quote=value, replaces=True)
+            for field, value in (('桌数', '23桌'), ('人数', '230人'))])
+        context = {**self.context, 'offer_confirmation': True}
+        actor = {**self.principal, 'message_id': 'colloquial-correction'}
+        for source in ('这场不用改成23桌230人。', '这场改成23桌230人吗',
+                       '不要改成23桌230人', '别改成23桌230人', '这场改成23桌230人？',
+                       '如果客户同意，这场改成23桌230人', '开席改成12点；这场23桌230人'):
+            with self.subTest(source=source):
+                result = self.call('case-update', update, principal=actor,
+                                   context={**context, 'source_text': source})
+                self.assertNotEqual('recorded', result['status'])
+                if '不用' in source:
+                    self.assertEqual('blocked', result['status'])
+                if '吗' in source:
+                    self.assertEqual('needs_confirmation', result['status'])
+                self.assertEqual(1, self.call('case-read', {})['case']['revision'])
+        # The unrelated negative instruction must not require another fixed phrase.
+        context['source_text'] = ('这场改成23桌230人，还是A套餐和11万预算，其他条件不变。'
+                                  '共享进展和方案一起更新，老版留着。预算说明不要一直说在预算内。')
+        private = self.call('case-update', update, principal=self.private,
+                            context={**context, 'share_allowed': False})
+        self.assertNotEqual('recorded', private['status'])
+        result = self.call('case-update', update, principal=actor, context=context)
+        self.assertEqual('recorded', result['status'], result)
+        self.assertEqual(2, result['case']['revision'])
+        self.assertEqual(['23桌', '230人'], [result['case']['facts'][f]['value'] for f in ('桌数', '人数')])
+        self.assertTrue(self.call('case-update', update, principal=actor, context=context)['replayed'])
+        with closing(sqlite3.connect(self.path)) as db:
+            original = json.loads(db.execute('SELECT body FROM shared_case_versions WHERE revision=1').fetchone()[0])
+            self.assertEqual(2, db.execute('SELECT COUNT(*) FROM shared_case_versions').fetchone()[0])
+        self.assertEqual(['22桌', '220人'], [original['facts'][f]['value'] for f in ('桌数', '人数')])
+
     def test_storage_failure_does_not_consume_message_or_modify_record(self):
         with mock.patch.object(cases,'_bind',side_effect=sqlite3.OperationalError('fictional disk failure')):
             self.assertEqual('unavailable',self.call('case-update',self.change())['status'])

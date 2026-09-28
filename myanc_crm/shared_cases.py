@@ -27,8 +27,8 @@ FACT_FIELDS = {'桌数', '人数', '预算', '已选方案', '套餐', '餐费',
                '金额依据', '预计金额', '已核验收款', '待核实收款', '待收金额', '婚宴日期', '场馆',
                '入场时间', '布场时间', '检查时间', '迎宾时间', '开席时间', '结束时间', '负责人',
                '客户需求', '待确认项', '执行安排', '项目阶段'}
-UNCERTAIN = ('不要', '不改', '暂不', '如果', '是否', '假设', '未确认', '没确认', '没有确认',
-             '尚未', '未发生', '没发生', '还没', '不确定', '请勿', '别改', '不确认', '假如', '建议', '考虑', '？', '?')
+UNCERTAIN = ('不要', '不用', '不改', '暂不', '如果', '是否', '假设', '未确认', '没确认', '没有确认',
+             '尚未', '未发生', '没发生', '还没', '不确定', '请勿', '别改', '不确认', '假如', '建议', '考虑', '吗', '？', '?')
 
 
 def _text(value, limit=256):
@@ -234,7 +234,7 @@ def _confirmation(command, request, context, options, config, principal, body, n
         if not re.fullmatch(r'\s*(?:其余|其他)条件(?:先)?不改\s*', clause))
     # Explicit denials must not be converted to another invitation to share.
     if command != 'case-read' and (not source.strip('， \t\r') or any(word in source
-            for word in ('不要', '不许', '不能', '禁止', '请勿', '暂不', '别同步', '别共享', '别改', '不改', '保密', '仅私下'))):
+            for word in ('不要', '不用', '不许', '不能', '禁止', '请勿', '暂不', '别同步', '别共享', '别改', '不改', '保密', '仅私下'))):
         return fallback
     revision = body['revision'] if body else 0
     if command == 'case-read':
@@ -478,7 +478,7 @@ def _changes(request, context, principal, config, interpreted=False):
             raise ValueError('invalid replacement')
         if replaces and not interpreted:
             clause = _source_clause(source, quote, value)
-            if not any(word in clause for word in ('改为', '调整为', '以此为准', '确认采用', '更正为')) or any(
+            if not any(word in clause for word in ('改为', '改成', '调整为', '以此为准', '确认采用', '更正为')) or any(
                     word in clause for word in UNCERTAIN):
                 raise ValueError('explicit_correction_required')
         seen.add(field)
