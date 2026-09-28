@@ -15,6 +15,7 @@ jobs:
       - name: Native maintenance and ordinary daemon fixture
         run: |
           python -m unittest discover -s tests -p 'test_maintenance*.py' -v
+          python -m unittest discover -s ops/runtime -p test_mac_office.py -v
           sudo env ANC_LAUNCHD_FIXTURE=1 SUDO_USER="$USER" "$(which python)" -m unittest discover -s tests -p test_maintenance_launchd.py -v
       - name: Pinned Codex workspace discovery and permissions (no model)
         run: |

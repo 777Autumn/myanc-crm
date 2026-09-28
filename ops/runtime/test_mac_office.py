@@ -2,7 +2,7 @@
 import io
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import subprocess
 import sys
 import tempfile
@@ -16,6 +16,71 @@ import team_file_render as render
 
 
 class MacOfficeTests(unittest.TestCase):
+    def test_socket_matches_gateway_unicode_uri_vector(self):
+        profile = PurePosixPath('/private/var/fictional work/婚宴 %/outputs/.office-profile')
+        self.assertEqual(render.mac_office_socket(profile, 501).name,
+                         'OSL_PIPE_501_SingleOfficeIPC_786cfa4b1e5213eb148ce155790654d')
+        self.assertNotEqual(render.mac_office_socket(profile, 501), render.mac_office_socket(profile, 502))
+
+    @unittest.skipUnless(sys.platform == 'darwin', 'requires native flock/ordinary UID')
+    def test_profile_serializes_and_preserves_stale_or_failed_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            outputs = Path(directory).resolve()
+            profile = outputs / '.office-profile'
+            with render.mac_office_profile(outputs):
+                (profile / 'fictional').write_text('private scratch')
+                with self.assertRaises(BlockingIOError):
+                    with render.mac_office_profile(outputs):
+                        self.fail('parallel profile accepted')
+            self.assertFalse(profile.exists())
+            inode = (outputs / '.office-profile.lock').stat().st_ino
+            with self.assertRaisesRegex(ValueError, 'synthetic failure'):
+                with render.mac_office_profile(outputs):
+                    raise ValueError('synthetic failure')
+            self.assertTrue(profile.is_dir())
+            with self.assertRaisesRegex(RuntimeError, 'stale Office'):
+                with render.mac_office_profile(outputs):
+                    self.fail('failed profile reused')
+            profile.rmdir()  # Controlled fixture reconciliation, never production retry.
+            profile.symlink_to(outputs, target_is_directory=True)
+            with self.assertRaisesRegex(RuntimeError, 'stale Office'):
+                with render.mac_office_profile(outputs):
+                    self.fail('symlink profile accepted')
+            profile.unlink()
+            socket = render.mac_office_socket(profile, os.geteuid())
+            with patch.object(render, 'mac_path_present', side_effect=lambda p: p == socket):
+                with self.assertRaisesRegex(RuntimeError, 'stale Office'):
+                    with render.mac_office_profile(outputs):
+                        self.fail('stale socket accepted')
+            self.assertEqual((outputs / '.office-profile.lock').stat().st_ino, inode)
+            (outputs / '.office-profile.lock').unlink()
+            (outputs / '.office-profile.lock').symlink_to(outputs / 'missing')
+            with self.assertRaises(OSError):
+                with render.mac_office_profile(outputs):
+                    self.fail('symlink lock accepted')
+
+    def test_metadata_uncertainty_is_not_absence(self):
+        for error in (PermissionError, OSError):
+            with patch.object(Path, 'lstat', side_effect=error('synthetic metadata failure')):
+                with self.assertRaises(error):
+                    render.mac_path_present(Path('/fictional'))
+        with patch.object(Path, 'lstat', side_effect=FileNotFoundError):
+            self.assertFalse(render.mac_path_present(Path('/fictional')))
+
+    @unittest.skipUnless(sys.platform == 'darwin', 'requires native profile lifecycle')
+    def test_socket_metadata_failure_preserves_profile_and_stops(self):
+        for code in (render.errno.EACCES, render.errno.EIO):
+            for at_exit in (False, True):
+                with self.subTest(code=code, at_exit=at_exit), tempfile.TemporaryDirectory() as directory:
+                    outputs = Path(directory).resolve()
+                    error = OSError(code, 'synthetic metadata failure')
+                    checks = [False, False, error] if at_exit else [False, error]
+                    with patch.object(render, 'mac_path_present', side_effect=checks):
+                        with self.assertRaises(OSError):
+                            with render.mac_office_profile(outputs):
+                                self.assertTrue(at_exit)
+                    self.assertEqual((outputs / '.office-profile').exists(), at_exit)
+
     def test_native_accounting_is_group_scoped_and_rejects_uncertainty(self):
         for returned, info_size, error, expected in ((8, 96, 0, [1234, 1234]),
                                                    (4, 0, render.errno.ESRCH, []),
@@ -67,21 +132,25 @@ class MacOfficeTests(unittest.TestCase):
     def test_fixed_script_and_json_job_use_private_profile(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
+            scratch = root / 'scratch'
+            scratch.mkdir()
+            profile = root / '.office-profile'
+            profile.mkdir()
             source = str(root / 'fictional "quoted".xlsx')
             with patch.object(sys, 'platform', 'darwin'), patch.object(render, 'worker_limits'), \
                     patch.dict(os.environ, {}, clear=True), \
                     patch.object(render.os, 'execv', create=True) as execute:
-                render.office_worker(source, str(root / 'output'), 'fictional', str(root))
-                self.assertEqual(os.environ['FONTCONFIG_FILE'], str(root / 'profile/fonts.conf'))
-            fonts = ET.parse(root / 'profile/fonts.conf').getroot()
+                render.office_worker(source, str(root / 'output'), 'fictional', str(scratch))
+                self.assertEqual(os.environ['FONTCONFIG_FILE'], str(profile / 'fonts.conf'))
+            fonts = ET.parse(profile / 'fonts.conf').getroot()
             self.assertEqual([item.text for item in fonts.findall('dir')], ['/System/Library/Fonts', '/Library/Fonts'])
-            self.assertEqual(fonts.find('cachedir').text, str(root / 'profile/font-cache'))
-            scripts = root / 'profile/user/Scripts/python'
+            self.assertEqual(fonts.find('cachedir').text, str(profile / 'font-cache'))
+            scripts = profile / 'user/Scripts/python'
             self.assertEqual((scripts / 'anc_render.py').read_bytes(), Path(render.__file__).read_bytes())
             self.assertEqual(json.loads((scripts / 'job.json').read_text()), [source, str(root / 'output'), 'fictional'])
             binary, argv = execute.call_args.args
             self.assertEqual(binary, '/Applications/LibreOffice.app/Contents/MacOS/soffice')
-            self.assertIn('-env:UserInstallation=' + (root / 'profile').as_uri(), argv)
+            self.assertIn('-env:UserInstallation=' + profile.as_uri(), argv)
             self.assertEqual(argv[-1], 'vnd.sun.star.script:anc_render.py$mac_office_job?language=Python&location=user')
             self.assertNotIn(source, argv)
             self.assertFalse(any('--accept' in item for item in argv))
