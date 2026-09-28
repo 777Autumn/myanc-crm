@@ -41,6 +41,33 @@ service setup/control and verifies the daemon's ordinary UID. It has no model,
 Bot, network or credentials. This evidence cannot replace the installed candidate's
 permissions, unique-receiver and 125-second application stability checks.
 
+### Codex workspace rules and Skills
+
+Keep one canonical copy of the published workspace policy and Skills. For each
+approved Codex workspace, install `CLAUDE.vps.md` as `CLAUDE.md`, a relative
+`AGENTS.md -> CLAUDE.md` link, and `.agents/skills -> ../.claude/skills`.
+Preserve the current `.claude/skills` contents, role references and Wiki versions;
+linking them does not publish new knowledge or import private conversation history.
+Use Codex's native [AGENTS and Skills discovery](https://learn.chatgpt.com/docs/customization/overview),
+including its [supported skill symlinks](https://learn.chatgpt.com/docs/build-skills).
+
+The matching `runtime/codex.config.example.toml` uses the `anc-work` named native
+permission profile. Select that same profile in the gateway agent options. Keep
+each entry's HOME and CODEX_HOME private and install the config as root-owned;
+device login remains per identity. The tool sandbox denies the authentication
+directory and protects both rule paths and link anchors. OS ownership, dedicated
+groups and the existing host capabilities remain required. The loopback network
+rule is hostname-wide, not a port ACL, and does not authorize an administration
+socket. Do not add unrestricted network/HOME access to make a failed tool work.
+
+Run `ANC_CODEX_BIN=/path/to/pinned/codex python -m unittest discover -s tests -p
+test_codex_workspace.py -v` as an ordinary Mac identity. The test uses temporary
+fictional files, calls the actual CLI's `skills/list` and sandboxed `command/exec`,
+and makes no model turn. It checks rule/Skill readability, saved revisions,
+protected writes/renames and credential read denial. It does not prove model
+compliance, installed ownership or cross-account isolation; verify those against
+the frozen installation before enabling the Bot.
+
 ## Integration
 
 After the existing install phase has stopped the service, backed up business state

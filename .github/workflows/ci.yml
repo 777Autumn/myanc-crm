@@ -16,6 +16,14 @@ jobs:
         run: |
           python -m unittest discover -s tests -p 'test_maintenance*.py' -v
           sudo env ANC_LAUNCHD_FIXTURE=1 SUDO_USER="$USER" "$(which python)" -m unittest discover -s tests -p test_maintenance_launchd.py -v
+      - name: Pinned Codex workspace discovery and permissions (no model)
+        run: |
+          test "$(uname -m)" = arm64
+          mkdir "$RUNNER_TEMP/anc-codex"
+          curl --fail --location --retry 2 --output "$RUNNER_TEMP/anc-codex/package.tar.gz" https://github.com/openai/codex/releases/download/rust-v0.157.1/codex-package-aarch64-apple-darwin.tar.gz
+          echo "6cda538d19c2f4d9dce965369aa22011afa9dce8c7a73c234b66eb3611ea4aab  $RUNNER_TEMP/anc-codex/package.tar.gz" | shasum -a 256 -c -
+          tar -xzf "$RUNNER_TEMP/anc-codex/package.tar.gz" -C "$RUNNER_TEMP/anc-codex"
+          ANC_CODEX_BIN="$RUNNER_TEMP/anc-codex/bin/codex" python -m unittest discover -s tests -p test_codex_workspace.py -v
   test:
     runs-on: ubuntu-latest
     steps:

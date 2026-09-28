@@ -1,0 +1,38 @@
+# Native Mac template for the pinned CLI. Install with root-owned configuration;
+# each ordinary entry has its own HOME, CODEX_HOME and independent device login.
+model = "gpt-6-luna"
+model_reasoning_effort = "medium"
+cli_auth_credentials_store = "file"
+check_for_update_on_startup = false
+approval_policy = "never"
+default_permissions = "anc-work"
+
+[features]
+network_proxy = true
+
+[permissions.anc-work]
+extends = ":workspace"
+
+[permissions.anc-work.filesystem]
+"~/.codex" = "deny"
+
+[permissions.anc-work.filesystem.":workspace_roots"]
+"AGENTS.md" = "read"
+"CLAUDE.md" = "read"
+".agents" = "read"
+".claude" = "read"
+".codex" = "read"
+".mcp.json" = "read"
+
+# Only host tools on loopback are allowed by the tool network proxy. This is a
+# hostname rule, NOT a port ACL. OS accounts and host capabilities remain required.
+# The app-server's own model requests use the separately installed network proxy.
+[permissions.anc-work.network]
+enabled = true
+proxy_url = "http://127.0.0.1:0"
+enable_socks5 = false
+allow_upstream_proxy = false
+allow_local_binding = false
+
+[permissions.anc-work.network.domains]
+"127.0.0.1" = "allow"

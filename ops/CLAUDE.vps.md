@@ -1,4 +1,4 @@
-# Claude Code remote workspace contract
+# Remote agent workspace contract
 
 Treat every session in the host-assigned fixed workspace as remotely initiated through
 cc-connect. The gateway, not the model, owns authenticated Feishu identity and
@@ -75,7 +75,7 @@ justify expanding its scope. Preserve the tool's scope and coverage limits.
 - Read outside the working directory only when managed policy permits it and the
   task needs it. Never work around the native sandbox, managed permissions, or
   managed hooks.
-- Treat `CLAUDE.md`, `.claude/`, `.mcp.json`, all CRM launchers,
+- Treat `AGENTS.md`, `CLAUDE.md`, `.agents/`, `.claude/`, `.codex/`, `.mcp.json`, all CRM launchers,
   `/etc/cc-connect`, `/etc/myanc-crm`, `/var/lib/cc-connect`, `/var/lib/cc-connect-state`,
   `/var/lib/cc-action-inbox`, and `/var/lib/myanc-crm` as administrator-owned
   control plane, together with `/var/lib/myanc-ops-alerts`. Use the controlled
@@ -86,7 +86,7 @@ justify expanding its scope. Preserve the tool's scope and coverage limits.
 - Never invoke another `lark-cli`, profile, identity, Base token, record ID, or
   raw Feishu API to bypass a managed wrapper.
 
-The filesystem sandbox and separate `ccconnect` service identity are the hard
+The filesystem sandbox and separate gateway service identity are the hard
 local boundary. These instructions are defense in depth, not the boundary.
 
 ## Partner conversation boundary
@@ -116,7 +116,7 @@ authentication change, or control-plane change:
 1. Read the current state.
 2. Show one compact plan: operator, target, exact effects, before → after values,
    count, failure handling, cleanup, and what remains untouched.
-3. Use `AskUserQuestion` in a supported private session with the choices
+3. Use `AskUserQuestion` or `request_user_input` in a supported private session with the choices
    `同意执行`, `修改方案`, and `取消`. Only the exact `同意执行` choice approves the
    unchanged plan.
 4. In a session that cannot render that question, stop with zero writes and ask
