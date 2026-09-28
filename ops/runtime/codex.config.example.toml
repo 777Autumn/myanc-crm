@@ -28,6 +28,11 @@ extends = ":workspace"
 # Only host tools on loopback are allowed by the tool network proxy. This is a
 # hostname rule, NOT a port ACL. OS accounts and host capabilities remain required.
 # The app-server's own model requests use the separately installed network proxy.
+# On Darwin the paired gateway also grants this work's exact LibreOffice Unix
+# socket to model tools. Other Unix/management sockets stay blocked. The converter
+# serializes a fresh outputs/.office-profile; stale profile/socket means stop and
+# inspect the prior process, never delete it and retry automatically. Native macOS
+# spellchecking is disabled only inside the one-shot Office conversion process.
 [permissions.anc-work.network]
 enabled = true
 proxy_url = "http://127.0.0.1:0"

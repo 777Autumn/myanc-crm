@@ -5,6 +5,7 @@ The gateway's shared Office validator runs before LibreOffice; the PDF boundary
 runs before Poppler. No receiver, network listener, delivery or dependency setup.
 """
 import argparse
+from contextlib import contextmanager, nullcontext
 import ctypes
 import errno
 import hashlib
@@ -14,6 +15,8 @@ import os
 from pathlib import Path
 import posixpath
 import signal
+import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -22,6 +25,41 @@ import zipfile
 import xml.etree.ElementTree as ET
 
 MAX_BYTES = 20 << 20
+
+
+def mac_office_socket(profile, uid):
+    # LibreOffice 26.8 dp_misc.cxx: URI UTF-16LE, unpadded digest bytes.
+    digest = hashlib.md5(profile.as_uri().encode('utf-16le')).digest()
+    return Path('/private/tmp') / ('OSL_PIPE_%d_SingleOfficeIPC_' % uid + ''.join(format(b, 'x') for b in digest))
+
+
+@contextmanager
+def mac_office_profile(outputs):
+    """One work's fixed IPC name, fresh profile; stale state needs maintenance."""
+    import fcntl
+    profile = outputs / '.office-profile'
+    socket = mac_office_socket(profile, os.geteuid())
+    fd = os.open(outputs / '.office-profile.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_nlink != 1 or info.st_mode & 0o077:
+            raise ValueError('unsafe Office profile lock')
+        # ponytail: one conversion per work; a busy work fails instead of queuing.
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if os.path.lexists(profile) or os.path.lexists(socket):
+            raise RuntimeError('stale Office profile/socket; preserve for maintenance')
+        profile.mkdir(mode=0o700)
+        try:
+            yield profile
+        except BaseException:
+            # A killed parent or uncertain conversion must not silently reuse it.
+            raise
+        else:
+            if os.path.lexists(socket):
+                raise RuntimeError('Office socket remained after exit; preserve for maintenance')
+            shutil.rmtree(profile)
+    finally:
+        os.close(fd)  # Keep the lock inode: unlinking it permits parallel owners.
 
 
 def xlsx_cells(data):
@@ -212,8 +250,9 @@ def render(work_root, source, destination, gateway):
                 # worker limit; do not relax the sandbox or start an Office server.
                 env['MAX_CONCURRENCY'] = '1'
             worker_python = sys.executable if sys.platform == 'darwin' else '/usr/bin/python3'
-            run([worker_python, '-I', str(Path(__file__).resolve()), '--office-worker',
-                 str(frozen), str(target), source.stem, str(scratch)], timeout=120, env=env)
+            with mac_office_profile(outputs) if sys.platform == 'darwin' else nullcontext():
+                run([worker_python, '-I', str(Path(__file__).resolve()), '--office-worker',
+                     str(frozen), str(target), source.stem, str(scratch)], timeout=120, env=env)
             updated = target / (source.stem + '.docx')
             if source.suffix.lower() == '.docx':
                 office_check(gateway, updated.name, updated.read_bytes())
@@ -270,7 +309,7 @@ def office_worker(source, destination, stem, scratch):
         # Signed macOS helpers cannot be launched from an external shell.
         # Run only our fixed script inside the signed Office process, with a
         # private one-shot profile. Received document macros remain disabled.
-        profile = Path(scratch) / 'profile'
+        profile = Path(scratch).parent / '.office-profile'
         scripts = profile / 'user/Scripts/python'
         scripts.mkdir(parents=True, mode=0o700)
         (scripts / 'anc_render.py').write_bytes(Path(__file__).read_bytes())
@@ -344,6 +383,10 @@ def office_update(source, destination, stem):
     doc = None
     try:
         context = uno.getComponentContext()
+        if sys.platform == 'darwin':
+            # Native spellchecking initializes AppKit even in headless mode.
+            # This fixed one-shot conversion does not provide spellchecking.
+            context.ServiceManager.remove('org.openoffice.lingu.MacOSXSpellChecker')
         desktop = context.ServiceManager.createInstanceWithContext('com.sun.star.frame.Desktop', context)
         doc = desktop.loadComponentFromURL(source.as_uri(), '_blank', 0,
                                           props(Hidden=True, ReadOnly=False, MacroExecutionMode=NEVER_EXECUTE, UpdateDocMode=NO_UPDATE))

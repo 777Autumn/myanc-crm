@@ -11,6 +11,9 @@ import threading
 import tomllib
 import unittest
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'ops/runtime'))
+from team_file_render import mac_office_socket
+
 
 OPS = Path(__file__).resolve().parents[1] / "ops"
 TEMPLATE = OPS / "runtime/codex.config.example.toml"
@@ -39,6 +42,10 @@ class CodexWorkspaceTests(unittest.TestCase):
             auth, workspace = root / ".codex", root / "workspace"
             auth.mkdir(mode=0o700)
             workspace.mkdir(mode=0o700)
+            (workspace / 'outputs').mkdir()
+            office_socket = str(mac_office_socket(workspace / 'outputs/.office-profile', os.geteuid()))
+            # Same narrowly scoped named-profile override as the paired gateway.
+            override = 'permissions={"anc-work"={network={unix_sockets={' + json.dumps(office_socket) + '="allow"}}}}'
             shutil.copyfile(TEMPLATE, auth / "config.toml")
             (auth / "private-fixture").write_text("fictional-private-data", encoding="utf-8")
             shutil.copyfile(OPS / "CLAUDE.vps.md", workspace / "CLAUDE.md")
@@ -48,7 +55,7 @@ class CodexWorkspaceTests(unittest.TestCase):
             (workspace / ".agents/skills").symlink_to("../.claude/skills", target_is_directory=True)
             env = {"HOME": str(root), "CODEX_HOME": str(auth), "PATH": "/usr/bin:/bin"}
             with tempfile.TemporaryFile(mode="w+") as errors:
-                process = subprocess.Popen([cli, "app-server", "--listen", "stdio://"],
+                process = subprocess.Popen([cli, '-c', override, "app-server", "--listen", "stdio://"],
                                            cwd=workspace, env=env, stdin=subprocess.PIPE,
                                            stdout=subprocess.PIPE, stderr=errors, text=True)
                 messages = queue.Queue()
@@ -118,6 +125,25 @@ printf 'protected workspace passed\n'
                         "timeoutMs": 10000})
                     self.assertNotEqual(checked["exitCode"], 0)
                     self.assertIn("document process group exceeded memory budget", checked["stderr"])
+                    program = '''import os, socket, sys
+for address, allowed in [(sys.argv[1], True), (sys.argv[1] + '-other', False), (sys.argv[2], False)]:
+    with socket.socket(socket.AF_UNIX) as client:
+        try:
+            client.bind(address)
+        except PermissionError:
+            assert not allowed, 'current work socket denied'
+        else:
+            os.unlink(address)
+            assert allowed, 'another socket allowed'
+print('exact Office socket only')
+'''
+                    other = str(mac_office_socket(workspace / 'another-work/outputs/.office-profile', os.geteuid()))
+                    checked = request(5, 'command/exec', {
+                        'permissionProfile': 'anc-work', 'cwd': str(workspace),
+                        'command': ['/usr/bin/env', *python_env, sys.executable, '-I', '-c', program, office_socket, other],
+                        'timeoutMs': 10000})
+                    self.assertEqual(checked['exitCode'], 0, checked)
+                    self.assertIn('exact Office socket only', checked['stdout'])
                 finally:
                     process.stdin.close()
                     try:
