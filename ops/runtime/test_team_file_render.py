@@ -202,6 +202,7 @@ class RenderBoundaryTests(unittest.TestCase):
             ("='[other.xlsx]预算总览'!B5", '=[other.xlsx]预算总览!B5', ()),
             ("='预算总览:预算明细'!B5", '=预算总览:预算明细!B5', ()),
             ("='预算总览'!Rate", '=预算总览!Rate', ()),
+            ("=SUM('预算总览'!B5:B5)", '=SUM(预算总览!B5)', ()),
             ("=SUM(  '预算总览'!B5)", '=SUM( 预算总览!B5)', ()),
         ):
             with self.subTest(original=original):
@@ -370,7 +371,9 @@ class NativeXlsxRenderTests(unittest.TestCase):
             book['预算总览']['B5'] = 2
             book['预算明细']['C2'] = 3
             book['预算明细']['D2'] = "='预算总览'!$B$5*C2"
-            book['预算总览']['B8'] = "=SUM('预算明细'!D2:D2)"
+            # Calc collapses D2:D2 to D2; this fixture tests only sheet quotes.
+            book['预算明细']['D3'] = 0
+            book['预算总览']['B8'] = "=SUM('预算明细'!D2:D3)"
             book.save(source)
             original = source.read_bytes()
             target = root / 'outputs' / 'recalculated'
@@ -380,7 +383,7 @@ class NativeXlsxRenderTests(unittest.TestCase):
             values = load_workbook(saved, data_only=True)
             try:
                 self.assertIn(formulas['预算明细']['D2'].value, ("='预算总览'!$B$5*C2", '=预算总览!$B$5*C2'))
-                self.assertIn(formulas['预算总览']['B8'].value, ("=SUM('预算明细'!D2:D2)", '=SUM(预算明细!D2:D2)'))
+                self.assertIn(formulas['预算总览']['B8'].value, ("=SUM('预算明细'!D2:D3)", '=SUM(预算明细!D2:D3)'))
                 for sheet, cell in (('预算明细', 'D2'), ('预算总览', 'B8')):
                     self.assertEqual(formulas[sheet][cell].data_type, 'f')
                     self.assertEqual(values[sheet][cell].value, 6)
