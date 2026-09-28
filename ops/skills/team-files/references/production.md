@@ -58,7 +58,13 @@ choose a new name; this input error does not require broader permissions.
 
 On macOS, convert files within the same work one at a time. Wait for each
 converter to finish before starting the next; the work has one protected Office
-profile. A busy or stale profile is a stop condition, not permission to delete
+profile. In Codex, retain the full `exec_command` result, including `session_id`
+and `exit_code`, instead of returning only `output`. A returned `session_id`
+means the command is still running: wait on that same session with `write_stdin`
+until it exits, then check the result and `render.json` before inspecting pages.
+An empty output alone means neither completion nor failure. After interrupted
+observation, check the existing conversion's result before starting another.
+A busy or stale profile is a stop condition, not permission to delete
 its lock or bypass the helper. This does not serialize different employees' work.
 
 The helper validates Office content through the existing gateway binary before
