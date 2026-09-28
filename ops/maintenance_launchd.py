@@ -31,12 +31,16 @@ HOST_ENV = {
     'MYANC_CRM_HOST_SECRET_FILE': '/usr/local/etc/myanc-crm/action-host.secret',
     'MYANC_CRM_PROJECTS': 'claude-local,owner-group,test-private,test-group',
     'MYANC_CRM_TOOLS': '1',
-    'CC_TEAM_BRAIN_COMMAND': '/usr/local/libexec/team-brain-host',
-    'CC_TEAM_BRAIN_PROJECTS': 'claude-local,owner-group,test-private,test-group',
     'MYANC_REMINDER_DB': '/private/var/lib/cc-connect/reminders.sqlite',
     'MYANC_CRM_PLAN_REMINDERS': '1',
     'MYANC_OPS_ALERT_DB': '/private/var/lib/cc-connect/alerts.sqlite',
     'MYANC_OPS_ALERT_OWNER_PROJECT': 'claude-local',
+}
+# An existing knowledge host needs its publication journal as well as its code.
+# Keep it separate when a migration only carries the selected local mock Wiki.
+KNOWLEDGE_ENV = {
+    'CC_TEAM_BRAIN_COMMAND': '/usr/local/libexec/team-brain-host',
+    'CC_TEAM_BRAIN_PROJECTS': 'claude-local,owner-group,test-private,test-group',
 }
 
 
@@ -111,9 +115,11 @@ def frozen_plist():
                     ProcessType='Background', ExitTimeOut=30, Umask=0o077,
                     StandardOutPath=STDOUT, StandardErrorPath=STDERR,
                     EnvironmentVariables={'HOME': CWD, 'PATH': '/usr/bin:/bin:/usr/sbin:/sbin'})
-    host_environment = expected['EnvironmentVariables'] | HOST_ENV
-    if value.get('EnvironmentVariables') == host_environment:
-        expected['EnvironmentVariables'] = host_environment
+    for hosts in (HOST_ENV, HOST_ENV | KNOWLEDGE_ENV):
+        host_environment = expected['EnvironmentVariables'] | hosts
+        if value.get('EnvironmentVariables') == host_environment:
+            expected['EnvironmentVariables'] = host_environment
+            break
     require(value == expected, 'unexpected_launchd_plist')
     return dict(manager='launchd', label=LABEL, plist_sha256=hashlib.sha256(raw).hexdigest())
 

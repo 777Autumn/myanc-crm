@@ -26,10 +26,15 @@ test directory alone does not demonstrate that launchd can open logs after chang
 The base plist leaves business hosts disabled. For the approved four-entrance Mac
 migration, explicitly add `maintenance_launchd.HOST_ENV` to its environment before
 freezing the installation. This exact opt-in variant reconnects the existing CRM,
-knowledge, reminders and owner alerts; partial or arbitrary overrides are rejected.
+shared cases, reminders and owner alerts; partial or arbitrary overrides are rejected.
 Secret values remain in protected files, never the plist. Provision and verify the
 fixed helper paths, four-project mappings, secret file and fresh reminder/alert
-stores before starting. Keep model credentials and private workspace state outside
+stores before starting. Add the complete `KNOWLEDGE_ENV` pair only when that host's
+protected configuration and existing publication journal are also provisioned and
+verified. A Mac migration carrying only the selected local mock Wiki leaves this
+pair absent: do not create an empty journal and report the old knowledge as connected.
+Local Wiki reads and fresh shared cases remain available; report the separate
+knowledge-tool limitation explicitly. Keep model credentials and private workspace state outside
 these host paths. This variant requires the paired gateway's four-project startup
 support and does not initialize storage or enable anything by importing the module.
 

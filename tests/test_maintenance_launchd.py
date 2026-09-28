@@ -281,6 +281,16 @@ class LaunchdTests(unittest.TestCase):
                             st_mtime_ns=1, st_size=target.stat().st_size))()
             with patch.object(n, 'PLIST', target), patch.object(Path, 'lstat', return_value=observed):
                 n.frozen_plist()
+                without_knowledge = copy.deepcopy(data)
+                del without_knowledge['EnvironmentVariables']['CC_TEAM_BRAIN_COMMAND']
+                del without_knowledge['EnvironmentVariables']['CC_TEAM_BRAIN_PROJECTS']
+                target.write_bytes(plistlib.dumps(without_knowledge))
+                n.frozen_plist()  # Fresh Mac cases do not imply migrated Wiki publication state.
+                partial = copy.deepcopy(data)
+                del partial['EnvironmentVariables']['CC_TEAM_BRAIN_PROJECTS']
+                target.write_bytes(plistlib.dumps(partial))
+                with self.assertRaisesRegex(RuntimeError, 'unexpected_launchd_plist'):
+                    n.frozen_plist()
                 for key, value in [('MYANC_CRM_HOST_SECRET', 'fictional-secret'),
                                    ('MYANC_CRM_HOST_SECRET_FILE', '/tmp/unprotected'),
                                    ('MYANC_CRM_PROJECTS', 'wrong-project'),
