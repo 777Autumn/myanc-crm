@@ -137,7 +137,78 @@ def fictional_budget(path):
     workbook.save(path)
 
 
+def saved_budget_formulas(formulas, *, cached='6', extra_sheets=()):
+    """Two local sheets with explicit saved caches, without evaluating formulas."""
+    book = Workbook()
+    book.active.title = '预算总览'
+    book.create_sheet('预算明细')
+    for title in extra_sheets:
+        book.create_sheet(title)['A1'] = 1
+    book['预算总览']['B5'] = 2
+    book['预算明细']['C2'] = 3
+    for address, formula in formulas.items():
+        title, coordinate = address.rsplit('!', 1)
+        book[title][coordinate] = formula
+    raw = io.BytesIO()
+    book.save(raw)
+    result = io.BytesIO()
+    ns = '{http://schemas.openxmlformats.org/spreadsheetml/2006/main}'
+    with zipfile.ZipFile(raw) as original, zipfile.ZipFile(result, 'w') as target:
+        for name in original.namelist():
+            value = original.read(name)
+            if name.startswith('xl/worksheets/') and name.endswith('.xml'):
+                xml = ET.fromstring(value)
+                for cell in xml.iter(ns + 'c'):
+                    if cell.find(ns + 'f') is not None:
+                        cell.find(ns + 'v').text = cached
+                value = ET.tostring(xml)
+            target.writestr(name, value)
+    return result.getvalue()
+
+
 class RenderBoundaryTests(unittest.TestCase):
+    def test_optional_local_sheet_quotes_survive_recalculation(self):
+        original = saved_budget_formulas({'预算明细!D2': "='预算总览'!$B$5*C2",
+                                          '预算总览!B8': "=SUM('预算明细'!D2:D2)"})
+        saved = saved_budget_formulas({'预算明细!D2': '=预算总览!$B$5*C2',
+                                       '预算总览!B8': '=SUM(预算明细!D2:D2)'})
+        result = check_xlsx_result(xlsx_cells(original), saved)
+        self.assertEqual(result['formula_count'], 2)
+        self.assertTrue(result['formula_caches_checked'])
+        # The reader accepts the same local reference with quotes added too.
+        self.assertEqual(check_xlsx_result(xlsx_cells(saved), original), result)
+
+    def test_sheet_quote_exception_rejects_other_formula_changes(self):
+        original = saved_budget_formulas({'预算明细!D2': "='预算总览'!$B$5*C2"})
+        before = xlsx_cells(original)
+        for formula in ('=预算总览!$B$6*C2', '=预算总览!B5*C2', '=预算总览!$B$5+C2',
+                        '=预算总览!$B$5*C3', '=预算明细!$B$5*C2', '=6'):
+            with self.subTest(formula=formula), self.assertRaisesRegex(ValueError, 'formulas changed'):
+                check_xlsx_result(before, saved_budget_formulas({'预算明细!D2': formula}))
+        for formulas in ({}, {'预算明细!D2': '6'},
+                         {'预算明细!D2': '=预算总览!$B$5*C2', '预算明细!D3': '=1'}):
+            with self.subTest(formulas=formulas), self.assertRaisesRegex(ValueError, 'formulas changed'):
+                check_xlsx_result(before, saved_budget_formulas(formulas))
+        with self.assertRaisesRegex(ValueError, 'uncalculated'):
+            check_xlsx_result(before, saved_budget_formulas({'预算明细!D2': '=预算总览!$B$5*C2'}, cached=None))
+
+    def test_sheet_quote_exception_does_not_rewrite_strings_or_unsupported_references(self):
+        for original, saved, sheets in (
+            ('="\'预算总览\'!B5"', '="预算总览!B5"', ()),
+            ('=INDIRECT("\'预算总览\'!B5")', '=INDIRECT("预算总览!B5")', ()),
+            ("='不存在'!B5", '=不存在!B5', ()),
+            ("='预算 总览'!B5", '=预算 总览!B5', ('预算 总览',)),
+            ("='预算''总览'!B5", "=预算'总览!B5", ("预算'总览",)),
+            ("='[other.xlsx]预算总览'!B5", '=[other.xlsx]预算总览!B5', ()),
+            ("='预算总览:预算明细'!B5", '=预算总览:预算明细!B5', ()),
+            ("='预算总览'!Rate", '=预算总览!Rate', ()),
+            ("=SUM(  '预算总览'!B5)", '=SUM( 预算总览!B5)', ()),
+        ):
+            with self.subTest(original=original):
+                before = xlsx_cells(saved_budget_formulas({'预算明细!D2': original}, extra_sheets=sheets))
+                with self.assertRaisesRegex(ValueError, 'formulas changed'):
+                    check_xlsx_result(before, saved_budget_formulas({'预算明细!D2': saved}, extra_sheets=sheets))
+
     def test_saved_xlsx_requires_formula_type_and_cache_but_keeps_equals_text(self):
         with tempfile.TemporaryDirectory() as temp:
             source = Path(temp) / 'fictional.xlsx'
@@ -278,6 +349,50 @@ with patch('team_file_render.os.execv') as execute:
 '''
         output = subprocess.check_output([sys.executable, '-B', '-c', probe], cwd=Path(__file__).parent)
         self.assertEqual(json.loads(output), [[2 << 30] * 2, [90] * 2, [128 << 20] * 2, [0, 0]])
+
+
+@unittest.skipUnless(os.environ.get('TEAM_FILES_TEST_XLSX_RECALC') == '1'
+                     and os.environ.get('TEAM_FILES_TEST_GATEWAY') and sys.platform in ('linux', 'darwin'),
+                     'requires explicit ordinary Linux/Mac Office fixture and matching gateway')
+class NativeXlsxRenderTests(unittest.TestCase):
+    def test_optional_sheet_quotes_recalculate_and_preview(self):
+        self.assertNotEqual(os.geteuid(), 0)
+        if sys.platform == 'linux':
+            deny_unix_sockets()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp).resolve()
+            (root / 'inputs').mkdir()
+            (root / 'outputs').mkdir()
+            source = root / 'inputs' / 'fictional-budget.xlsx'
+            book = Workbook()
+            book.active.title = '预算总览'
+            book.create_sheet('预算明细')
+            book['预算总览']['B5'] = 2
+            book['预算明细']['C2'] = 3
+            book['预算明细']['D2'] = "='预算总览'!$B$5*C2"
+            book['预算总览']['B8'] = "=SUM('预算明细'!D2:D2)"
+            book.save(source)
+            original = source.read_bytes()
+            target = root / 'outputs' / 'recalculated'
+            result = render(root, source, target, os.environ['TEAM_FILES_TEST_GATEWAY'])
+            saved = target / source.name
+            formulas = load_workbook(saved, data_only=False)
+            values = load_workbook(saved, data_only=True)
+            try:
+                self.assertIn(formulas['预算明细']['D2'].value, ("='预算总览'!$B$5*C2", '=预算总览!$B$5*C2'))
+                self.assertIn(formulas['预算总览']['B8'].value, ("=SUM('预算明细'!D2:D2)", '=SUM(预算明细!D2:D2)'))
+                for sheet, cell in (('预算明细', 'D2'), ('预算总览', 'B8')):
+                    self.assertEqual(formulas[sheet][cell].data_type, 'f')
+                    self.assertEqual(values[sheet][cell].value, 6)
+            finally:
+                formulas.close(); values.close()
+            self.assertEqual(source.read_bytes(), original)
+            self.assertEqual(result['xlsx']['formula_count'], 2)
+            self.assertTrue(result['xlsx']['formula_caches_checked'])
+            pages = len(PdfReader(saved.with_suffix('.pdf')).pages)
+            self.assertGreater(pages, 0)
+            self.assertEqual(len(list(target.glob('page-*.png'))), pages)
+            self.assertEqual(json.loads((target / 'render.json').read_text(encoding='utf-8'))['pages'], pages)
 
 
 @unittest.skipUnless(os.environ.get('TEAM_FILES_TEST_GATEWAY'), 'requires matching candidate binary and Linux Office packages')

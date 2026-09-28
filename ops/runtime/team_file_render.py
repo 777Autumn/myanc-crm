@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import posixpath
+import re
 import signal
 import shutil
 import stat
@@ -106,11 +107,49 @@ def xlsx_cells(data):
     return cells
 
 
+def same_xlsx_formula(original, saved, sheets):
+    if original == saved:
+        return True
+    if not isinstance(original, str) or not isinstance(saved, str):
+        return False
+    from openpyxl.formula import Tokenizer
+    from openpyxl.formula.tokenizer import TokenizerError
+    try:
+        left, right = Tokenizer('=' + original).items, Tokenizer('=' + saved).items
+    except TokenizerError:
+        return False
+    # Tokenizer collapses whitespace. Only compare tokens that preserve every
+    # original character; this exception permits sheet quotes, not other edits.
+    if (''.join(t.value for t in left) != original or ''.join(t.value for t in right) != saved
+            or len(left) != len(right)):
+        return False
+    for a, b in zip(left, right):
+        if (a.type, a.subtype) != (b.type, b.subtype):
+            return False
+        if a.value == b.value:
+            continue
+        if (a.type, a.subtype) != ('OPERAND', 'RANGE'):
+            return False
+        source, sep, reference = a.value.rpartition('!')
+        target, other_sep, other_reference = b.value.rpartition('!')
+        source = source[1:-1] if source.startswith("'") and source.endswith("'") else source
+        target = target[1:-1] if target.startswith("'") and target.endswith("'") else target
+        if (not sep or not other_sep or source != target or source not in sheets
+                or not (source[0].isalpha() or source[0] == '_')
+                or not all(c.isalnum() or c == '_' for c in source)
+                or reference != other_reference
+                or re.fullmatch(r'\$?[A-Za-z]{1,3}\$?[1-9][0-9]*(?::\$?[A-Za-z]{1,3}\$?[1-9][0-9]*)?', reference) is None):
+            return False
+    return True
+
+
 def check_xlsx_result(before, data):
     after = xlsx_cells(data)
     formulas = {key: cell['formula'] for key, cell in before.items() if cell['is_formula']}
     saved = {key: cell['formula'] for key, cell in after.items() if cell['is_formula']}
-    if formulas != saved:
+    # Only populated sheets observed in both workbooks enter the quote exception.
+    sheets = {key.rsplit('!', 1)[0] for key in before} & {key.rsplit('!', 1)[0] for key in after}
+    if formulas.keys() != saved.keys() or any(not same_xlsx_formula(value, saved[key], sheets) for key, value in formulas.items()):
         raise ValueError('saved workbook formulas changed; inspect the retained source')
     if any(cell['type'] == 'e' or (cell['is_formula'] and not cell['cached']) for cell in after.values()):
         raise ValueError('saved workbook contains an error or an uncalculated formula')
