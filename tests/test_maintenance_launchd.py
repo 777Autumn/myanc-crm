@@ -257,6 +257,55 @@ class LaunchdTests(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError, 'unexpected_launchd_plist'):
                         n.frozen_plist()
 
+    def test_four_entry_host_environment_is_explicit_and_exact(self):
+        template = Path(__file__).parents[1] / 'ops/runtime/com.myanc.cc-connect.plist'
+        data = plistlib.loads(template.read_bytes())
+        # Existing gateway host names, fictional state: no account token in plist.
+        host = {
+            'MYANC_CRM_HOST_COMMAND': '/usr/local/bin/crm-followup',
+            'MYANC_CRM_HOST_SECRET_FILE': '/usr/local/etc/myanc-crm/action-host.secret',
+            'MYANC_CRM_PROJECTS': 'claude-local,owner-group,test-private,test-group',
+            'MYANC_CRM_TOOLS': '1',
+            'CC_TEAM_BRAIN_COMMAND': '/usr/local/libexec/team-brain-host',
+            'CC_TEAM_BRAIN_PROJECTS': 'claude-local,owner-group,test-private,test-group',
+            'MYANC_REMINDER_DB': '/private/var/lib/cc-connect/reminders.sqlite',
+            'MYANC_CRM_PLAN_REMINDERS': '1',
+            'MYANC_OPS_ALERT_DB': '/private/var/lib/cc-connect/alerts.sqlite',
+            'MYANC_OPS_ALERT_OWNER_PROJECT': 'claude-local',
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / 'service.plist'
+            data['EnvironmentVariables'].update(host)
+            target.write_bytes(plistlib.dumps(data))
+            observed = type('Stat', (), dict(st_mode=0o100644, st_uid=0, st_ino=1,
+                            st_mtime_ns=1, st_size=target.stat().st_size))()
+            with patch.object(n, 'PLIST', target), patch.object(Path, 'lstat', return_value=observed):
+                n.frozen_plist()
+                without_knowledge = copy.deepcopy(data)
+                del without_knowledge['EnvironmentVariables']['CC_TEAM_BRAIN_COMMAND']
+                del without_knowledge['EnvironmentVariables']['CC_TEAM_BRAIN_PROJECTS']
+                target.write_bytes(plistlib.dumps(without_knowledge))
+                n.frozen_plist()  # Fresh Mac cases do not imply migrated Wiki publication state.
+                partial = copy.deepcopy(data)
+                del partial['EnvironmentVariables']['CC_TEAM_BRAIN_PROJECTS']
+                target.write_bytes(plistlib.dumps(partial))
+                with self.assertRaisesRegex(RuntimeError, 'unexpected_launchd_plist'):
+                    n.frozen_plist()
+                for key, value in [('MYANC_CRM_HOST_SECRET', 'fictional-secret'),
+                                   ('MYANC_CRM_HOST_SECRET_FILE', '/tmp/unprotected'),
+                                   ('MYANC_CRM_PROJECTS', 'wrong-project'),
+                                   ('PATH', '/tmp')]:
+                    bad = copy.deepcopy(data)
+                    bad['EnvironmentVariables'][key] = value
+                    target.write_bytes(plistlib.dumps(bad))
+                    with self.assertRaisesRegex(RuntimeError, 'unexpected_launchd_plist'):
+                        n.frozen_plist()
+                bad = copy.deepcopy(data)
+                del bad['EnvironmentVariables']['MYANC_CRM_TOOLS']
+                target.write_bytes(plistlib.dumps(bad))
+                with self.assertRaisesRegex(RuntimeError, 'unexpected_launchd_plist'):
+                    n.frozen_plist()
+
     @unittest.skipUnless(sys.platform == 'darwin', 'requires actual libproc')
     def test_actual_native_process_start_identity(self):
         detail = n.process(os.getpid())
