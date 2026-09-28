@@ -21,6 +21,20 @@ TEMPLATE = OPS / "runtime/codex.config.example.toml"
 
 
 class CodexWorkspaceTests(unittest.TestCase):
+    def test_shared_template_has_no_inherited_or_static_private_access(self):
+        config = tomllib.loads(TEMPLATE.read_text(encoding="utf-8"))
+        self.assertEqual(config['default_permissions'], 'anc-work')
+        profile = config['permissions']['anc-shared']
+        self.assertEqual(set(profile), {'filesystem', 'network'})
+        self.assertEqual(profile['filesystem'][':minimal'], 'read')
+        self.assertEqual(set(profile['filesystem'].values()), {'read'})
+        for path in profile['filesystem']:
+            self.assertTrue(path == ':minimal' or path.startswith(('/opt/', '/Library/', '/Applications/')))
+        self.assertEqual(profile['network']['domains'], {'127.0.0.1': 'allow'})
+        for flag in ('enable_socks5', 'allow_upstream_proxy', 'allow_local_binding'):
+            self.assertFalse(profile['network'][flag])
+        self.assertNotIn('unix_sockets', profile['network'])
+
     def test_template_keeps_native_profile_and_credential_boundary(self):
         config = tomllib.loads(TEMPLATE.read_text(encoding="utf-8"))
         self.assertEqual((config["model"], config["model_reasoning_effort"]),
@@ -34,6 +48,14 @@ class CodexWorkspaceTests(unittest.TestCase):
     @unittest.skipUnless(sys.platform == "darwin" and os.environ.get("ANC_CODEX_BIN"),
                          "requires pinned native Mac CLI; no model or credentials")
     def test_native_discovery_and_protected_workspace(self):
+        self.native_discovery_and_protected_workspace('anc-work')
+
+    @unittest.skipUnless(sys.platform == "darwin" and os.environ.get("ANC_CODEX_BIN"),
+                         "requires pinned native Mac CLI; no model or credentials")
+    def test_native_shared_profile_and_protected_workspace(self):
+        self.native_discovery_and_protected_workspace('anc-shared')
+
+    def native_discovery_and_protected_workspace(self, profile):
         cli = os.environ["ANC_CODEX_BIN"]
         self.assertNotEqual(os.geteuid(), 0, "model tools must run as an ordinary UID")
         self.assertEqual(subprocess.check_output([cli, "--version"], text=True).strip(),
@@ -46,7 +68,14 @@ class CodexWorkspaceTests(unittest.TestCase):
             (workspace / 'outputs').mkdir()
             office_socket = str(mac_office_socket(workspace / 'outputs/.office-profile', os.geteuid()))
             # Same narrowly scoped named-profile override as the paired gateway.
-            override = 'permissions={"anc-work"={network={unix_sockets={' + json.dumps(office_socket) + '="allow"}}}}'
+            fields = 'network={unix_sockets={' + json.dumps(office_socket) + '="allow"}}'
+            if profile == 'anc-shared':
+                fs = {str(workspace): 'write', office_socket: 'write', str(OPS.parent): 'read',
+                      str(Path(sys.executable).resolve().parent.parent): 'read'}
+                for name in ('AGENTS.override.md', 'AGENTS.md', 'CLAUDE.md', '.agents', '.claude', '.codex', '.mcp.json'):
+                    fs[str(workspace / name)] = 'read'
+                fields += ',filesystem={' + ','.join(json.dumps(k) + '=' + json.dumps(v) for k, v in fs.items()) + '}'
+            override = 'permissions={' + json.dumps(profile) + '={' + fields + '}}'
             shutil.copyfile(TEMPLATE, auth / "config.toml")
             (auth / "private-fixture").write_text("fictional-private-data", encoding="utf-8")
             shutil.copyfile(OPS / "CLAUDE.vps.md", workspace / "CLAUDE.md")
@@ -106,7 +135,7 @@ if (printf forbidden > "$HOME/.codex/config.toml") 2>/dev/null; then exit 15; fi
 test -s result-v1.txt && test -s result-v2.txt
 printf 'protected workspace passed\n'
 '''
-                    result = request(3, "command/exec", {"permissionProfile": "anc-work", "cwd": str(workspace),
+                    result = request(3, "command/exec", {"permissionProfile": profile, "cwd": str(workspace),
                                                          "command": ["/bin/sh", "-c", script], "timeoutMs": 10000})
                     self.assertEqual(result["exitCode"], 0, result)
                     self.assertIn("protected workspace passed", result["stdout"])
@@ -121,7 +150,7 @@ printf 'protected workspace passed\n'
                     python_env = [key + "=" + os.environ[key] for key in
                                   ("PYTHONHOME", "DYLD_FRAMEWORK_PATH") if key in os.environ]
                     checked = request(4, "command/exec", {
-                        "permissionProfile": "anc-work", "cwd": str(workspace),
+                        "permissionProfile": profile, "cwd": str(workspace),
                         "command": ["/usr/bin/env", *python_env, sys.executable, "-I", "-c", program],
                         "timeoutMs": 10000})
                     self.assertNotEqual(checked["exitCode"], 0)
@@ -140,7 +169,7 @@ print('exact Office socket only')
 '''
                     other = str(mac_office_socket(workspace / 'another-work/outputs/.office-profile', os.geteuid()))
                     checked = request(5, 'command/exec', {
-                        'permissionProfile': 'anc-work', 'cwd': str(workspace),
+                        'permissionProfile': profile, 'cwd': str(workspace),
                         'command': ['/usr/bin/env', *python_env, sys.executable, '-I', '-c', program, office_socket, other],
                         'timeoutMs': 10000})
                     self.assertEqual(checked['exitCode'], 0, checked)
@@ -155,7 +184,7 @@ print('exact Office socket only')
                             program = ('import socket,sys; s=socket.socket(socket.AF_UNIX); '
                                        's.settimeout(2); s.connect(sys.argv[1])')
                             checked = request(6, 'command/exec', {
-                                'permissionProfile': 'anc-work', 'cwd': str(workspace),
+                                'permissionProfile': profile, 'cwd': str(workspace),
                                 'command': ['/usr/bin/env', *python_env, sys.executable, '-I', '-c', program, management],
                                 'timeoutMs': 10000})
                             self.assertNotEqual(checked['exitCode'], 0)

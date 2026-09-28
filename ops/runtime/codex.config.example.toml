@@ -1,5 +1,6 @@
 # Native Mac template for the pinned CLI. Install with root-owned configuration;
-# each ordinary entry has its own HOME, CODEX_HOME and independent device login.
+# legacy isolated identities log in separately. The optional anc-shared profile
+# supports the paired gateway's single native owner for fixed trusted entrances.
 model = "gpt-6-luna"
 model_reasoning_effort = "medium"
 cli_auth_credentials_store = "file"
@@ -41,4 +42,26 @@ allow_upstream_proxy = false
 allow_local_binding = false
 
 [permissions.anc-work.network.domains]
+"127.0.0.1" = "allow"
+
+# Opt-in shared owner: select permission_profile="anc-shared" and
+# shared_app_server=true in the paired gateway. No :workspace inheritance:
+# work roots, read-only rule anchors and the exact Office socket are injected
+# for one native thread only. Keep this config root-owned outside all work roots.
+[permissions.anc-shared.filesystem]
+":minimal" = "read"
+"/opt/team-files" = "read"
+"/opt/homebrew" = "read"
+"/Library/Frameworks/Python.framework" = "read"
+"/Applications/LibreOffice.app" = "read"
+"/Library/Fonts" = "read"
+
+[permissions.anc-shared.network]
+enabled = true
+proxy_url = "http://127.0.0.1:0"
+enable_socks5 = false
+allow_upstream_proxy = false
+allow_local_binding = false
+
+[permissions.anc-shared.network.domains]
 "127.0.0.1" = "allow"
