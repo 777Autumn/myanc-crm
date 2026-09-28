@@ -23,6 +23,16 @@ mode `0640`; verify parent traversal and file writability as that ordinary user.
 The frozen installation list includes these ownership/mode checks. A root-created
 test directory alone does not demonstrate that launchd can open logs after changing UID.
 
+The base plist leaves business hosts disabled. For the approved four-entrance Mac
+migration, explicitly add `maintenance_launchd.HOST_ENV` to its environment before
+freezing the installation. This exact opt-in variant reconnects the existing CRM,
+knowledge, reminders and owner alerts; partial or arbitrary overrides are rejected.
+Secret values remain in protected files, never the plist. Provision and verify the
+fixed helper paths, four-project mappings, secret file and fresh reminder/alert
+stores before starting. Keep model credentials and private workspace state outside
+these host paths. This variant requires the paired gateway's four-project startup
+support and does not initialize storage or enable anything by importing the module.
+
 Mac start requires an unloaded service and zero matching receivers, then issues
 one `launchctl bootstrap`. Stop targets only the verified service with `bootout`.
 The helper pins the boot-session UUID and resource coalition, PID and the native
