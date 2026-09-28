@@ -178,12 +178,17 @@ class SharedCaseTests(unittest.TestCase):
             for field, value in (('桌数', '23桌'), ('人数', '230人'))])
         context = {**self.context, 'offer_confirmation': True}
         actor = {**self.principal, 'message_id': 'colloquial-correction'}
-        for source in ('不要改成23桌230人', '别改成23桌230人', '这场改成23桌230人？',
+        for source in ('这场不用改成23桌230人。', '这场改成23桌230人吗',
+                       '不要改成23桌230人', '别改成23桌230人', '这场改成23桌230人？',
                        '如果客户同意，这场改成23桌230人', '开席改成12点；这场23桌230人'):
             with self.subTest(source=source):
                 result = self.call('case-update', update, principal=actor,
                                    context={**context, 'source_text': source})
                 self.assertNotEqual('recorded', result['status'])
+                if '不用' in source:
+                    self.assertEqual('blocked', result['status'])
+                if '吗' in source:
+                    self.assertEqual('needs_confirmation', result['status'])
                 self.assertEqual(1, self.call('case-read', {})['case']['revision'])
         # The unrelated negative instruction must not require another fixed phrase.
         context['source_text'] = ('这场改成23桌230人，还是A套餐和11万预算，其他条件不变。'
