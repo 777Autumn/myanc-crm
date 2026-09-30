@@ -459,6 +459,36 @@ class RecoveryTests(unittest.TestCase):
         self.recover()
         self.assertEqual(self.backend.commands, ['start'])
 
+    def test_outer_startup_failure_is_bound_without_rewriting_original(self):
+        self.expected['failure_receipt'] = 'startup-failed.json'
+        self.expected['failure_sha256'] = self.put('startup-failed.json', {
+            'error_type': 'AssertionError', 'safety': 'paused', 'pause_error': None})
+        self.diagnosis.update({key: value for key, value in self.expected.items() if key != 'diagnosis_sha256'})
+        self.expected['diagnosis_sha256'] = self.put('recovery-diagnosis.json', self.diagnosis)
+        original = self.read('startup-failed.json')
+        (self.root / 'startup-failed.json').write_bytes(original + b' ')
+        with self.assertRaisesRegex(m.StartError, 'recovery_receipt_changed'):
+            self.recover()
+        (self.root / 'startup-failed.json').write_bytes(original)
+        self.assertFalse((self.root / 'recovery-requested.json').exists())
+        self.assertEqual(self.recover()['pid'], '42')
+        self.assertEqual(self.read('startup-failed.json'), original)
+        with self.assertRaisesRegex(m.StartError, 'recovery_already_requested'):
+            self.recover()
+        self.assertEqual(self.backend.commands, ['start'])
+
+    def test_outer_startup_failure_requires_its_actual_error_field(self):
+        self.expected['failure_receipt'] = 'startup-failed.json'
+        for failure in ({'category': 'invented'}, {'error_type': ''}, {'error_type': 1}):
+            with self.subTest(failure=failure):
+                self.expected['failure_sha256'] = self.put('startup-failed.json', failure)
+                self.diagnosis.update({key: value for key, value in self.expected.items() if key != 'diagnosis_sha256'})
+                self.expected['diagnosis_sha256'] = self.put('recovery-diagnosis.json', self.diagnosis)
+                with self.assertRaisesRegex(m.StartError, 'invalid_original_failure'):
+                    self.recover()
+        self.assertFalse((self.root / 'recovery-requested.json').exists())
+        self.assertEqual(self.backend.commands, [])
+
     def test_missing_changed_or_unbound_receipts_reject_before_consumption(self):
         for name in ('attempt.json', 'start-requested.json', 'failed.json', 'recovery-diagnosis.json'):
             with self.subTest(name=name):

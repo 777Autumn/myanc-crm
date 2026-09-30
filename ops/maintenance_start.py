@@ -287,7 +287,7 @@ def recover_once(record, read_record, verify_controls, verify_reconciled, *, exp
     for key in fields - {'failure_receipt'}:
         require(isinstance(expected[key], str)
                 and re.fullmatch('[0-9a-f]{64}', expected[key]) is not None, 'invalid_recovery_digest')
-    require(expected['failure_receipt'] in ('failed.json', 'start-failed.json'),
+    require(expected['failure_receipt'] in ('failed.json', 'start-failed.json', 'startup-failed.json'),
             'invalid_failure_receipt')
     require(0 < timeout <= 40, 'invalid_timeout')
     backend = backend or Systemd()
@@ -319,7 +319,9 @@ def recover_once(record, read_record, verify_controls, verify_reconciled, *, exp
     require(request.get('unit') == getattr(backend, 'unit', UNIT)
             and isinstance(request.get('identity_sha256'), str),
             'invalid_original_start_request')
-    require(isinstance(failure.get('category'), str) and bool(failure['category']),
+    # Bind the existing outer health failure directly; never rewrite its receipt.
+    category_key = 'error_type' if expected['failure_receipt'] == 'startup-failed.json' else 'category'
+    require(isinstance(failure.get(category_key), str) and bool(failure[category_key]),
             'invalid_original_failure')
     require(all(diagnosis.get(key) == expected[key] for key in fields - {'diagnosis_sha256'}),
             'recovery_diagnosis_unbound')
