@@ -67,13 +67,19 @@ a specific `code`, such as `file_format_unsupported`, `file_work_scope_mismatch`
 `file_version_conflict`. This attempt did not send a file. Preserve the output
 and resolve the reported cause; scope/version conflicts require fresh context
 and identification of the intended work/artifact.
-The local `file_access_not_prepared` rejection happens before requesting a send;
-it is not an unknown delivery or evidence of unsupported PDF/platform behavior.
-Check the selected final file, its saved-byte hash and the current context. Once
-the actual cause is resolved, continue the unsent artifacts through the same
-controlled client, keeping accepted files and uncertain attempts untouched.
-Report only the evidenced cause; a prior rejection alone does not establish a
-continuing platform block. Native guard denials still follow the workspace stop rule.
+The local `file_access_not_prepared` rejection adds `stage: local_preflight`,
+`request_state: not_sent` and a safe `reason`: `output_changed` means the selected
+bytes or their hash changed; `invalid_output` means a missing/invalid path or file;
+`access_denied` means an explicit local permission denial; `preparation_failed`
+leaves the cause undetermined. This call made no send request. These fields say
+nothing about earlier attempts and do not establish a Feishu permission block.
+Refresh `work-context` and reconcile prior receipts. For `output_changed`, reread
+the final saved file and recompute its hash; use that value without editing it.
+Once the cause is resolved, continue only unsent artifacts through the same client,
+keeping accepted files and uncertain attempts untouched. Other reasons require
+resolving the actual file/path problem or reporting the remaining limit; native
+guard denials still follow the workspace stop rule. Older clients may omit these
+fields: do not guess the cause from `file_access_not_prepared` alone.
 HTTP 503 with
 `status: unavailable`, `code: file_outcome_unconfirmed` may follow a send whose
 receipt could not be persisted. Treat that outcome as unknown and recover status;
