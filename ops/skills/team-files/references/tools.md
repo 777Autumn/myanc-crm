@@ -66,7 +66,15 @@ A `file-deliver` preflight rejection returns HTTP 400 with `status: blocked` and
 a specific `code`, such as `file_format_unsupported`, `file_work_scope_mismatch` or
 `file_version_conflict`. This attempt did not send a file. Preserve the output
 and resolve the reported cause; scope/version conflicts require fresh context
-and identification of the intended work/artifact. HTTP 503 with
+and identification of the intended work/artifact.
+The local `file_access_not_prepared` rejection happens before requesting a send;
+it is not an unknown delivery or evidence of unsupported PDF/platform behavior.
+Check the selected final file, its saved-byte hash and the current context. Once
+the actual cause is resolved, continue the unsent artifacts through the same
+controlled client, keeping accepted files and uncertain attempts untouched.
+Report only the evidenced cause; a prior rejection alone does not establish a
+continuing platform block. Native guard denials still follow the workspace stop rule.
+HTTP 503 with
 `status: unavailable`, `code: file_outcome_unconfirmed` may follow a send whose
 receipt could not be persisted. Treat that outcome as unknown and recover status;
 never rename the file or retry delivery to bypass it.
