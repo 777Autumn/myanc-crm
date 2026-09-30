@@ -197,8 +197,11 @@ delete a consumed marker, or reuse an empty alternate directory.
 Freeze `expected` with these SHA-256 fields: `attempt_sha256`,
 `start_request_sha256`, `failure_sha256`, `diagnosis_sha256`, `candidate_sha256`,
 `manifest_sha256`, and `installed_manifest_sha256`. Its `failure_receipt` is
-either the original outer `failed.json` (including application-health failure) or
-`start-failed.json`. The helper verifies `attempt.json`, `start-requested.json`,
+the original outer `failed.json` or `startup-failed.json` (including application-health
+failure), or `start-failed.json`. The existing `startup-failed.json` format uses
+`error_type`; the other two use `category`. Bind the original bytes and filename
+directly, without renaming, rewriting or replacing the failure with a summary.
+The helper verifies `attempt.json`, `start-requested.json`,
 that failure, and `recovery-diagnosis.json` against these exact bytes. Diagnosis
 must repeat the bindings except its own digest, describe the established `cause`,
 identify a `maintainer_reference`, and freeze `controls_sha256` and
