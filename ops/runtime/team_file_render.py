@@ -484,8 +484,21 @@ def main():
         parser.exit(1, 'Output directory already exists; preserve it and choose a new directory name '
                     'inside this work outputs; do not create it beforehand. No delivery was attempted.\n')
     except (OSError, ValueError, RuntimeError, KeyError, IndexError, TypeError,
-            zipfile.BadZipFile, ET.ParseError, subprocess.SubprocessError):
-        parser.exit(1, 'Document preparation failed; originals retained. No delivery was attempted.\n')
+            zipfile.BadZipFile, ET.ParseError, subprocess.SubprocessError) as error:
+        # Report only fixed reasons, never exception text, document data or argv.
+        reason = {
+            'stale Office profile/socket; preserve for maintenance': 'office_profile_stale',
+            'Office socket remained after exit; preserve for maintenance': 'office_socket_remained',
+            'document tool failed; preserve original and inspect runtime': 'document_tool_exit',
+            'document process accounting unavailable': 'document_accounting_unavailable',
+            'document process group exceeded memory budget': 'document_memory_budget',
+        }.get(str(error)) if type(error) is RuntimeError else None
+        if isinstance(error, subprocess.TimeoutExpired):
+            reason = 'document_tool_timeout'
+        elif isinstance(error, BlockingIOError) and error.errno in (errno.EAGAIN, errno.EWOULDBLOCK):
+            reason = 'office_profile_busy'
+        detail = f' ({reason})' if reason else ''
+        parser.exit(1, f'Document preparation failed{detail}; originals retained. No delivery was attempted.\n')
     print(json.dumps(result, ensure_ascii=False))
 
 

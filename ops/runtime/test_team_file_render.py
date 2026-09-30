@@ -1,4 +1,5 @@
 """Offline rendering only: fictional sources, no models or external messages."""
+import errno
 import hashlib
 import io
 import json
@@ -167,6 +168,47 @@ def saved_budget_formulas(formulas, *, cached='6', extra_sheets=()):
 
 
 class RenderBoundaryTests(unittest.TestCase):
+    def test_main_reports_only_allowlisted_render_failure_reasons(self):
+        failures = (
+            (RuntimeError('stale Office profile/socket; preserve for maintenance'), 'office_profile_stale'),
+            (BlockingIOError(errno.EAGAIN, 'fictional private lock'), 'office_profile_busy'),
+            (RuntimeError('Office socket remained after exit; preserve for maintenance'), 'office_socket_remained'),
+            (RuntimeError('document tool failed; preserve original and inspect runtime'), 'document_tool_exit'),
+            (subprocess.TimeoutExpired(['/fictional/private/tool', 'private document'], 30,
+                                       output=b'fictional private stdout', stderr=b'fictional private stderr'),
+             'document_tool_timeout'),
+            (RuntimeError('document process accounting unavailable'), 'document_accounting_unavailable'),
+            (RuntimeError('document process group exceeded memory budget'), 'document_memory_budget'),
+        )
+        args = ['render', '--work-root', '/fictional/private/work', '--input', '/fictional/private/input.xlsx',
+                '--output-dir', '/fictional/private/work/outputs/new']
+        for failure, reason in failures:
+            with self.subTest(reason=reason), patch('sys.argv', args), \
+                    patch('team_file_render.render', side_effect=failure), redirect_stderr(io.StringIO()) as error:
+                with self.assertRaises(SystemExit) as stopped:
+                    main()
+                self.assertEqual(stopped.exception.code, 1)
+                self.assertEqual(error.getvalue(), 'Document preparation failed (' + reason +
+                                 '); originals retained. No delivery was attempted.\n')
+
+    def test_main_preserves_generic_failure_without_exposing_unknown_details(self):
+        failures = (
+            RuntimeError('fictional document text /private/path FAKE_AUTH=not-a-real-secret'),
+            RuntimeError('stale Office profile/socket; preserve for maintenance\nfictional private text'),
+            ValueError('stale Office profile/socket; preserve for maintenance'),
+            BlockingIOError(errno.EBADF, '/fictional/private/path'),
+        )
+        args = ['render', '--work-root', '/fictional/private/work', '--input', '/fictional/private/input.xlsx',
+                '--output-dir', '/fictional/private/work/outputs/new']
+        for failure in failures:
+            with self.subTest(failure_type=type(failure).__name__), patch('sys.argv', args), \
+                    patch('team_file_render.render', side_effect=failure), redirect_stderr(io.StringIO()) as error:
+                with self.assertRaises(SystemExit) as stopped:
+                    main()
+                self.assertEqual(stopped.exception.code, 1)
+                self.assertEqual(error.getvalue(),
+                                 'Document preparation failed; originals retained. No delivery was attempted.\n')
+
     def test_optional_local_sheet_quotes_survive_recalculation(self):
         original = saved_budget_formulas({'预算明细!D2': "='预算总览'!$B$5*C2",
                                           '预算总览!B8': "=SUM('预算明细'!D2:D2)"})
