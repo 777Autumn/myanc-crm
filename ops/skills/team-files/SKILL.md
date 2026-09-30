@@ -41,7 +41,9 @@ description: 读取员工选定的文档、表格、PDF和图片，制作或修�
    use `sha256sum -- '<absolute artifact path>'` on Linux. On macOS, run the
    Python snippet below with the installed `/opt/team-files/bin/python -I -X utf8`,
    passing this work's artifact paths as arguments; shell-quote each path.
-   Reuse that result until the file changes,
+   Select the final delivery file after the last save or conversion, compute its
+   saved-byte hash and use that returned value directly. A hash from an earlier
+   copy or render is not the final file's hash. Recompute after any byte change,
    then deliver the exact file/version through the controlled client. Avoid
    repeated inline Python programs just to compute or recount the same hash.
    This changes no permission rule: if a tool requests approval, keep the request
