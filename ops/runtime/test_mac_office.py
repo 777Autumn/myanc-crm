@@ -16,6 +16,23 @@ import team_file_render as render
 
 
 class MacOfficeTests(unittest.TestCase):
+    def test_only_flock_eagain_marks_office_profile_busy(self):
+        for code in (render.errno.EAGAIN, render.errno.EBADF):
+            lock = MagicMock()
+            lock.flock.side_effect = BlockingIOError(code, 'synthetic native error')
+            with self.subTest(code=code), patch.dict(sys.modules, {'fcntl': lock}), \
+                    patch.object(render, 'os') as identity:
+                identity.geteuid.return_value = 501
+                identity.fstat.return_value = MagicMock(st_mode=render.stat.S_IFREG | 0o600,
+                                                       st_uid=501, st_nlink=1)
+                with self.assertRaises(BlockingIOError) as stopped:
+                    with render.mac_office_profile(Path(tempfile.gettempdir()).resolve()):
+                        self.fail('busy or failed lock accepted')
+                self.assertEqual(stopped.exception.errno, code)
+                self.assertEqual(stopped.exception.strerror,
+                                 'Office profile lock busy' if code == render.errno.EAGAIN else 'synthetic native error')
+                identity.close.assert_called_once()
+
     def test_socket_matches_gateway_unicode_uri_vector(self):
         profile = PurePosixPath('/private/var/fictional work/婚宴 %/outputs/.office-profile')
         self.assertEqual(render.mac_office_socket(profile, 501).name,
@@ -29,9 +46,11 @@ class MacOfficeTests(unittest.TestCase):
             profile = outputs / '.office-profile'
             with render.mac_office_profile(outputs):
                 (profile / 'fictional').write_text('private scratch')
-                with self.assertRaises(BlockingIOError):
+                with self.assertRaises(BlockingIOError) as busy:
                     with render.mac_office_profile(outputs):
                         self.fail('parallel profile accepted')
+                self.assertIn(busy.exception.errno, (render.errno.EAGAIN, render.errno.EWOULDBLOCK))
+                self.assertEqual(busy.exception.strerror, 'Office profile lock busy')
             self.assertFalse(profile.exists())
             inode = (outputs / '.office-profile.lock').stat().st_ino
             with self.assertRaisesRegex(ValueError, 'synthetic failure'):

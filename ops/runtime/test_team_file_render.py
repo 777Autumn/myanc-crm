@@ -171,7 +171,7 @@ class RenderBoundaryTests(unittest.TestCase):
     def test_main_reports_only_allowlisted_render_failure_reasons(self):
         failures = (
             (RuntimeError('stale Office profile/socket; preserve for maintenance'), 'office_profile_stale'),
-            (BlockingIOError(errno.EAGAIN, 'fictional private lock'), 'office_profile_busy'),
+            (BlockingIOError(errno.EAGAIN, 'Office profile lock busy'), 'office_profile_busy'),
             (RuntimeError('Office socket remained after exit; preserve for maintenance'), 'office_socket_remained'),
             (RuntimeError('document tool failed; preserve original and inspect runtime'), 'document_tool_exit'),
             (subprocess.TimeoutExpired(['/fictional/private/tool', 'private document'], 30,
@@ -208,6 +208,30 @@ class RenderBoundaryTests(unittest.TestCase):
                 self.assertEqual(stopped.exception.code, 1)
                 self.assertEqual(error.getvalue(),
                                  'Document preparation failed; originals retained. No delivery was attempted.\n')
+
+    def test_preflight_process_spawn_eagain_is_not_reported_as_office_lock_busy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'inputs').mkdir()
+            (root / 'outputs').mkdir()
+            source = root / 'inputs' / 'fictional.xlsx'
+            source.write_bytes(b'fictional original')
+            target = root / 'outputs' / 'new'
+            args = ['render', '--work-root', str(root), '--input', str(source), '--output-dir', str(target)]
+            with patch('sys.argv', args), patch('team_file_render.os') as identity, \
+                    patch('team_file_render.subprocess.Popen',
+                          side_effect=BlockingIOError(errno.EAGAIN, 'fictional private process limit')) as spawn, \
+                    redirect_stderr(io.StringIO()) as error:
+                identity.name = 'posix'
+                identity.geteuid.return_value = 451
+                with self.assertRaises(SystemExit) as stopped:
+                    main()
+                self.assertEqual(stopped.exception.code, 1)
+                self.assertEqual(spawn.call_args.args[0][1:], ['file-check', source.name])
+                self.assertEqual(error.getvalue(),
+                                 'Document preparation failed; originals retained. No delivery was attempted.\n')
+            self.assertFalse(target.exists())
+            self.assertEqual(source.read_bytes(), b'fictional original')
 
     def test_optional_local_sheet_quotes_survive_recalculation(self):
         original = saved_budget_formulas({'预算明细!D2': "='预算总览'!$B$5*C2",

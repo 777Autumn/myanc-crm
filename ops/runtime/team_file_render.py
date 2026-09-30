@@ -54,7 +54,12 @@ def mac_office_profile(outputs):
         if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_nlink != 1 or info.st_mode & 0o077:
             raise ValueError('unsafe Office profile lock')
         # ponytail: one conversion per work; a busy work fails instead of queuing.
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            if error.errno not in (errno.EAGAIN, errno.EWOULDBLOCK):
+                raise
+            raise BlockingIOError(error.errno, 'Office profile lock busy') from None
         if mac_path_present(profile) or mac_path_present(socket):
             raise RuntimeError('stale Office profile/socket; preserve for maintenance')
         profile.mkdir(mode=0o700)
@@ -495,7 +500,8 @@ def main():
         }.get(str(error)) if type(error) is RuntimeError else None
         if isinstance(error, subprocess.TimeoutExpired):
             reason = 'document_tool_timeout'
-        elif isinstance(error, BlockingIOError) and error.errno in (errno.EAGAIN, errno.EWOULDBLOCK):
+        elif (isinstance(error, BlockingIOError) and error.errno in (errno.EAGAIN, errno.EWOULDBLOCK)
+              and error.strerror == 'Office profile lock busy'):
             reason = 'office_profile_busy'
         detail = f' ({reason})' if reason else ''
         parser.exit(1, f'Document preparation failed{detail}; originals retained. No delivery was attempted.\n')
