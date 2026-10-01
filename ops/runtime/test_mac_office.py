@@ -1,4 +1,5 @@
 """Mac worker seams; fictional paths, no Office install or real messages."""
+from contextlib import redirect_stderr, redirect_stdout
 import io
 import json
 import os
@@ -7,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from types import SimpleNamespace
 import unittest
 import xml.etree.ElementTree as ET
 from unittest.mock import MagicMock, patch
@@ -16,6 +18,205 @@ import team_file_render as render
 
 
 class MacOfficeTests(unittest.TestCase):
+    def test_run_records_first_failure_and_known_exit_without_retry(self):
+        profile = Path(tempfile.gettempdir()) / 'fictional-office-profile'
+        private = 'fictional document /private/path FAKE_AUTH=not-a-real-secret'
+        for stage, code, cleanup in (('spawn', None, False), ('wait', None, False),
+                                     ('accounting', None, False), ('exit', 1, False),
+                                     ('exit', -15, True), ('cleanup', 0, True)):
+            with self.subTest(stage=stage, code=code, cleanup=cleanup):
+                original = OSError(private) if stage == 'spawn' else subprocess.TimeoutExpired([private], 1)
+                proc = MagicMock(pid=42, returncode=code)
+                proc.communicate.return_value = (private.encode(), b'')
+                proc.poll.return_value = code
+                if stage in ('wait', 'accounting'):
+                    proc.communicate.side_effect = original
+                accounting = RuntimeError('document process accounting unavailable')
+                closing = OSError(private)
+                if cleanup:
+                    proc.stdout.close.side_effect = closing
+
+                def waited():
+                    proc.returncode = -9  # Cleanup must not invent the earlier exit status.
+
+                proc.wait.side_effect = waited
+                with patch.object(sys, 'platform', 'darwin' if stage == 'accounting' else 'linux'), \
+                        patch.object(render.subprocess, 'Popen', side_effect=original if stage == 'spawn' else None,
+                                     return_value=proc) as spawn, \
+                        patch.object(render, 'mac_group_memory', side_effect=accounting), \
+                        patch.object(render.signal, 'SIGKILL', 9, create=True), \
+                        patch.object(render.os, 'killpg', create=True), \
+                        patch.object(render, 'write_office_failure') as diagnostic:
+                    with self.assertRaises((OSError, RuntimeError, subprocess.TimeoutExpired)) as stopped:
+                        render.run([private], diagnostic_profile=profile, stage='office_worker')
+                    if stage in ('spawn', 'wait'):
+                        self.assertIs(stopped.exception, original)
+                    elif stage == 'accounting':
+                        self.assertIs(stopped.exception, accounting)
+                    elif stage == 'cleanup':
+                        self.assertIs(stopped.exception, closing)
+                    diagnostic.assert_called_once()
+                    self.assertEqual(diagnostic.call_args.args[:3], (profile, 'parent', 'office_worker_' + stage))
+                    self.assertIs(diagnostic.call_args.args[3], stopped.exception)
+                    self.assertEqual(diagnostic.call_args.kwargs.get('returncode'), code)
+                    if cleanup and stage != 'cleanup':
+                        self.assertIs(diagnostic.call_args.kwargs.get('cleanup_error'), closing)
+                    spawn.assert_called_once()
+                    self.assertEqual(proc.communicate.call_count, int(stage != 'spawn'))
+                    self.assertEqual(proc.wait.call_count, int(stage != 'spawn'))
+
+    def test_office_update_records_stage_and_dispose_without_hiding_original(self):
+        private = 'fictional document /private/path FAKE_AUTH=not-a-real-secret'
+        modules = {'uno': MagicMock(), 'com.sun.star.beans': SimpleNamespace(PropertyValue=SimpleNamespace),
+                   'com.sun.star.document.MacroExecMode': SimpleNamespace(NEVER_EXECUTE=4),
+                   'com.sun.star.document.UpdateDocMode': SimpleNamespace(NO_UPDATE=0)}
+        source = Path(tempfile.gettempdir()).resolve() / 'fictional.xlsx'
+        for stage, method in (('load', 'loadComponentFromURL'), ('update', 'calculateAll'),
+                              ('save', 'storeAsURL'), ('pdf', 'storeToURL'), ('close', 'close'),
+                              (None, None)):
+            for dispose_fails in (False, True) if stage else (False,):
+                with self.subTest(stage=stage, dispose_fails=dispose_fails):
+                    desktop, doc = MagicMock(), MagicMock()
+                    modules['uno'].getComponentContext.return_value.ServiceManager.createInstanceWithContext.return_value = desktop
+                    desktop.loadComponentFromURL.return_value = doc
+                    original, cleanup = ValueError(private), OSError(private)
+                    if stage:
+                        getattr(desktop if stage == 'load' else doc, method).side_effect = original
+                    if dispose_fails:
+                        doc.dispose.side_effect = cleanup
+                    with patch.dict(sys.modules, modules), patch.object(render, 'write_office_failure') as diagnostic:
+                        if stage:
+                            with self.assertRaises(ValueError) as stopped:
+                                render.office_update(source, source.parent, 'fictional', diagnostic_profile=source.parent)
+                            self.assertIs(stopped.exception, original)
+                            diagnostic.assert_called_once()
+                            self.assertEqual(diagnostic.call_args.args, (source.parent, 'worker', stage, original))
+                            self.assertIs(diagnostic.call_args.kwargs.get('cleanup_error'),
+                                          cleanup if dispose_fails and stage != 'load' else None)
+                        else:
+                            render.office_update(source, source.parent, 'fictional', diagnostic_profile=source.parent)
+                            diagnostic.assert_not_called()
+                    desktop.loadComponentFromURL.assert_called_once()
+                    self.assertEqual(doc.dispose.call_count, int(stage is not None and stage != 'load'))
+                    for name in ('calculateAll', 'storeAsURL', 'storeToURL', 'close'):
+                        self.assertLessEqual(getattr(doc, name).call_count, 1)
+
+    def test_diagnostic_io_failure_cannot_replace_office_error_or_expose_details(self):
+        private = 'fictional document /private/path FAKE_AUTH=not-a-real-secret'
+        modules = {'uno': MagicMock(), 'com.sun.star.beans': SimpleNamespace(PropertyValue=SimpleNamespace),
+                   'com.sun.star.document.MacroExecMode': SimpleNamespace(NEVER_EXECUTE=4),
+                   'com.sun.star.document.UpdateDocMode': SimpleNamespace(NO_UPDATE=0)}
+        source = Path(tempfile.gettempdir()).resolve() / 'fictional.xlsx'
+        for failure_point in ('open', 'fsync'):
+            with self.subTest(failure_point=failure_point):
+                doc, stream = MagicMock(), MagicMock()
+                modules['uno'].getComponentContext.return_value.ServiceManager.createInstanceWithContext.return_value.loadComponentFromURL.return_value = doc
+                original = ValueError(private)
+                doc.storeAsURL.side_effect = original
+                stream.fileno.return_value = 124
+                with patch.dict(sys.modules, modules), \
+                        patch.object(render.os, 'geteuid', return_value=451, create=True), \
+                        patch.object(render.os, 'O_DIRECTORY', 0, create=True), \
+                        patch.object(render.os, 'O_NOFOLLOW', 0, create=True), \
+                        patch.object(render.os, 'open', side_effect=[123, OSError(private) if failure_point == 'open' else 124]) as opened, \
+                        patch.object(render.os, 'fstat', return_value=SimpleNamespace(st_mode=render.stat.S_IFDIR | 0o700, st_uid=451)), \
+                        patch.object(render.os, 'fdopen') as fdopen, \
+                        patch.object(render.os, 'fsync', side_effect=OSError(private)) as synced, \
+                        patch.object(render.os, 'close'), \
+                        redirect_stdout(io.StringIO()) as stdout, redirect_stderr(io.StringIO()) as stderr:
+                    fdopen.return_value.__enter__.return_value = stream
+                    with self.assertRaises(ValueError) as stopped:
+                        render.office_update(source, source.parent, 'fictional', diagnostic_profile=source.parent)
+                    self.assertIs(stopped.exception, original)
+                    self.assertEqual(opened.call_count, 2)
+                    self.assertEqual(synced.call_count, int(failure_point == 'fsync'))
+                    self.assertEqual(stdout.getvalue() + stderr.getvalue(), '')
+                    raw = ''.join(call.args[0] for call in stream.write.call_args_list)
+                    self.assertNotIn(private, raw)
+                    if raw:
+                        self.assertEqual(json.loads(raw)['error_type'], 'ValueError')
+                doc.storeAsURL.assert_called_once()
+                doc.dispose.assert_called_once()
+                doc.storeToURL.assert_not_called()
+
+    @unittest.skipUnless(os.name == 'posix' and os.geteuid() != 0, 'requires ordinary POSIX owner/mode/dir_fd')
+    def test_failure_records_are_private_exclusive_sanitized_and_best_effort(self):
+        private = 'fictional document /private/path FAKE_AUTH=not-a-real-secret'
+        with tempfile.TemporaryDirectory() as directory:
+            profile = Path(directory)
+            profile.chmod(0o700)
+            error = type('com.sun.star.io.IOException', (Exception,), {})(private)
+            render.write_office_failure(profile, 'worker', 'save', error, cleanup_error=OSError(private))
+            path = profile / 'office-worker-failure.json'
+            raw = path.read_bytes()
+            self.assertEqual(json.loads(raw), {'stage': 'save', 'error_type': 'IOException',
+                                              'returncode': None, 'cleanup_error_type': 'OSError'})
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(path.stat().st_uid, os.geteuid())
+            render.write_office_failure(profile, 'worker', 'job', RuntimeError(private))
+            self.assertEqual(path.read_bytes(), raw, 'fallback must preserve the first failure')
+            render.write_office_failure(profile, 'parent', 'office_worker_exit', RuntimeError(private), returncode=-15)
+            self.assertEqual(json.loads((profile / 'office-parent-failure.json').read_bytes())['returncode'], -15)
+            self.assertNotIn(private.encode(), raw)
+            for failure_point in ('open', 'fsync'):
+                with self.subTest(failure_point=failure_point), tempfile.TemporaryDirectory() as fresh:
+                    with patch.object(render.os, failure_point, side_effect=OSError(private)):
+                        render.write_office_failure(Path(fresh), 'worker', 'save', error)
+            with tempfile.TemporaryDirectory() as fresh:
+                invalid = Path(fresh)
+                render.write_office_failure(invalid, 'worker', private, type(private, (Exception,), {})(private))
+                for item in invalid.iterdir():
+                    self.assertNotIn(private, item.read_text())
+            with tempfile.TemporaryDirectory() as fresh:
+                unsafe = Path(fresh)
+                unsafe.chmod(0o755)
+                render.write_office_failure(unsafe, 'worker', 'save', error)
+                self.assertEqual(list(unsafe.iterdir()), [])
+                unsafe.chmod(0o700)
+                with patch.object(render.os, 'geteuid', return_value=0):
+                    render.write_office_failure(unsafe, 'worker', 'save', error)
+                self.assertEqual(list(unsafe.iterdir()), [])
+                with patch.object(render.os, 'geteuid', return_value=os.geteuid() + 1):
+                    render.write_office_failure(unsafe, 'worker', 'save', error)
+                self.assertEqual(list(unsafe.iterdir()), [])
+                link = unsafe / 'symlink'
+                linked = unsafe / 'real-profile'
+                linked.mkdir(mode=0o700)
+                link.symlink_to(linked, target_is_directory=True)
+                render.write_office_failure(link, 'worker', 'save', error)
+                self.assertEqual(list(linked.iterdir()), [])
+            render.write_office_failure(None, 'worker', 'save', error)
+
+    def test_mac_job_uses_profile_and_preserves_worker_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            profile = Path(directory)
+            script = profile / 'user/Scripts/python/anc_render.py'
+            script.parent.mkdir(parents=True)
+            job = ['fictional source', 'fictional target', 'fictional stem']
+            script.with_name('job.json').write_text(json.dumps(job), encoding='utf-8')
+            uno = SimpleNamespace(fileUrlToSystemPath=lambda value: str(script))
+            original = ValueError('fictional document /private/path FAKE_AUTH=not-a-real-secret')
+            for fails in (False, True):
+                with self.subTest(fails=fails), patch.dict(sys.modules, {'uno': uno}), \
+                        patch.object(render, 'office_update', side_effect=original if fails else None) as update, \
+                        patch.object(render, 'write_office_failure') as diagnostic:
+                    if fails:
+                        with self.assertRaises(ValueError) as stopped:
+                            render.mac_office_job()
+                        self.assertIs(stopped.exception, original)
+                        diagnostic.assert_called_once_with(profile, 'worker', 'job', original)
+                    else:
+                        render.mac_office_job()
+                        diagnostic.assert_not_called()
+                    update.assert_called_once_with(*job, diagnostic_profile=profile)
+            script.with_name('job.json').write_text('{fictional malformed', encoding='utf-8')
+            with patch.dict(sys.modules, {'uno': uno}), patch.object(render, 'office_update') as update, \
+                    patch.object(render, 'write_office_failure') as diagnostic:
+                with self.assertRaises(json.JSONDecodeError):
+                    render.mac_office_job()
+                update.assert_not_called()
+                self.assertEqual(diagnostic.call_args.args[:3], (profile, 'worker', 'job'))
+
     def test_only_flock_eagain_marks_office_profile_busy(self):
         for code in (render.errno.EAGAIN, render.errno.EBADF):
             lock = MagicMock()
@@ -57,9 +258,13 @@ class MacOfficeTests(unittest.TestCase):
                 with render.mac_office_profile(outputs):
                     raise ValueError('synthetic failure')
             self.assertTrue(profile.is_dir())
+            diagnostic = profile / 'office-parent-failure.json'
+            recorded = diagnostic.read_bytes()
             with self.assertRaisesRegex(RuntimeError, 'stale Office'):
                 with render.mac_office_profile(outputs):
                     self.fail('failed profile reused')
+            self.assertEqual(diagnostic.read_bytes(), recorded, 'stale rejection must not rewrite old evidence')
+            diagnostic.unlink()  # Remove only this test's own synthetic failure record.
             profile.rmdir()  # Controlled fixture reconciliation, never production retry.
             profile.symlink_to(outputs, target_is_directory=True)
             with self.assertRaisesRegex(RuntimeError, 'stale Office'):

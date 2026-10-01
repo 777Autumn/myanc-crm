@@ -66,6 +66,12 @@ An empty output alone means neither completion nor failure. After interrupted
 observation, check the existing conversion's result before starting another.
 A busy or stale profile is a stop condition, not permission to delete
 its lock or bypass the helper. This does not serialize different employees' work.
+On a failed Mac conversion, preserve any `office-parent-failure.json` and
+`office-worker-failure.json` inside the retained private profile. These contain
+only bounded stage/type fields, the parent's exit code observed before cleanup
+(possibly unknown), and a separate cleanup error type. Missing diagnostics do
+not prove success. They do not authorize another conversion or identify an
+earlier failure whose diagnostics were not captured.
 
 The helper validates Office content through the existing gateway binary before
 conversion. For DOCX it refreshes fields and indexes, saves a new editable DOCX,
