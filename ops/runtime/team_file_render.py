@@ -28,6 +28,40 @@ import xml.etree.ElementTree as ET
 MAX_BYTES = 20 << 20
 
 
+def write_office_failure(profile, role, stage, error, *, returncode=None, cleanup_error=None):
+    """Best-effort fixed fields in this conversion's existing private profile."""
+    directory_fd = None
+    try:
+        if profile is None or os.geteuid() == 0:
+            return
+        directory_fd = os.open(profile, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        info = os.fstat(directory_fd)
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o700:
+            return
+        def identifier(value):
+            return value if re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]{0,63}', value) else 'unknown'
+        record = {'stage': identifier(stage), 'error_type': identifier(type(error).__name__.rsplit('.', 1)[-1]),
+                  'returncode': returncode if type(returncode) is int and -(1 << 31) <= returncode < 1 << 31 else None,
+                  'cleanup_error_type': identifier(type(cleanup_error).__name__.rsplit('.', 1)[-1]) if cleanup_error is not None else None}
+        name = {'parent': 'office-parent-failure.json', 'worker': 'office-worker-failure.json'}[role]
+        fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=directory_fd)
+        with os.fdopen(fd, 'w', encoding='utf-8') as stream:
+            json.dump(record, stream, sort_keys=True)
+            stream.write('\n')
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.fsync(directory_fd)
+    except BaseException:
+        # A diagnostic failure never replaces the conversion error or retries.
+        pass
+    finally:
+        if directory_fd is not None:
+            try:
+                os.close(directory_fd)
+            except BaseException:
+                pass
+
+
 def mac_office_socket(profile, uid):
     # LibreOffice 26.8 dp_misc.cxx: URI UTF-16LE, unpadded digest bytes.
     digest = hashlib.md5(profile.as_uri().encode('utf-16le')).digest()
@@ -63,15 +97,18 @@ def mac_office_profile(outputs):
         if mac_path_present(profile) or mac_path_present(socket):
             raise RuntimeError('stale Office profile/socket; preserve for maintenance')
         profile.mkdir(mode=0o700)
+        stage = 'office_worker'
         try:
             yield profile
-        except BaseException:
-            # A killed parent or uncertain conversion must not silently reuse it.
-            raise
-        else:
+            stage = 'profile_socket_check'
             if mac_path_present(socket):
                 raise RuntimeError('Office socket remained after exit; preserve for maintenance')
+            stage = 'profile_cleanup'
             shutil.rmtree(profile)
+        except BaseException as error:
+            # A killed parent or uncertain conversion must not silently reuse it.
+            write_office_failure(profile, 'parent', stage, error)
+            raise
     finally:
         os.close(fd)  # Keep the lock inode: unlinking it permits parallel owners.
 
@@ -201,11 +238,15 @@ def mac_group_memory(group):
     return resident
 
 
-def run(command, *, data=None, timeout=30, env=None, memory_limit=2 << 30):
-    proc = subprocess.Popen(command, stdin=subprocess.PIPE if data is not None else subprocess.DEVNULL,
-                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                            env=env, start_new_session=True)
+def run(command, *, data=None, timeout=30, env=None, memory_limit=2 << 30,
+        diagnostic_profile=None, stage='document_tool'):
+    proc = failure = cleanup_error = returncode = None
+    phase = 'spawn'
     try:
+        proc = subprocess.Popen(command, stdin=subprocess.PIPE if data is not None else subprocess.DEVNULL,
+                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                env=env, start_new_session=True)
+        phase = 'wait'
         if sys.platform == 'darwin':
             # macOS rejects RLIMIT_AS. Bound the whole one-shot process group
             # by sampled RSS instead; this is not a hard allocation ceiling.
@@ -220,28 +261,49 @@ def run(command, *, data=None, timeout=30, env=None, memory_limit=2 << 30):
                     break
                 except subprocess.TimeoutExpired:
                     first = False
+                    phase = 'accounting'
                     members = mac_group_memory(proc.pid)
                     if not members and proc.poll() is None:
                         raise RuntimeError('document process accounting unavailable')
                     resident = sum(members)
                     if resident > memory_limit:
                         raise RuntimeError('document process group exceeded memory budget')
+                    phase = 'wait'
         else:
             stdout, _ = proc.communicate(data, timeout=timeout)
-        if proc.returncode:
+        returncode = proc.returncode
+        phase = 'exit'
+        if returncode:
             raise RuntimeError('document tool failed; preserve original and inspect runtime')
         return stdout
+    except BaseException as error:
+        failure = error
+        if proc is not None:
+            # Do not report the SIGKILL from our cleanup as the original exit.
+            returncode = proc.returncode
+        raise
     finally:
         # Includes the transient LibreOffice process if its worker timed out.
         try:
-            os.killpg(proc.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        proc.wait()
-        if proc.stdout is not None:
-            proc.stdout.close()
-        if proc.stdin is not None:
-            proc.stdin.close()
+            if proc is not None:
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                proc.wait()
+                if proc.stdout is not None:
+                    proc.stdout.close()
+                if proc.stdin is not None:
+                    proc.stdin.close()
+        except BaseException as error:
+            cleanup_error = error
+            if failure is None:
+                failure, phase = error, 'cleanup'
+                raise
+        finally:
+            if failure is not None:
+                write_office_failure(diagnostic_profile, 'parent', stage + '_' + phase, failure,
+                                     returncode=returncode, cleanup_error=cleanup_error)
 
 
 def office_check(gateway, name, data):
@@ -302,9 +364,10 @@ def render(work_root, source, destination, gateway):
                 # worker limit; do not relax the sandbox or start an Office server.
                 env['MAX_CONCURRENCY'] = '1'
             worker_python = sys.executable if sys.platform == 'darwin' else '/usr/bin/python3'
-            with mac_office_profile(outputs) if sys.platform == 'darwin' else nullcontext():
+            with mac_office_profile(outputs) if sys.platform == 'darwin' else nullcontext() as profile:
                 run([worker_python, '-I', str(Path(__file__).resolve()), '--office-worker',
-                     str(frozen), str(target), source.stem, str(scratch)], timeout=120, env=env)
+                     str(frozen), str(target), source.stem, str(scratch)], timeout=120, env=env,
+                    diagnostic_profile=profile, stage='office_worker')
             updated = target / (source.stem + '.docx')
             if source.suffix.lower() == '.docx':
                 office_check(gateway, updated.name, updated.read_bytes())
@@ -409,14 +472,19 @@ def mac_office_job(*_args):
     import uno
     # LibreOffice's script provider supplies a file URL, not a filesystem path.
     script = Path(uno.fileUrlToSystemPath(__file__))
-    source, destination, stem = json.loads(script.with_name('job.json').read_text(encoding='utf-8'))
-    office_update(source, destination, stem)
+    profile = script.parents[3]
+    try:
+        source, destination, stem = json.loads(script.with_name('job.json').read_text(encoding='utf-8'))
+        office_update(source, destination, stem, diagnostic_profile=profile)
+    except BaseException as error:
+        write_office_failure(profile, 'worker', 'job', error)
+        raise
 
 
 g_exportedScripts = (mac_office_job,)
 
 
-def office_update(source, destination, stem):
+def office_update(source, destination, stem, *, diagnostic_profile=None):
     source, target = Path(source), Path(destination)
 
     import uno
@@ -433,6 +501,7 @@ def office_update(source, destination, stem):
         return tuple(result)
 
     doc = None
+    stage = 'load'
     try:
         context = uno.getComponentContext()
         if sys.platform == 'darwin':
@@ -444,6 +513,7 @@ def office_update(source, destination, stem):
                                           props(Hidden=True, ReadOnly=False, MacroExecutionMode=NEVER_EXECUTE, UpdateDocMode=NO_UPDATE))
         if doc is None:
             raise RuntimeError('LibreOffice did not load document')
+        stage = 'update'
         if source.suffix == '.docx':
             # Index insertion changes pagination. Reflow, refresh fields and
             # update indexes again before saving the editable Word result.
@@ -453,21 +523,30 @@ def office_update(source, destination, stem):
                 indexes = doc.getDocumentIndexes()
                 for index in range(indexes.getCount()):
                     indexes.getByIndex(index).update()
+            stage = 'save'
             doc.storeAsURL((target / (stem + '.docx')).as_uri(), props(FilterName='Office Open XML Text', Overwrite=False))
             pdf_filter = 'writer_pdf_Export'
         elif source.suffix == '.xlsx':
             doc.calculateAll()
+            stage = 'save'
             doc.storeAsURL((target / (stem + '.xlsx')).as_uri(),
                            props(FilterName='Calc MS Excel 2007 XML', Overwrite=False))
             pdf_filter = 'calc_pdf_Export'
         else:
             pdf_filter = 'impress_pdf_Export'
+        stage = 'pdf'
         doc.storeToURL((target / (stem + '.pdf')).as_uri(), props(FilterName=pdf_filter, Overwrite=False))
+        stage = 'close'
         doc.close(True)
-        doc = None
-    finally:
+    except BaseException as error:
+        cleanup_error = None
         if doc is not None:
-            doc.dispose()
+            try:
+                doc.dispose()
+            except BaseException as dispose_error:
+                cleanup_error = dispose_error
+        write_office_failure(diagnostic_profile, 'worker', stage, error, cleanup_error=cleanup_error)
+        raise
 
 
 def main():
