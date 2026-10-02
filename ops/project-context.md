@@ -49,6 +49,23 @@ The agent client cannot call it or provide identities. Explicit references and
 automatic imports must share this check; group-only legacy access is not a grant
 to cross chats. Sending stays bound to the original work conversation.
 
+`case-publish` accepts only `case_name`, `expected_revision` and one to four
+distinct `delivery_ids` from the caller's current work. The gateway resolves the
+accepted versions, freezes `publication_files` in the existing confirmation, and
+checks that selection again before executing. Confirmation always names the files
+and project-member audience; selecting a project or permitting a fact update is
+not a file-publication grant. The case revision and all selected artifact rows
+commit together in the existing three tables. `case-result` reconciles the exact
+request and frozen selection without executing it again.
+
+Published files receive independent `publication_id` values. Public views expose
+their names, hashes and versions; original private work, principal and message
+receipts stay in host-only provenance. `case-access` accepts either the original
+group `receipt` or a `publication_id`, never both. The latter returns a scoped
+`source` only after current membership and target-work binding checks. The file
+host then verifies the original accepted delivery and snapshot before importing.
+This does not assign a group realm, modify the private delivery or send it again.
+
 ## Context and acceptance
 
 Company facts come from the published Wiki; sales/operations methods from the

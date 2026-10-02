@@ -84,6 +84,9 @@ class CrmToolClientTests(unittest.TestCase):
             (["stage"], b'{"content":"A","profile":"other"}', "invalid_input"),
             (["stage"], b'{"content":"A","approved":true}', "invalid_input"),
             (["result"], b'{"change_id":"chg_test","principal":{}}', "invalid_input"),
+            (["case-publish"], b'{"case_name":"fixture","publication_files":[]}', "invalid_input"),
+            (["case-publish"], b'{"case_name":"fixture","confirmation":{}}', "invalid_input"),
+            (["case-access"], b'{"publication_id":"casepub_fixture"}', "invalid_command"),
             (["assignee"], b'{"query":"member@example.com","profile":"other"}', "invalid_input"),
             (["stage-customer-create"], b'{"name":"test","approved":true}', "invalid_input"),
             (["stage-customer-update"], b'{"customer_query":"C-001","record_id":"other"}', "invalid_input"),
@@ -102,6 +105,16 @@ class CrmToolClientTests(unittest.TestCase):
                 code, result, factory = self.invoke(argv, body, ProxyPeer({}))
                 self.assertEqual((2, {"status": "blocked", "code": expected}), (code, result))
                 factory.assert_not_called()
+
+    def test_publish_sends_only_selection_and_preserves_pending_confirmation(self):
+        request = dict(case_name='fixture', expected_revision=2, delivery_ids=['accepted-file'])
+        expected = dict(status='awaiting_confirmation', question='Confirm selected file?')
+        peer = ProxyPeer(expected)
+        code, result, factory = self.invoke(['case-publish'], json.dumps(request).encode(), peer)
+        self.assertEqual((0, expected), (code, result))
+        self.assertEqual(1, factory.call_count)
+        self.assertEqual({'command': 'case-publish', 'input': request},
+                         json.loads(bytes(peer.sent).split(b'\r\n\r\n', 1)[1]))
 
     def test_missing_or_invalid_session_token_never_opens_a_socket(self):
         for token in (None, "", "bad\r\nInjected: yes", "token space", "非ASCII", "A" * 1025):
