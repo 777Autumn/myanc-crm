@@ -87,6 +87,16 @@ subprocess. CPU, file-size, wall-time and core-dump limits remain. These are
 sampled memory budgets, not Linux's hard allocation ceiling: transient excess
 is possible, and the PDF monitor cannot run while native code holds the GIL.
 
+An empty RSS sample permits one terminal `communicate` on the same child, at
+most 100 ms within the original deadline, without resending input. Exit and pipe
+completion must be observed and a fresh raw PID list must be empty; members whose
+task information vanished with `ESRCH` do not establish an empty group. Cleanup
+skips signalling only for a reaped child with a freshly verified empty group.
+Otherwise it still attempts the group kill, preserving permission/accounting
+errors. Mac cleanup waits at most five seconds and closes both pipes even when
+signalling or waiting fails. Existing failures and their original exit status
+remain primary.
+
 An accounting failure retains the fixed operation (`listpids`, `pidinfo` or
 `empty_group`), PID, returned/expected byte counts and numeric errno in the
 existing private failure record. `empty_group` counts members rather than bytes.

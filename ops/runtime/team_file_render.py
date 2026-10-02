@@ -224,14 +224,10 @@ def accounting_failure(operation, pid, returned, expected, error_number):
     return error
 
 
-def mac_group_memory(group):
-    """Sample only this one-shot group without macOS's setuid /bin/ps.
-
-    Darwin proc_info.h: PROC_PGRP_ONLY=2, PROC_PIDTASKINFO=4 (96 bytes).
-    """
+def mac_group_pids(group):
+    """Enumerate this one-shot group, retaining members whose RSS is unavailable."""
     lib = ctypes.CDLL('/usr/lib/libproc.dylib', use_errno=True)
     lib.proc_listpids.argtypes = [ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p, ctypes.c_int]
-    lib.proc_pidinfo.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_uint64, ctypes.c_void_p, ctypes.c_int]
     # ponytail: cap a one-shot document group at 128 processes; fail closed if full.
     pids = (ctypes.c_int * 128)()
     ctypes.set_errno(0)
@@ -241,10 +237,16 @@ def mac_group_memory(group):
         raise accounting_failure('listpids', group, size, ctypes.sizeof(pids), error_number)
     if size == 0 and error_number:
         raise accounting_failure('listpids', group, size, ctypes.sizeof(pids), error_number)
+    return [pid for pid in pids[:size // ctypes.sizeof(ctypes.c_int)] if pid]
+
+
+def mac_group_memory(group):
+    """Darwin PROC_PIDTASKINFO=4 (96 bytes); exiting members can lose task info."""
+    pids = mac_group_pids(group)
+    lib = ctypes.CDLL('/usr/lib/libproc.dylib', use_errno=True)
+    lib.proc_pidinfo.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_uint64, ctypes.c_void_p, ctypes.c_int]
     resident = []
-    for pid in pids[:size // ctypes.sizeof(ctypes.c_int)]:
-        if not pid:
-            continue
+    for pid in pids:
         # First two uint64 fields are virtual and resident bytes; remaining
         # fields are four uint64 time counters and twelve int32 counters.
         info = (ctypes.c_uint64 * 12)()
@@ -284,8 +286,20 @@ def run(command, *, data=None, timeout=30, env=None, memory_limit=2 << 30,
                     first = False
                     phase = 'accounting'
                     members = mac_group_memory(proc.pid)
-                    if not members and proc.poll() is None:
-                        raise accounting_failure('empty_group', proc.pid, 0, 1, 0)
+                    if not members:
+                        # Darwin can lose task info before waitpid can reap the
+                        # child. Reconcile once within the existing sample/deadline,
+                        # without resending input or treating an empty RSS as exit.
+                        remaining = min(.1, deadline - time.monotonic())
+                        if remaining <= 0:
+                            raise accounting_failure('empty_group', proc.pid, 0, 1, 0)
+                        try:
+                            stdout, _ = proc.communicate(None, timeout=remaining)
+                        except subprocess.TimeoutExpired:
+                            raise accounting_failure('empty_group', proc.pid, 0, 1, 0) from None
+                        if mac_group_pids(proc.pid):
+                            raise accounting_failure('empty_group', proc.pid, 0, 1, 0)
+                        break
                     resident = sum(members)
                     if resident > memory_limit:
                         raise RuntimeError('document process group exceeded memory budget')
@@ -305,26 +319,44 @@ def run(command, *, data=None, timeout=30, env=None, memory_limit=2 << 30,
         raise
     finally:
         # Includes the transient LibreOffice process if its worker timed out.
-        try:
-            if proc is not None:
+        if proc is not None:
+            empty = False
+            if sys.platform == 'darwin' and proc.returncode is not None:
                 try:
+                    # A reaped leader alone does not establish group exit. Only a
+                    # fresh, complete empty PID list permits skipping a signal.
+                    empty = not mac_group_pids(proc.pid)
+                except BaseException as error:
+                    cleanup_error = error
+            try:
+                if not empty:
                     os.killpg(proc.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-                proc.wait()
-                if proc.stdout is not None:
-                    proc.stdout.close()
-                if proc.stdin is not None:
-                    proc.stdin.close()
-        except BaseException as error:
-            cleanup_error = error
-            if failure is None:
-                failure, phase = error, 'cleanup'
-                raise
-        finally:
-            if failure is not None:
-                write_office_failure(diagnostic_profile, 'parent', stage + '_' + phase, failure,
-                                     returncode=returncode, cleanup_error=cleanup_error)
+            except ProcessLookupError:
+                pass
+            except BaseException as error:
+                cleanup_error = cleanup_error or error
+            try:
+                if sys.platform == 'darwin':
+                    proc.wait(timeout=5)
+                elif cleanup_error is None:
+                    proc.wait()
+            except BaseException as error:
+                cleanup_error = cleanup_error or error
+            finally:
+                for stream in (proc.stdout, proc.stdin):
+                    try:
+                        if stream is not None:
+                            stream.close()
+                    except BaseException as error:
+                        cleanup_error = cleanup_error or error
+        cleanup_only = failure is None and cleanup_error is not None
+        if cleanup_only:
+            failure, phase = cleanup_error, 'cleanup'
+        if failure is not None:
+            write_office_failure(diagnostic_profile, 'parent', stage + '_' + phase, failure,
+                                 returncode=returncode, cleanup_error=cleanup_error)
+        if cleanup_only:
+            raise cleanup_error
 
 
 def office_check(gateway, name, data):
