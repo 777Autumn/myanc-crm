@@ -104,6 +104,12 @@ class CliBoundaryTests(unittest.TestCase):
             self.assertEqual((0, "disabled"), (code, result['status']))
             code, _ = self.run_cli(["host-tool"], json.dumps(payload))
             self.assertEqual(2, code)
+            payload['command'] = 'case-publish'
+            payload['request'] = dict(case_name='fixture', expected_revision=1, delivery_ids=['accepted-file'])
+            code, result = self.run_cli(["host-tool"], json.dumps(payload), host=True)
+            self.assertEqual((0, "disabled"), (code, result['status']))
+            code, _ = self.run_cli(["host-tool"], json.dumps(payload))
+            self.assertEqual(2, code)
             payload['command'] = 'customer'
             payload['request'] = {'customer_query': 'fictional'}
             code, _ = self.run_cli(["host-tool"], json.dumps(payload), host=True)

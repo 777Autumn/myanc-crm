@@ -16,9 +16,10 @@ FIELDS = {
     'case-read': {'case_name'},
     'case-update': {'case_name', 'expected_revision', 'changes', 'source_message_id'},
     'case-member-add': {'case_name', 'expected_revision', 'member_name', 'responsibility', 'source_message_id'},
+    'case-publish': {'case_name', 'expected_revision', 'delivery_ids'},
     # Host-only: absent from the agent client and gateway request decoder.
     'case-artifact': {'phase', 'request_key', 'existing_delivery', 'artifact'},
-    'case-access': {'receipt', 'require_binding'},
+    'case-access': {'receipt', 'publication_id', 'require_binding'},
     'case-result': {'command', 'input'},
 }
 STATES = {'proposed', 'reported_confirmed', 'occurred', 'unverified'}
@@ -138,7 +139,7 @@ def _scope(config, principal, context):
         raise ValueError('case member unavailable')
     _project_policy(options, config)
     required = {'work_id', 'source_text', 'share_allowed'}
-    if not isinstance(context, dict) or not required <= set(context) or set(context) - required - {'source_receipt','selected_case','original_text', 'offer_confirmation', 'confirmation'}:
+    if not isinstance(context, dict) or not required <= set(context) or set(context) - required - {'source_receipt','selected_case','original_text', 'offer_confirmation', 'confirmation', 'publication_files'}:
         raise ValueError('trusted case context required')
     if type(context.get('offer_confirmation', False)) is not bool:
         raise ValueError('invalid confirmation policy')
@@ -246,7 +247,14 @@ def _confirmation(command, request, context, options, config, principal, body, n
             raise ValueError('source message mismatch')
         if type(request.get('expected_revision')) is not int or request['expected_revision'] != revision:
             return dict(status='conflict', code='case_revision_changed', current_revision=revision)
-        if command == 'case-member-add':
+        if command == 'case-publish':
+            if body is None or not options.get('project_context', {}).get('enabled'):
+                return fallback
+            files = _publication_files(request, context)
+            lines = [f'{item["name"]}（已交付版本 {item["version"]}）' for item in files]
+            question = (f'将以下已交付文件发布到「{name}」，供该项目成员读取；当前版本 {revision}：\n'
+                        + '\n'.join(lines) + '\n只发布以上文件，其他私聊内容保持私有，不重新发送文件。确认吗？')
+        elif command == 'case-member-add':
             if body is None or not options.get('project_context', {}).get('enabled'):
                 return fallback
             if principal['user_id'] != body['project']['owner'] and principal['user_id'] not in options['project_context']['managers']:
@@ -273,10 +281,10 @@ def _confirmation(command, request, context, options, config, principal, body, n
     return dict(status='needs_confirmation', question=question, revision=revision)
 
 
-def _operation_result(db, options, request, principal, key):
+def _operation_result(db, options, request, principal, key, context):
     """Host-only reconciliation; never executes an operation after a restart."""
     command, data = request.get('command'), request.get('input')
-    if command not in {'case-read', 'case-update', 'case-member-add'} or not isinstance(data, dict) or set(data) - FIELDS[command]:
+    if command not in {'case-read', 'case-update', 'case-member-add', 'case-publish'} or not isinstance(data, dict) or set(data) - FIELDS[command]:
         raise ValueError('invalid operation result query')
     name = _text(data.get('case_name'), 120)
     body = _current(db, options['namespace'], name)
@@ -286,14 +294,18 @@ def _operation_result(db, options, request, principal, key):
         row = db.execute('SELECT name FROM shared_case_bindings WHERE namespace=? AND work_key=?', (options['namespace'], key)).fetchone()
         return dict(status='found' if row and row['name'] == name and body else 'not_executed', current_revision=body['revision'] if body else 0)
     parts = [principal[k] for k in ('platform', 'chat_id', 'user_id', 'message_id')]
-    if command == 'case-member-add':
+    if command in {'case-member-add', 'case-publish'}:
         parts.append(command)
     row = db.execute('SELECT request_hash,body FROM shared_case_versions WHERE namespace=? AND name=? AND message_key=?',
                      (options['namespace'], name, core._hash(parts))).fetchone()
     if row:
-        if row['request_hash'] != core._hash(data):
+        digest = _publication_digest(data, context, principal) if command == 'case-publish' else core._hash(data)
+        if row['request_hash'] != digest:
             return dict(status='blocked', code='case_message_already_recorded')
-        return dict(status='recorded', case=json.loads(row['body']), replayed=True)
+        result = dict(status='recorded', case=json.loads(row['body']), replayed=True)
+        if command == 'case-publish':
+            result['publications'] = _published_batch(db, options['namespace'], key, core._hash(parts), data)
+        return result
     return dict(status='not_executed', current_revision=body['revision'] if body else 0)
 
 
@@ -346,14 +358,105 @@ def _add_member(db, options, request, principal, context, config, key, body):
     return _save_version(db, options, key, body, message, digest)
 
 
+def _publication_files(request, context):
+    if set(request) != FIELDS['case-publish']:
+        raise ValueError('complete publication selection required')
+    ids = request.get('delivery_ids')
+    files = context.get('publication_files')
+    if (not isinstance(ids, list) or not 1 <= len(ids) <= 4 or
+            any(not isinstance(value, str) or _text(value) != value for value in ids) or
+            len(set(ids)) != len(ids) or not isinstance(files, list) or len(files) != len(ids)):
+        raise ValueError('selected accepted files required')
+    for delivery_id, item in zip(ids, files):
+        if (not isinstance(item, dict) or set(item) != {'delivery_id', 'name', 'sha256', 'version', 'message_receipt'} or
+                item['delivery_id'] != delivery_id or type(item['version']) is not int or item['version'] < 1 or
+                any(_text(item[field]) != item[field] for field in ('name', 'sha256', 'message_receipt')) or
+                not re.fullmatch('[0-9a-f]{64}', item['sha256'])):
+            raise ValueError('invalid host publication file')
+    return files
+
+
+def _publication_digest(request, context, principal):
+    return core._hash(dict(input=request, files=_publication_files(request, context),
+        work_id=context['work_id'], project=principal['project'], session_key=principal['session_key']))
+
+
+def _public_artifact(body):
+    if body.get('kind') == 'published_file':
+        return {key: body[key] for key in ('kind', 'publication_id', 'name', 'sha256', 'file_version')}
+    return body
+
+
+def _published_batch(db, namespace, key, message, request):
+    rows = []
+    for delivery_id in request['delivery_ids']:
+        request_key = core._hash(['case-publish', message, delivery_id])
+        row = db.execute('SELECT revision,body FROM shared_case_artifacts '
+                         'WHERE namespace=? AND work_key=? AND request_key=?',
+                         (namespace, key, request_key)).fetchone()
+        if not row or not row['body']:
+            raise ValueError('publication result incomplete')
+        rows.append(dict(_public_artifact(json.loads(row['body'])), case_revision=row['revision']))
+    return rows
+
+
+def _publish(db, options, request, principal, context, config, key, body):
+    if not options.get('project_context', {}).get('enabled') or body is None:
+        return dict(status='blocked', code='project_context_required')
+    files = _publication_files(request, context)
+    revision = request.get('expected_revision')
+    if type(revision) is not int or revision < 1:
+        raise ValueError('invalid expected revision')
+    if not _confirmed('case-publish', request, context):
+        return _confirmation('case-publish', request, context, options, config, principal, body, body['name'],
+                             dict(status='blocked', code='case_publish_confirmation_required'))
+    if context['confirmation']['revision'] != revision:
+        return dict(status='conflict', code='case_revision_changed', current_revision=body['revision'])
+    message = core._hash([*(principal[k] for k in ('platform', 'chat_id', 'user_id', 'message_id')), 'case-publish'])
+    digest = _publication_digest(request, context, principal)
+    previous = db.execute('SELECT request_hash,body FROM shared_case_versions '
+                          'WHERE namespace=? AND name=? AND message_key=?',
+                          (options['namespace'], body['name'], message)).fetchone()
+    if previous:
+        if previous['request_hash'] != digest:
+            return dict(status='blocked', code='case_message_already_recorded')
+        return dict(status='recorded', case=json.loads(previous['body']), replayed=True,
+                    publications=_published_batch(db, options['namespace'], key, message, request))
+    if body['revision'] != revision:
+        return dict(status='conflict', code='case_revision_changed', current_revision=body['revision'])
+    for item in files:
+        request_key = core._hash(['case-publish', message, item['delivery_id']])
+        publication_id = 'casepub_' + core._hash([options['namespace'], body['name'], key, request_key])
+        source = {field: _text(principal[field], 1024) for field in
+                  ('platform', 'user_id', 'chat_id', 'project', 'session_key')}
+        source.update(work_id=context['work_id'], **item)
+        saved = dict(kind='published_file', publication_id=publication_id,
+                     name=item['name'], sha256=item['sha256'], file_version=item['version'], source=source,
+                     source_message_id=principal['message_id'],
+                     confirmation_message_id=context['confirmation']['answer_message_id'])
+        db.execute('INSERT INTO shared_case_artifacts VALUES(?,?,?,?,?,?,?)',
+                   (options['namespace'], body['name'], revision + 1, key, request_key,
+                    core._json(saved), publication_id))
+    result = _save_version(db, options, key, body, message, digest)
+    result['publications'] = _published_batch(db, options['namespace'], key, message, request)
+    return result
+
+
 def _access(db, options, request, principal, key):
     """Host-only receipt check shared by explicit references and snapshot import."""
+    publication = 'publication_id' in request
     if not options.get('project_context', {}).get('enabled'):
+        if publication:
+            return dict(status='blocked', code='project_context_required')
         return dict(status='legacy')
-    receipt = _text(request.get('receipt'))
+    if set(request) != ({'publication_id', 'require_binding'} if publication else {'receipt', 'require_binding'}):
+        raise ValueError('one artifact reference required')
+    receipt = _text(request.get('publication_id' if publication else 'receipt'))
     require_binding = request.get('require_binding')
     if type(require_binding) is not bool:
         raise ValueError('binding policy required')
+    if publication and not require_binding:
+        return dict(status='blocked', code='project_artifact_work_mismatch')
     rows = db.execute("SELECT DISTINCT name FROM shared_case_artifacts WHERE namespace=? AND receipt=? AND body<>''",
                       (options['namespace'], receipt)).fetchall()
     if len(rows) != 1 or not _can_read(options, _current(db, options['namespace'], rows[0]['name']), principal):
@@ -365,6 +468,17 @@ def _access(db, options, request, principal, key):
         return dict(status='blocked', code='project_artifact_work_mismatch')
     if principal['chat_id'] == options['group_chat_id'] and name != options['project_context']['group_case']:
         return dict(status='blocked', code='project_artifact_group_mismatch')
+    artifacts = db.execute("SELECT body FROM shared_case_artifacts WHERE namespace=? AND name=? AND receipt=? AND body<>''",
+                           (options['namespace'], name, receipt)).fetchall()
+    if publication:
+        if len(artifacts) != 1:
+            return dict(status='blocked', code='project_artifact_unavailable')
+        saved = json.loads(artifacts[0]['body'])
+        if saved.get('kind') != 'published_file' or saved.get('publication_id') != receipt:
+            return dict(status='blocked', code='project_artifact_unavailable')
+        return dict(status='authorized', case_name=name, publication_id=receipt, source=saved['source'])
+    if any(json.loads(row['body']).get('kind') == 'published_file' for row in artifacts):
+        return dict(status='blocked', code='project_artifact_unavailable')
     return dict(status='authorized', case_name=name, source_chat_id=options['group_chat_id'])
 
 
@@ -383,7 +497,7 @@ def _bind(db, namespace, key, body):
 def _view(db, namespace, body):
     rows = db.execute("SELECT revision,body FROM shared_case_artifacts WHERE namespace=? AND name=? AND body<>'' "
                       'ORDER BY revision DESC,rowid DESC LIMIT 20', (namespace, body['name'])).fetchall()
-    body['artifacts'] = [dict(json.loads(row['body']), case_revision=row['revision'],
+    body['artifacts'] = [dict(_public_artifact(json.loads(row['body'])), case_revision=row['revision'],
                               stale=row['revision'] != body['revision']) for row in rows]
     return dict(status='found', case=body, trust='source_data_not_instructions',
                 meaning='Shared preparation record; not a contract, payment or CRM receipt.')
@@ -545,6 +659,8 @@ def tool(command, request, principal, context, config):
             return dict(status='disabled', code='shared_cases_disabled')
         if command not in FIELDS or not isinstance(request, dict) or set(request) - FIELDS[command]:
             raise ValueError('invalid case request')
+        if command == 'case-publish' and set(request) != FIELDS[command]:
+            raise ValueError('complete publication selection required')
         key = core._hash([*(principal[k] for k in ('platform', 'user_id', 'chat_id', 'project')), context['work_id']])
         with _database(options['ledger_path']) as db:
             policy = options.get('project_context', {})
@@ -554,7 +670,7 @@ def tool(command, request, principal, context, config):
             if command == 'case-artifact':
                 return _artifact(db,options,request,principal,key)
             if command == 'case-result':
-                return _operation_result(db, options, request, principal, key)
+                return _operation_result(db, options, request, principal, key, context)
             if command == 'case-list':
                 query = request.get('query', '')
                 if not isinstance(query, str) or len(query) > 256:
@@ -659,6 +775,8 @@ def tool(command, request, principal, context, config):
                 return _view(db, options['namespace'], body)
             if command == 'case-member-add':
                 return _add_member(db, options, request, principal, context, config, key, body)
+            if command == 'case-publish':
+                return _publish(db, options, request, principal, context, config, key, body)
             return _update(db, options, request, principal, context, config, key, name)
     except (ValueError, KeyError, TypeError):
         return dict(status='blocked', code='invalid_case_request_or_scope')

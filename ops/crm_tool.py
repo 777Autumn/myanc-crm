@@ -18,6 +18,7 @@ FIELDS = {
     "case-read": {"case_name"},
     "case-update": {"case_name", "expected_revision", "changes", "source_message_id"},
     "case-member-add": {"case_name", "expected_revision", "member_name", "responsibility", "source_message_id"},
+    "case-publish": {"case_name", "expected_revision", "delivery_ids"},
     "reminder-create": {"content", "at"},
     "reminder-list": {"all", "id"},
     "reminder-update": {"id", "version", "content", "at"},
