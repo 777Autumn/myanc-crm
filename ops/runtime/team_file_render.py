@@ -43,6 +43,16 @@ def write_office_failure(profile, role, stage, error, *, returncode=None, cleanu
         record = {'stage': identifier(stage), 'error_type': identifier(type(error).__name__.rsplit('.', 1)[-1]),
                   'returncode': returncode if type(returncode) is int and -(1 << 31) <= returncode < 1 << 31 else None,
                   'cleanup_error_type': identifier(type(cleanup_error).__name__.rsplit('.', 1)[-1]) if cleanup_error is not None else None}
+        accounting = getattr(error, 'accounting', None)
+        if (type(error) is RuntimeError and str(error) == 'document process accounting unavailable'
+                and type(accounting) is dict and set(accounting) == {'operation', 'pid', 'returned', 'expected', 'errno'}
+                and type(accounting['operation']) is str and accounting['operation'] in ('listpids', 'pidinfo', 'empty_group')
+                and all(type(accounting[k]) is int and -(1 << 31) <= accounting[k] < 1 << 31
+                        for k in ('pid', 'returned', 'expected', 'errno'))
+                and accounting['pid'] > 0 and accounting['expected'] > 0 and 0 <= accounting['errno'] <= 4095):
+            record['accounting'] = accounting
+        if isinstance(cleanup_error, OSError) and type(cleanup_error.errno) is int and 0 <= cleanup_error.errno <= 4095:
+            record['cleanup_errno'] = cleanup_error.errno
         name = {'parent': 'office-parent-failure.json', 'worker': 'office-worker-failure.json'}[role]
         fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=directory_fd)
         with os.fdopen(fd, 'w', encoding='utf-8') as stream:
@@ -208,6 +218,12 @@ def check_xlsx_result(before, data):
             'equals_text_requires_task_review': bool(text_cells)}
 
 
+def accounting_failure(operation, pid, returned, expected, error_number):
+    error = RuntimeError('document process accounting unavailable')
+    error.accounting = dict(operation=operation, pid=pid, returned=returned, expected=expected, errno=error_number)
+    return error
+
+
 def mac_group_memory(group):
     """Sample only this one-shot group without macOS's setuid /bin/ps.
 
@@ -218,9 +234,13 @@ def mac_group_memory(group):
     lib.proc_pidinfo.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_uint64, ctypes.c_void_p, ctypes.c_int]
     # ponytail: cap a one-shot document group at 128 processes; fail closed if full.
     pids = (ctypes.c_int * 128)()
+    ctypes.set_errno(0)
     size = lib.proc_listpids(2, group, pids, ctypes.sizeof(pids))
+    error_number = ctypes.get_errno()
     if size < 0 or size >= ctypes.sizeof(pids) or size % ctypes.sizeof(ctypes.c_int):
-        raise RuntimeError('document process accounting unavailable')
+        raise accounting_failure('listpids', group, size, ctypes.sizeof(pids), error_number)
+    if size == 0 and error_number:
+        raise accounting_failure('listpids', group, size, ctypes.sizeof(pids), error_number)
     resident = []
     for pid in pids[:size // ctypes.sizeof(ctypes.c_int)]:
         if not pid:
@@ -230,10 +250,11 @@ def mac_group_memory(group):
         info = (ctypes.c_uint64 * 12)()
         ctypes.set_errno(0)
         count = lib.proc_pidinfo(pid, 4, 0, info, ctypes.sizeof(info))
+        error_number = ctypes.get_errno()
         if count != ctypes.sizeof(info):
-            if count == 0 and ctypes.get_errno() == errno.ESRCH:
+            if count == 0 and error_number == errno.ESRCH:
                 continue  # A group member can exit between enumeration and read.
-            raise RuntimeError('document process accounting unavailable')
+            raise accounting_failure('pidinfo', pid, count, ctypes.sizeof(info), error_number)
         resident.append(info[1])
     return resident
 
@@ -264,7 +285,7 @@ def run(command, *, data=None, timeout=30, env=None, memory_limit=2 << 30,
                     phase = 'accounting'
                     members = mac_group_memory(proc.pid)
                     if not members and proc.poll() is None:
-                        raise RuntimeError('document process accounting unavailable')
+                        raise accounting_failure('empty_group', proc.pid, 0, 1, 0)
                     resident = sum(members)
                     if resident > memory_limit:
                         raise RuntimeError('document process group exceeded memory budget')
