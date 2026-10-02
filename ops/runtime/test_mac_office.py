@@ -1,5 +1,5 @@
 """Mac worker seams; fictional paths, no Office install or real messages."""
-from contextlib import redirect_stderr, redirect_stdout
+from contextlib import contextmanager, ExitStack, redirect_stderr, redirect_stdout
 import io
 import json
 import os
@@ -36,7 +36,7 @@ class MacOfficeTests(unittest.TestCase):
                 if cleanup:
                     proc.stdout.close.side_effect = closing
 
-                def waited():
+                def waited(**_kwargs):
                     proc.returncode = -9  # Cleanup must not invent the earlier exit status.
 
                 proc.wait.side_effect = waited
@@ -64,6 +64,123 @@ class MacOfficeTests(unittest.TestCase):
                     spawn.assert_called_once()
                     self.assertEqual(proc.communicate.call_count, int(stage != 'spawn'))
                     self.assertEqual(proc.wait.call_count, int(stage != 'spawn'))
+
+    @contextmanager
+    def mac_run_fixture(self, replies, *, memory=(), pids=()):
+        proc = MagicMock(pid=42, returncode=None)
+        results = iter(replies)
+
+        def communicate(data, timeout):
+            result = next(results)
+            if isinstance(result, BaseException):
+                raise result
+            proc.returncode = result
+            return b'validated protocol output', None
+
+        proc.communicate.side_effect = communicate
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(sys, 'platform', 'darwin'))
+            spawn = stack.enter_context(patch.object(render.subprocess, 'Popen', return_value=proc))
+            sample = stack.enter_context(patch.object(render, 'mac_group_memory', return_value=list(memory)))
+            members = stack.enter_context(patch.object(render, 'mac_group_pids', return_value=list(pids)))
+            kill = stack.enter_context(patch.object(render.os, 'killpg', create=True))
+            stack.enter_context(patch.object(render.signal, 'SIGKILL', 9, create=True))
+            diagnostic = stack.enter_context(patch.object(render, 'write_office_failure'))
+            yield proc, sample, members, kill, diagnostic
+            spawn.assert_called_once()
+            proc.stdout.close.assert_called_once()
+            proc.stdin.close.assert_called_once()
+
+    def test_exit_window_finishes_once_without_resending_input_or_signalling_empty_group(self):
+        timeout = subprocess.TimeoutExpired(['fixture'], .1)
+        with self.mac_run_fixture([timeout, 0]) as (proc, sample, members, kill, diagnostic):
+            self.assertEqual(render.run(['fixture'], data=b'one input'), b'validated protocol output')
+            self.assertEqual([c.args[0] for c in proc.communicate.call_args_list], [b'one input', None])
+            self.assertTrue(all(0 < c.kwargs['timeout'] <= .1 for c in proc.communicate.call_args_list))
+            sample.assert_called_once_with(42)
+            self.assertEqual(members.call_count, 2, 'terminal check and cleanup each require a fresh raw list')
+            kill.assert_not_called(); diagnostic.assert_not_called()
+            proc.wait.assert_called_once_with(timeout=5)
+
+    def test_empty_sample_never_accepts_live_child_nonempty_group_or_unknown_enumeration(self):
+        timeout = subprocess.TimeoutExpired(['fixture'], .1)
+        for finish, pids in ((timeout, []), (0, [42]), (0, [43])):
+            with self.subTest(finish=type(finish).__name__, pids=pids), \
+                    self.mac_run_fixture([timeout, finish], pids=pids) as (proc, sample, members, kill, diagnostic):
+                with self.assertRaises(RuntimeError) as stopped:
+                    render.run(['fixture'])
+                self.assertEqual(stopped.exception.accounting['operation'], 'empty_group')
+                self.assertEqual(proc.communicate.call_count, 2)
+                kill.assert_called_once(); proc.wait.assert_called_once_with(timeout=5)
+                self.assertIs(diagnostic.call_args.args[3], stopped.exception)
+        unknown = render.accounting_failure('listpids', 42, 0, 512, render.errno.EPERM)
+        with self.mac_run_fixture([timeout, 0]) as (proc, sample, members, kill, diagnostic):
+            members.side_effect = unknown
+            with self.assertRaises(RuntimeError) as stopped:
+                render.run(['fixture'])
+            self.assertIs(stopped.exception, unknown)
+            kill.assert_called_once()
+            diagnostic.assert_called_once()
+
+    def test_terminal_wait_does_not_extend_deadline_and_nonzero_exit_still_fails(self):
+        timeout = subprocess.TimeoutExpired(['fixture'], .1)
+        for now, code in ((.97, 1), (1.01, 0)):
+            with self.subTest(now=now), self.mac_run_fixture([timeout, code]) as (proc, sample, members, kill, diagnostic), \
+                    patch.object(render.time, 'monotonic', side_effect=[0, .9, now]):
+                with self.assertRaises(RuntimeError) as stopped:
+                    render.run(['fixture'], timeout=1)
+                if now < 1:
+                    self.assertAlmostEqual(proc.communicate.call_args.kwargs['timeout'], .03)
+                    self.assertIn('document tool failed', str(stopped.exception))
+                    self.assertEqual(diagnostic.call_args.kwargs['returncode'], 1)
+                else:
+                    self.assertEqual(proc.communicate.call_count, 1)
+                    self.assertEqual(stopped.exception.accounting['operation'], 'empty_group')
+
+    def test_resident_budget_still_sums_members_and_does_not_enter_terminal_grace(self):
+        timeout = subprocess.TimeoutExpired(['fixture'], .1)
+        with self.mac_run_fixture([timeout], memory=[6, 7], pids=[42, 43]) as (proc, sample, members, kill, diagnostic):
+            with self.assertRaisesRegex(RuntimeError, 'memory budget'):
+                render.run(['fixture'], memory_limit=12)
+            self.assertEqual(proc.communicate.call_count, 1)
+            kill.assert_called_once()
+
+    def test_cleanup_permission_and_timeout_remain_visible_and_close_both_pipes(self):
+        for original in (None, ValueError('first failure')):
+            for wait_error in (None, subprocess.TimeoutExpired(['fixture'], 5)):
+                with self.subTest(original=original, wait_error=wait_error), \
+                        self.mac_run_fixture([original or 0], pids=[43]) as (proc, sample, members, kill, diagnostic):
+                    denied = PermissionError(render.errno.EPERM, 'synthetic cleanup denial')
+                    kill.side_effect = denied
+                    proc.wait.side_effect = wait_error
+                    with self.assertRaises((PermissionError, ValueError)) as stopped:
+                        render.run(['fixture'])
+                    self.assertIs(stopped.exception, original or denied)
+                    self.assertIs(diagnostic.call_args.kwargs['cleanup_error'], denied)
+                    self.assertEqual(diagnostic.call_args.kwargs['returncode'], None if original else 0)
+                    proc.wait.assert_called_once_with(timeout=5)
+        timeout = subprocess.TimeoutExpired(['fixture'], 5)
+        with self.mac_run_fixture([0]) as (proc, sample, members, kill, diagnostic):
+            proc.wait.side_effect = timeout
+            proc.stdout.close.side_effect = OSError('later close error')
+            with self.assertRaises(subprocess.TimeoutExpired) as stopped:
+                render.run(['fixture'])
+            self.assertIs(stopped.exception, timeout)
+            self.assertIs(diagnostic.call_args.kwargs['cleanup_error'], timeout)
+
+    def test_raw_members_survive_all_esrch_memory_sample(self):
+        lib = MagicMock()
+        def list_pids(kind, group, pids, size):
+            pids[0] = 42
+            return 4
+        def pid_info(*_args):
+            render.ctypes.set_errno(render.errno.ESRCH)
+            return 0
+        lib.proc_listpids.side_effect = list_pids
+        lib.proc_pidinfo.side_effect = pid_info
+        with patch.object(render.ctypes, 'CDLL', return_value=lib):
+            self.assertEqual(render.mac_group_memory(42), [])
+            self.assertEqual(render.mac_group_pids(42), [42])
 
     def test_office_update_records_stage_and_dispose_without_hiding_original(self):
         private = 'fictional document /private/path FAKE_AUTH=not-a-real-secret'
@@ -429,6 +546,7 @@ class MacOfficeTests(unittest.TestCase):
                 proc.communicate.side_effect = [subprocess.TimeoutExpired('fixture', .1), (b'done', b'')]
                 with patch.object(sys, 'platform', 'darwin'), patch.object(render.subprocess, 'Popen', return_value=proc), \
                         patch.object(render, 'mac_group_memory', return_value=usage), \
+                        patch.object(render, 'mac_group_pids', return_value=[42]), \
                         patch.object(render.signal, 'SIGKILL', 9, create=True), \
                         patch.object(render.os, 'killpg', create=True) as kill:
                     if rejects:
