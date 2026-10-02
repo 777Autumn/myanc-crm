@@ -87,6 +87,15 @@ subprocess. CPU, file-size, wall-time and core-dump limits remain. These are
 sampled memory budgets, not Linux's hard allocation ceiling: transient excess
 is possible, and the PDF monitor cannot run while native code holds the GIL.
 
+An accounting failure retains the fixed operation (`listpids`, `pidinfo` or
+`empty_group`), PID, returned/expected byte counts and numeric errno in the
+existing private failure record. `empty_group` counts members rather than bytes.
+An OS cleanup error also retains its numeric errno. These fields contain no
+command line, exception text or document path. A zero-byte enumeration with a
+nonzero errno is a failed read, not an empty group ([Apple libproc wrapper](https://github.com/apple-oss-distributions/xnu/blob/main/libsyscall/wrappers/libproc/libproc.c#L40-L54)). Missing historical fields
+leave the original cause unknown; no automatic retry, successful-conversion
+claim or cleanup permission follows from these diagnostics.
+
 Package exploration used official LibreOffice 26.8.0 ARM64 (reported 26.8.0.3),
 SHA256 `8858d8058da4f862f47559486814e65efc27294da67c5e4bb56b006b1ee59f89`,
 and Python 3.13.15 universal2 installer, SHA256

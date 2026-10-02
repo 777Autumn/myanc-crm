@@ -306,17 +306,20 @@ class MacOfficeTests(unittest.TestCase):
                     self.assertEqual((outputs / '.office-profile').exists(), at_exit)
 
     def test_native_accounting_is_group_scoped_and_rejects_uncertainty(self):
-        for returned, info_size, error, expected in ((8, 96, 0, [1234, 1234]),
-                                                   (4, 0, render.errno.ESRCH, []),
-                                                   (4, 0, render.errno.EPERM, None),
-                                                   (-1, 96, 0, None), (512, 96, 0, None),
-                                                   (3, 96, 0, None)):
-            with self.subTest(returned=returned, info_size=info_size, error=error):
+        for returned, list_error, info_size, error, expected in ((8, 0, 96, 0, [1234, 1234]),
+                                                               (4, 0, 0, render.errno.ESRCH, []),
+                                                               (4, 0, 0, render.errno.EPERM, None),
+                                                               (-1, 0, 96, 0, None), (512, 0, 96, 0, None),
+                                                               (3, 0, 96, 0, None),
+                                                               (0, render.errno.EPERM, 96, 0, None),
+                                                               (0, 0, 96, 0, [])):
+            with self.subTest(returned=returned, list_error=list_error, info_size=info_size, error=error):
                 lib = MagicMock()
 
                 def list_pids(kind, group, pids, size):
                     self.assertEqual((kind, group, size), (2, 42, 512))
                     pids[0], pids[1] = 42, 43
+                    render.ctypes.set_errno(list_error)
                     return returned
 
                 def pid_info(pid, flavor, arg, info, size):
@@ -330,10 +333,48 @@ class MacOfficeTests(unittest.TestCase):
                 lib.proc_pidinfo.side_effect = pid_info
                 with patch.object(render.ctypes, 'CDLL', return_value=lib):
                     if expected is None:
-                        with self.assertRaisesRegex(RuntimeError, 'accounting unavailable'):
+                        with self.assertRaisesRegex(RuntimeError, 'accounting unavailable') as stopped:
                             render.mac_group_memory(42)
+                        if returned == 4:
+                            self.assertEqual(stopped.exception.accounting,
+                                             dict(operation='pidinfo', pid=42, returned=info_size, expected=96, errno=error))
+                        else:
+                            self.assertEqual(stopped.exception.accounting,
+                                             dict(operation='listpids', pid=42, returned=returned, expected=512, errno=list_error))
                     else:
                         self.assertEqual(render.mac_group_memory(42), expected)
+
+    def test_accounting_failure_records_bounded_fields_without_private_details(self):
+        private = 'fictional document /private/path FAKE_AUTH=not-a-real-secret'
+        valid = dict(operation='pidinfo', pid=42, returned=0, expected=96, errno=render.errno.EPERM)
+        for details, included in ((valid, True), ({**valid, 'pid': True}, False),
+                                  ({**valid, 'operation': private}, False),
+                                  ({**valid, 'errno': 1 << 32}, False),
+                                  ({**valid, 'private_path': private}, False)):
+            with self.subTest(details=details):
+                failure = RuntimeError('document process accounting unavailable')
+                failure.accounting = details
+                stream = io.StringIO()
+                with patch.object(render.os, 'geteuid', return_value=451, create=True), \
+                        patch.object(render.os, 'O_DIRECTORY', 0, create=True), \
+                        patch.object(render.os, 'O_NOFOLLOW', 0, create=True), \
+                        patch.object(render.os, 'open', side_effect=[123, 124]), \
+                        patch.object(render.os, 'fstat', return_value=SimpleNamespace(st_mode=render.stat.S_IFDIR | 0o700, st_uid=451)), \
+                        patch.object(render.os, 'fdopen') as fdopen, \
+                        patch.object(render.os, 'fsync'), patch.object(render.os, 'close'):
+                    destination = MagicMock()
+                    destination.write.side_effect = stream.write
+                    destination.fileno.return_value = 124
+                    fdopen.return_value.__enter__.return_value = destination
+                    render.write_office_failure(Path('fictional-profile'), 'parent', 'office_worker_accounting', failure,
+                                                cleanup_error=PermissionError(render.errno.EPERM, private))
+                raw = stream.getvalue(); value = json.loads(raw)
+                self.assertNotIn(private, raw)
+                self.assertEqual(value['cleanup_error_type'], 'PermissionError')
+                self.assertEqual(value['cleanup_errno'], render.errno.EPERM)
+                self.assertEqual('accounting' in value, included)
+                if included:
+                    self.assertEqual(value['accounting'], valid)
 
     @unittest.skipUnless(sys.platform == 'darwin', 'requires native macOS process accounting')
     def test_actual_mac_memory_and_timeout_cleanup(self):
@@ -391,8 +432,11 @@ class MacOfficeTests(unittest.TestCase):
                         patch.object(render.signal, 'SIGKILL', 9, create=True), \
                         patch.object(render.os, 'killpg', create=True) as kill:
                     if rejects:
-                        with self.assertRaises((RuntimeError, ValueError)):
+                        with self.assertRaises((RuntimeError, ValueError)) as stopped:
                             render.run(['fixture'], data=b'fictional', memory_limit=512 << 10)
+                        if not usage:
+                            self.assertEqual(stopped.exception.accounting,
+                                             dict(operation='empty_group', pid=42, returned=0, expected=1, errno=0))
                     else:
                         self.assertEqual(render.run(['fixture'], data=b'fictional', memory_limit=512 << 10), b'done')
                         self.assertIsNone(proc.communicate.call_args.args[0])
