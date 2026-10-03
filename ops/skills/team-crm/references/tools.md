@@ -4,6 +4,18 @@ For the configured CRM Base, use `/usr/local/bin/crm-tool` with one command
 and one stdin JSON object. These tools retrieve facts or stage a proposal; the
 gateway owns every CRM write and the authenticated sender/session binding.
 
+When personal connections are enabled, private CRM reads use the requester's
+verified Feishu connection. Group reads use only the host-approved shared CRM.
+Keep the same tool arguments: the host selects identity and resource. If a tool
+reports a connection or scope block, explain that this request is unavailable in
+the current connection/work scope. For connection problems, ask the user to send
+“连接状态” or “连接我的飞书” in the bot's private chat; these are host commands.
+Use only the host-delivered authorization link/QR. Permission failures do not
+authorize using another account, broader tools, or an earlier private result.
+Personal work may return its file to the original private chat; a blocked shared
+publication remains private. Starting an unrelated work does not authorize copying
+private material into it.
+
 Current-state requests start with a fresh `customer` call in this user turn,
 including when the user puts a proposed change on hold and asks only to look at
 the record. Reuse the known customer identifier, then read and answer; a read
@@ -269,6 +281,7 @@ expiry or restarting the service cannot resolve it.
   verified receipt.
 - If the history row succeeds but the customer summary fails, preserve the true
   history and report `partial`; never blindly roll it back or retry.
-- Private and group replies follow the same field-visibility rule. Relevant
-  phone, email, and address values may be shown; no extra group redaction is
-  required by this workflow.
+- Relevant contact fields returned by the current authorized tool may be shown
+  within that conversation's scope. Personal results and their summaries/files
+  remain in the original private conversation; group membership never expands
+  the group's allowed sources.

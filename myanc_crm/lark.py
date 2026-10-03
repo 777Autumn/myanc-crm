@@ -157,7 +157,13 @@ class LarkCliBackend:
         followup_table_id: str,
         base_url: str,
         fields: Mapping[str, Mapping[str, str]],
+        runner=None,
+        identity: str = "bot",
     ) -> None:
+        if identity not in {"bot", "user"}:
+            raise ValueError("Invalid backend identity")
+        self.runner = runner
+        self.identity = identity
         self.wrapper_path = _wrapper_path(wrapper_path)
         self.base_token = _config_value("base_token", base_token)
         self.customer_table_id = _table_id("customer_table_id", customer_table_id)
@@ -846,7 +852,7 @@ class LarkCliBackend:
         artifact_manifest: bool = False,
     ) -> Mapping[str, Any]:
         try:
-            completed = subprocess.run(
+            completed = (self.runner or subprocess.run)(
                 [self.wrapper_path, *args],
                 cwd=cwd,
                 capture_output=True,
@@ -880,7 +886,7 @@ class LarkCliBackend:
             return envelope
         if envelope.get("ok") is not True:
             raise LarkBackendError("protocol_error", operation)
-        if envelope.get("identity") != "bot":
+        if envelope.get("identity") != self.identity:
             raise LarkBackendError("identity_mismatch", operation)
         return envelope
 

@@ -94,6 +94,33 @@ class CliBoundaryTests(unittest.TestCase):
 
         self.assertNotEqual(attacker_path.resolve(), selected)
 
+    def test_personal_connection_host_endpoints_require_host_secret(self):
+        for command in ("host-connection", "host-connection-config", "host-connection-guard", "host-connection-tick"):
+            with self.subTest(command=command):
+                code, _ = self.run_cli([command])
+                self.assertEqual(2, code)
+                code, result = self.run_cli([command], host=True)
+                self.assertEqual((0, "disabled"), (code, result["status"]))
+
+    def test_restricted_personal_source_blocks_all_crm_bypasses_before_runtime(self):
+        principal = dict(platform="feishu", user_id="sender-test", chat_id="chat-test",
+                         session_key="session-test", project="project-test", message_id="message-test")
+        self.config["allowed_actors"]["sender-test"]["connection_profile"] = "anc-user-test"
+        self.config["personal_connections"] = dict(app_id="fixture-app", tenant_key="fixture-tenant",
+            source_app_id="fixture-bot", source_tenant_key="fixture-tenant", cli_path=str(Path(self.temp.name)/"cli"),
+            cli_home_root=str(Path(self.temp.name)/"homes"), database_path=str(Path(self.temp.name)/"private"/"connections.db"),
+            resource_mode="restricted", routes=[{k:principal[k] for k in ("platform","user_id","chat_id","project")} | {"audience":"private"}])
+        self.config_path.write_text(json.dumps(self.config), encoding="utf-8")
+        with mock.patch.object(cli, "_runtime") as runtime:
+            for command in ("stage", "stage-customer-create", "stage-customer-update", "result", "assignee", "open"):
+                request = {"change_id": "chg_" + "a"*32} if command == "result" else {}
+                code, result = self.run_cli(["host-tool"], json.dumps(dict(command=command, request=request, principal=principal)), host=True)
+                self.assertEqual((0,"blocked","restricted_resource_operation_denied"), (code,result["status"],result["code"]))
+            for command in ("host-plan-read", "host-plan-events", "host-execute", "host-begin", "host-claim"):
+                code, result = self.run_cli([command], json.dumps(dict(principal=principal)), host=True)
+                self.assertEqual((0,"blocked"), (code,result["status"]))
+            runtime.assert_not_called()
+
     def test_case_tools_require_host_and_never_open_formal_crm(self):
         principal = dict(platform="feishu", user_id="sender-test", chat_id="chat-test",
                          session_key="session-test", project="project-test", message_id="message-test")
