@@ -1,0 +1,474 @@
+"""Host-owned Feishu connections. Tokens and refresh remain owned by lark-cli.
+
+Nothing in this module is a model-facing CLI. The gateway supplies the principal;
+protected configuration supplies every profile, application and resource route.
+"""
+
+from contextlib import contextmanager
+from datetime import datetime
+import base64
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import sqlite3
+import subprocess
+import tempfile
+import time
+from urllib.parse import urlsplit
+
+from . import core, write_locks
+
+
+READ_COMMANDS = frozenset({"customer", "customers"})
+CLI_READ_COMMANDS = frozenset({"+field-list", "+record-list", "+record-get", "+record-search"})
+ROUTE_FIELDS = ("platform", "user_id", "chat_id", "project")
+
+
+class ConnectionBlocked(ValueError):
+    def __init__(self, code):
+        super().__init__(code)
+        self.code = code
+
+
+def _text(value):
+    if not isinstance(value, str) or not value or len(value) > 1024 or any(c in value for c in "\x00\r\n"):
+        raise ConnectionBlocked("connection_configuration_invalid")
+    return value
+
+
+def _timestamp(value):
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+    except (AttributeError, TypeError, ValueError):
+        raise ConnectionBlocked("connection_metadata_invalid") from None
+
+
+class Connections:
+    def __init__(self, config, *, run=subprocess.run, now=time.time):
+        self.config = config
+        self.options = config["personal_connections"]
+        if not isinstance(self.options, dict):
+            raise ConnectionBlocked("connection_configuration_invalid")
+        self.run, self.now = run, now
+        for key in ("app_id", "tenant_key", "source_app_id", "source_tenant_key", "cli_path", "database_path", "cli_home_root"):
+            _text(self.options.get(key))
+        self.path = Path(self.options["database_path"])
+        self.cli = self.options["cli_path"]
+        self.home_root = Path(self.options["cli_home_root"])
+        if not self.path.is_absolute() or not Path(self.cli).is_absolute() or not self.home_root.is_absolute():
+            raise ConnectionBlocked("connection_configuration_invalid")
+        if self.options.get("resource_mode") not in {"shared", "restricted"}:
+            raise ConnectionBlocked("connection_configuration_invalid")
+        profiles = []
+        for actor in config["allowed_actors"].values():
+            profile = actor.get("connection_profile")
+            if profile is not None:
+                if not re.fullmatch(r"anc-user-[a-z0-9-]{1,64}", profile):
+                    raise ConnectionBlocked("connection_configuration_invalid")
+                profiles.append(profile)
+        if len(profiles) != len(set(profiles)):
+            raise ConnectionBlocked("connection_profile_shared")
+        routes = self.options.get("routes")
+        if not isinstance(routes, list) or not routes:
+            raise ConnectionBlocked("connection_configuration_invalid")
+        seen = set()
+        for route in routes:
+            if not isinstance(route, dict) or set(route) != {*ROUTE_FIELDS, "audience"}:
+                raise ConnectionBlocked("connection_configuration_invalid")
+            key = tuple(_text(route.get(field)) for field in ROUTE_FIELDS)
+            if key in seen or route["audience"] not in {"private", "shared"}:
+                raise ConnectionBlocked("connection_configuration_invalid")
+            if route["user_id"] not in config["allowed_actors"]:
+                raise ConnectionBlocked("connection_configuration_invalid")
+            seen.add(key)
+
+    def route(self, principal):
+        matches = [route for route in self.options["routes"]
+                   if all(route[key] == principal.get(key) for key in ROUTE_FIELDS)]
+        if len(matches) != 1:
+            raise ConnectionBlocked("connection_route_denied")
+        return matches[0]["audience"]
+
+    def actor(self, principal):
+        if self.route(principal) != "private":
+            raise ConnectionBlocked("connection_private_chat_required")
+        actor = self.config["allowed_actors"][principal["user_id"]]
+        _text(actor.get("connection_profile"))
+        _text(actor.get("feishu_user_id"))
+        return actor
+
+    def key(self, principal):
+        identity = [self.options[k] for k in ("source_app_id", "source_tenant_key", "app_id", "tenant_key")]
+        identity.append(_text(principal.get("user_id")))
+        return hashlib.sha256(json.dumps(identity).encode()).hexdigest()
+
+    @contextmanager
+    def database(self):
+        core._prepare_ledger_parent(self.path.parent)
+        if not self.path.exists():
+            try:
+                core._create_private_file(self.path)
+            except FileExistsError:
+                pass
+        core._validate_private_file(self.path)
+        with core._private_umask():
+            db = sqlite3.connect(self.path, timeout=10)
+            db.row_factory = sqlite3.Row
+            try:
+                db.execute("CREATE TABLE IF NOT EXISTS connections (subject TEXT PRIMARY KEY, "
+                           "profile TEXT NOT NULL, account TEXT NOT NULL, status TEXT NOT NULL, "
+                           "version INTEGER NOT NULL, expires REAL NOT NULL DEFAULT 0, "
+                           "refresh_expires REAL NOT NULL DEFAULT 0, retry_at REAL NOT NULL DEFAULT 0, "
+                           "failures INTEGER NOT NULL DEFAULT 0, device_code TEXT NOT NULL DEFAULT '', "
+                           "flow_expires REAL NOT NULL DEFAULT 0)")
+                db.execute("CREATE TABLE IF NOT EXISTS connection_sessions (session TEXT PRIMARY KEY, "
+                           "subject TEXT NOT NULL, version INTEGER NOT NULL)")
+                db.execute("CREATE TABLE IF NOT EXISTS connection_work (work TEXT PRIMARY KEY, "
+                           "subject TEXT NOT NULL, version INTEGER NOT NULL, requires_connection INTEGER NOT NULL)")
+                db.commit()
+                yield db
+            finally:
+                db.close()
+
+    @contextmanager
+    def locked(self, principal):
+        with self.database() as db:
+            with write_locks.acquire(self.path.parent, ["connection-" + self.key(principal)]):
+                yield db
+
+    def _row(self, db, principal):
+        actor = self.actor(principal)
+        key = self.key(principal)
+        db.execute("INSERT OR IGNORE INTO connections(subject,profile,account,status,version) VALUES(?,?,?,'disconnected',0)",
+                   (key, actor["connection_profile"], actor["feishu_user_id"]))
+        db.commit()
+        row = db.execute("SELECT * FROM connections WHERE subject=?", (key,)).fetchone()
+        if row["profile"] != actor["connection_profile"] or row["account"] != actor["feishu_user_id"]:
+            raise ConnectionBlocked("connection_binding_changed")
+        return row
+
+    def _set(self, db, row, status, *, invalidate=False, **values):
+        allowed = {"expires", "refresh_expires", "retry_at", "failures", "device_code", "flow_expires"}
+        if set(values) - allowed:
+            raise ValueError("Unsupported connection state")
+        values.update(status=status, version=row["version"] + int(invalidate))
+        db.execute("UPDATE connections SET " + ",".join(key + "=?" for key in values) + " WHERE subject=?",
+                   (*values.values(), row["subject"]))
+        db.commit()
+
+    def environment(self, profile):
+        # Never pass inherited credential overrides or model-controlled arguments.
+        env = {k: v for k, v in os.environ.items()
+               if not k.startswith(("LARK_", "LARKSUITE_", "FEISHU_", "MYANC_CRM_"))}
+        # Official Darwin/Linux stores live under HOME. Each person has a native
+        # CLI store so a wrong scan cannot replace another profile's app:user token.
+        home = self.home_root / profile
+        core._validate_parent_chain(home)
+        env.update(HOME=str(home), LARKSUITE_CLI_NO_UPDATE_NOTIFIER="1", LARKSUITE_CLI_NO_SKILLS_NOTIFIER="1")
+        return env
+
+    def _cli(self, profile, args, *, timeout=10):
+        env = self.environment(profile)
+        try:
+            completed = self.run([self.cli, *args, "--profile", profile], capture_output=True,
+                                 text=True, encoding="utf-8", timeout=timeout, env=env, check=False, shell=False)
+            if completed.returncode:
+                raise ConnectionBlocked("connection_temporarily_unavailable")
+            value = json.loads(completed.stdout)
+            if not isinstance(value, dict):
+                raise ValueError
+            return value
+        except (subprocess.TimeoutExpired, OSError, ValueError) as exc:
+            if isinstance(exc, ConnectionBlocked):
+                raise
+            raise ConnectionBlocked("connection_temporarily_unavailable") from None
+
+    def validate_source(self, app_id):
+        if app_id != self.options["source_app_id"]:
+            raise ConnectionBlocked("connection_source_app_mismatch")
+        result = self.run([self.cli, "--version"], capture_output=True, text=True,
+                          encoding="utf-8", timeout=10, check=False, shell=False)
+        if result.returncode or not re.fullmatch(r"(?:lark-cli\s+)?(?:version\s+)?v?1\.0\.90\s*", result.stdout):
+            raise ConnectionBlocked("connection_cli_version_mismatch")
+        return {"status": "enabled", "users": self.users()}
+
+    def qrcode(self, profile, uri):
+        with tempfile.TemporaryDirectory(prefix="connection-qr-", dir=self.path.parent) as directory:
+            result = self.run([self.cli, "auth", "qrcode", uri, "--output", "connection.png", "--profile", profile],
+                              cwd=directory, env=self.environment(profile), capture_output=True, text=True,
+                              encoding="utf-8", timeout=10, check=False, shell=False)
+            path = Path(directory) / "connection.png"
+            if result.returncode or not path.is_file() or path.stat().st_size > 100000:
+                raise ConnectionBlocked("connection_qrcode_unavailable")
+            content = path.read_bytes()
+            if not content.startswith(b"\x89PNG\r\n\x1a\n"):
+                raise ConnectionBlocked("connection_qrcode_unavailable")
+            return base64.b64encode(content).decode("ascii")
+
+    def metadata(self, actor, *, verify=False):
+        args = ["auth", "status", "--json"] + (["--verify"] if verify else [])
+        data = self._cli(actor["connection_profile"], args)
+        if data.get("appId") != self.options["app_id"]:
+            raise ConnectionBlocked("connection_identity_mismatch")
+        user = data.get("identities", {}).get("user", {})
+        if user.get("openId") and user["openId"] != actor["feishu_user_id"]:
+            raise ConnectionBlocked("connection_identity_mismatch")
+        if user.get("status") in {"missing", "not_configured"}:
+            raise ConnectionBlocked("connection_required")
+        if user.get("openId") != actor["feishu_user_id"]:
+            raise ConnectionBlocked("connection_identity_mismatch")
+        if not user.get("available") or (verify and user.get("verified") is not True):
+            raise ConnectionBlocked("connection_temporarily_unavailable")
+        _timestamp(user.get("expiresAt"))
+        _timestamp(user.get("refreshExpiresAt"))
+        return user
+
+    def _verify_identity(self, actor):
+        self.metadata(actor, verify=True)
+        info = self._cli(actor["connection_profile"],
+                         ["api", "GET", "/open-apis/authen/v1/user_info", "--as", "user"])
+        body = info.get("data", {})
+        if info.get("ok") is not True or info.get("identity") != "user":
+            raise ConnectionBlocked("connection_temporarily_unavailable")
+        if body.get("open_id") != actor["feishu_user_id"] or body.get("tenant_key") != self.options["tenant_key"]:
+            raise ConnectionBlocked("connection_identity_mismatch")
+        # --verify fills expiry fields before refreshing in 1.0.90.
+        return self.metadata(actor)
+
+    def command(self, operation, principal):
+        actor = self.actor(principal)
+        with self.locked(principal) as db:
+            row = self._row(db, principal)
+            previous_version = row["version"]
+            if operation == "disconnect":
+                self._set(db, row, "disconnected", invalidate=True, device_code="", flow_expires=0)
+            elif operation in {"connect", "reconnect"}:
+                # Adopt only a first-use, operator-provisioned native login after
+                # the same app/account/tenant verification as interactive enrollment.
+                if operation == "connect" and (row["version"] == 0 or row["status"] == "connected"):
+                    try:
+                        user = self._verify_identity(actor)
+                    except ConnectionBlocked as exc:
+                        if exc.code != "connection_required":
+                            raise
+                    else:
+                        initial = row["version"] == 0
+                        self._set(db, row, "connected", invalidate=initial,
+                                  expires=_timestamp(user["expiresAt"]), refresh_expires=_timestamp(user["refreshExpiresAt"]))
+                        return {"status": "connected", "version": row["version"] + int(initial), "audience": "private", "reset": initial}
+                return self._begin(db, row, actor)
+            elif operation == "complete":
+                self._complete(db, row, actor)
+            elif operation == "status":
+                if row["status"] in {"pending", "verifying"}:
+                    self._complete(db, row, actor)
+                elif row["status"] == "connected":
+                    try:
+                        self._verify_identity(actor)
+                    except ConnectionBlocked as exc:
+                        if exc.code not in {"connection_required", "connection_identity_mismatch"}:
+                            raise
+                        self._set(db, row, "reconnect_required", invalidate=True)
+            elif operation != "check":
+                raise ConnectionBlocked("connection_operation_denied")
+            row = self._row(db, principal)
+            return {"status": row["status"], "version": row["version"], "audience": "private",
+                    "reset": row["version"] != previous_version}
+
+    def _begin(self, db, row, actor):
+        info = self._cli(actor["connection_profile"], ["auth", "status", "--json"])
+        if info.get("appId") != self.options["app_id"]:
+            raise ConnectionBlocked("connection_identity_mismatch")
+        actual_user = info.get("identities", {}).get("user", {}).get("openId")
+        if actual_user and actual_user != actor["feishu_user_id"]:
+            if row["status"] != "wrong_account":
+                raise ConnectionBlocked("connection_identity_mismatch")
+            # Only our failed enrollment can clear this isolated CLI store.
+            # An externally replaced profile remains blocked for operator review.
+        # Clear this person's old native login before starting. This makes a
+        # persisted user during pending unambiguously a completed new exchange,
+        # including a process killed after the CLI saved it but before we did.
+        status = "wrong_account" if row["status"] == "wrong_account" else "disconnected"
+        self._set(db, row, status, invalidate=True, device_code="", flow_expires=0)
+        row = db.execute("SELECT * FROM connections WHERE subject=?", (row["subject"],)).fetchone()
+        if actual_user:
+            self._cli(actor["connection_profile"], ["auth", "logout", "--json"])
+            check = self._cli(actor["connection_profile"], ["auth", "status", "--json"])
+            if check.get("appId") != self.options["app_id"] or check.get("identities", {}).get("user", {}).get("openId"):
+                raise ConnectionBlocked("connection_identity_mismatch")
+        data = self._cli(actor["connection_profile"], ["auth", "login", "--no-wait", "--json",
+                         "--scope", "bitable:app:readonly offline_access"])
+        uri = data.get("verification_url")
+        parsed = urlsplit(uri or "")
+        if parsed.scheme != "https" or parsed.username or parsed.password or not (
+                parsed.hostname == "feishu.cn" or (parsed.hostname or "").endswith(".feishu.cn")):
+            raise ConnectionBlocked("connection_authorization_url_invalid")
+        code = _text(data.get("device_code"))
+        ttl = data.get("expires_in")
+        if type(ttl) is not int or not 1 <= ttl <= 1800:
+            raise ConnectionBlocked("connection_metadata_invalid")
+        # Device code is a short-lived flow secret, never a user access/refresh token.
+        row = db.execute("SELECT * FROM connections WHERE subject=?", (row["subject"],)).fetchone()
+        self._set(db, row, "pending", device_code=code, flow_expires=self.now() + ttl)
+        return {"status": "pending", "version": row["version"], "verification_url": uri,
+                "qrcode_png": self.qrcode(actor["connection_profile"], uri),
+                "expires_in": ttl, "audience": "private", "reset": True}
+
+    def _complete(self, db, row, actor):
+        if row["status"] not in {"pending", "verifying"}:
+            return
+        if row["status"] == "pending":
+            info = self._cli(actor["connection_profile"], ["auth", "status", "--json"])
+            if info.get("appId") != self.options["app_id"]:
+                raise ConnectionBlocked("connection_identity_mismatch")
+            if not info.get("identities", {}).get("user", {}).get("openId"):
+                if row["flow_expires"] <= self.now():
+                    self._set(db, row, "reconnect_required", device_code="", flow_expires=0)
+                    return
+                self._cli(actor["connection_profile"], ["auth", "login", "--json", "--device-code", row["device_code"]], timeout=12)
+            self._set(db, row, "verifying", device_code="", flow_expires=0)
+            row = db.execute("SELECT * FROM connections WHERE subject=?", (row["subject"],)).fetchone()
+        try:
+            user = self._verify_identity(actor)
+        except ConnectionBlocked as exc:
+            if exc.code == "connection_temporarily_unavailable":
+                return
+            status = "wrong_account" if exc.code == "connection_identity_mismatch" else "reconnect_required"
+            self._set(db, row, status, invalidate=True, device_code="", flow_expires=0)
+            return
+        self._set(db, row, "connected", invalidate=True, device_code="", flow_expires=0,
+                  expires=_timestamp(user["expiresAt"]), refresh_expires=_timestamp(user["refreshExpiresAt"]),
+                  failures=0, retry_at=0)
+
+    def require(self, principal, session_token):
+        actor = self.actor(principal)
+        if not isinstance(session_token, str) or len(session_token) < 32:
+            raise ConnectionBlocked("connection_session_invalid")
+        with self.locked(principal) as db:
+            row = self._row(db, principal)
+            if row["status"] != "connected":
+                raise ConnectionBlocked("connection_required")
+            try:
+                self.metadata(actor)
+            except ConnectionBlocked as exc:
+                if exc.code in {"connection_required", "connection_identity_mismatch"}:
+                    self._set(db, row, "reconnect_required", invalidate=True)
+                raise
+            session = hashlib.sha256(session_token.encode()).hexdigest()
+            db.execute("INSERT OR IGNORE INTO connection_sessions VALUES(?,?,?)", (session, row["subject"], row["version"]))
+            db.commit()
+            bound = db.execute("SELECT * FROM connection_sessions WHERE session=?", (session,)).fetchone()
+            if bound["subject"] != row["subject"] or bound["version"] != row["version"]:
+                raise ConnectionBlocked("connection_session_expired")
+            return dict(profile=row["profile"], version=row["version"], subject=row["subject"])
+
+    def check_version(self, binding, *, require_connected=True):
+        with self.database() as db:
+            row = db.execute("SELECT * FROM connections WHERE subject=?", (binding["subject"],)).fetchone()
+            if not row or (require_connected and row["status"] != "connected") or row["version"] != binding["version"]:
+                raise ConnectionBlocked("connection_session_expired")
+
+    def guard(self, command, principal, token, work_id, knowledge_subject=""):
+        audience = self.route(principal)
+        private_commands = {*READ_COMMANDS, "work-resume", "work-context", "file-deliver", "file-status",
+                            "knowledge_catalog", "knowledge_search", "knowledge_read"}
+        # A whole restricted source is private. This persistent mark follows its
+        # existing work ID across process restarts, new tokens and config changes.
+        if command in READ_COMMANDS and audience == "private":
+            binding = self.require(principal, token)
+            if self.options["resource_mode"] == "restricted":
+                if not work_id:
+                    raise ConnectionBlocked("personal_work_binding_required")
+                with self.database() as db:
+                    db.execute("INSERT OR IGNORE INTO connection_work VALUES(?,?,?,1)",
+                               (work_id, binding["subject"], binding["version"]))
+                    db.execute("UPDATE connection_work SET requires_connection=1 WHERE work=?", (work_id,))
+                    db.commit()
+        if command in {"knowledge_catalog", "knowledge_search", "knowledge_read"} and knowledge_subject != "team":
+            # The existing knowledge host reserves team for universally shared
+            # pages. Other subjects stay private even if their reader can see them.
+            if audience != "private" or not work_id:
+                raise ConnectionBlocked("personal_work_audience_denied")
+            with self.locked(principal) as db:
+                row = self._row(db, principal)
+                db.execute("INSERT OR IGNORE INTO connection_work VALUES(?,?,?,0)",
+                           (work_id, row["subject"], row["version"]))
+                db.commit()
+        with self.database() as db:
+            bound = db.execute("SELECT * FROM connection_work WHERE work=?", (work_id,)).fetchone()
+        if not bound:
+            return {"status": "allowed"}
+        if audience != "private" or bound["subject"] != self.key(principal):
+            raise ConnectionBlocked("personal_work_audience_denied")
+        self.check_version(bound, require_connected=bool(bound["requires_connection"]))
+        if command not in private_commands:
+            raise ConnectionBlocked("personal_work_sharing_denied")
+        return {"status": "allowed", "private": True}
+
+    def users(self):
+        return list(dict.fromkeys(route["user_id"] for route in self.options["routes"] if route["audience"] == "private"))
+
+    def maintain(self, user_id):
+        if user_id not in self.users():
+            raise ConnectionBlocked("connection_route_denied")
+        route = next(route for route in self.options["routes"]
+                     if route["audience"] == "private" and route["user_id"] == user_id)
+        with self.locked(route) as db:
+            row = self._row(db, route)
+            if row["status"] == "connected" and max(row["expires"] - 240, row["retry_at"]) <= self.now():
+                try:
+                    user = self._verify_identity(self.actor(route))
+                    self._set(db, row, "connected", expires=_timestamp(user["expiresAt"]),
+                              refresh_expires=_timestamp(user["refreshExpiresAt"]), retry_at=0, failures=0)
+                except ConnectionBlocked as exc:
+                    if exc.code in {"connection_required", "connection_identity_mismatch"} or row["refresh_expires"] <= self.now():
+                        self._set(db, row, "reconnect_required", invalidate=True)
+                    else:
+                        delay = min(3600, 60 * 2 ** min(row["failures"], 6))
+                        self._set(db, row, "connected", failures=row["failures"] + 1, retry_at=self.now() + delay)
+            # Deliver the current generation even after a successful reconnect.
+            # Consumers compare work bindings; only stale personal work is stopped.
+            # Repeating this state survives interrupted calls and gateway restarts.
+            row = self._row(db, route)
+            return ([{"user_id": user_id, "status": row["status"], "version": row["version"]}]
+                    if row["version"] else [])
+
+
+def access(config, command, principal):
+    """Run before any backend, navigation, old receipt or approval is opened."""
+    if "personal_connections" not in config:
+        return None
+    connections = Connections(config)
+    if not principal:
+        if connections.options["resource_mode"] != "shared":
+            raise ConnectionBlocked("restricted_resource_operation_denied")
+        return None
+    audience = connections.route(principal)
+    if audience == "private" and command in READ_COMMANDS:
+        return connections
+    if connections.options["resource_mode"] != "shared" and not command.startswith("case-"):
+        raise ConnectionBlocked("restricted_resource_operation_denied")
+    return None
+
+
+class PersonalReadRunner:
+    """Only the existing backend's fixed Base read argv can reach a user CLI."""
+    def __init__(self, connections, principal, token):
+        self.connections, self.principal, self.token = connections, principal, token
+        self.binding = connections.require(principal, token)
+
+    def __call__(self, argv, **kwargs):
+        args = list(argv[1:])
+        if len(args) < 2 or args[0] != "base" or args[1] not in CLI_READ_COMMANDS:
+            raise ConnectionBlocked("personal_read_only")
+        if any(arg.split("=", 1)[0] in {"--profile", "--as", "--yes"} for arg in args):
+            raise ConnectionBlocked("personal_identity_override_denied")
+        self.connections.require(self.principal, self.token)
+        self.connections.check_version(self.binding)
+        kwargs["env"] = self.connections.environment(self.binding["profile"])
+        completed = self.connections.run([self.connections.cli, *args, "--profile", self.binding["profile"], "--as", "user"], **kwargs)
+        self.connections.metadata(self.connections.actor(self.principal))
+        self.connections.check_version(self.binding)
+        return completed

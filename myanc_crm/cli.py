@@ -24,6 +24,7 @@ from .core import (
 )
 from .lark import LarkBackendError, LarkCliBackend, _base_url
 from . import core
+from .connections import Connections, ConnectionBlocked, PersonalReadRunner, access as connection_access
 
 
 MAX_INPUT_BYTES = 256 * 1024
@@ -120,7 +121,7 @@ def _required_text(config: Mapping[str, Any], name: str) -> str:
     return value.strip()
 
 
-def _runtime(config: Mapping[str, Any], config_path: Path) -> tuple[LarkCliBackend, Ledger]:
+def _runtime(config: Mapping[str, Any], config_path: Path, *, personal_runner=None) -> tuple[LarkCliBackend, Ledger]:
     raw_ledger = _required_text(config, "ledger_path")
     ledger_path = Path(raw_ledger)
     if not ledger_path.is_absolute():
@@ -139,6 +140,7 @@ def _runtime(config: Mapping[str, Any], config_path: Path) -> tuple[LarkCliBacke
         followup_table_id=_required_text(config, "followup_table_id"),
         base_url=_required_text(config, "base_url"),
         fields=_required_mapping(config, "fields"),
+        **({"runner": personal_runner, "identity": "user"} if personal_runner is not None else {}),
     )
     return backend, Ledger(ledger_path)
 
@@ -433,6 +435,10 @@ def main(
         "host-plan-events",
         "host-plan-read",
         "host-plan-ack",
+        "host-connection",
+        "host-connection-tick",
+        "host-connection-config",
+        "host-connection-guard",
     }:
         result = {
             "status": "failed",
@@ -456,6 +462,39 @@ def main(
         if command.startswith("host-"):
             _required_mapping(config, "allowed_actors")
             _require_host(config)
+        if command in {"host-connection", "host-connection-tick", "host-connection-config", "host-connection-guard"}:
+            if "personal_connections" not in config:
+                _write(target, {"status": "disabled"})
+                return 0
+            connections = Connections(config)
+            if command == "host-connection-guard":
+                if set(request) != {"command", "principal", "work_id", "knowledge_subject"}:
+                    raise ValueError("Invalid connection guard")
+                _, principal = _host_prepare_payload({"request": {}, "principal": request["principal"]}, config)
+                operation = core._required_text(request["command"], "command", 80)
+                work_id = request["work_id"]
+                if not isinstance(work_id, str) or len(work_id) > 256:
+                    raise ValueError("Invalid host work binding")
+                token = os.environ.get(ACTION_TOKEN_ENV, "")
+                subject = request["knowledge_subject"]
+                if not isinstance(subject, str) or len(subject) > 100:
+                    raise ValueError("Invalid knowledge subject")
+                result = connections.guard(operation, principal, token, work_id, subject)
+            elif command == "host-connection-config":
+                if set(request) != {"source_app_id"}:
+                    raise ValueError("Invalid source binding")
+                result = connections.validate_source(request["source_app_id"])
+            elif command == "host-connection-tick":
+                if set(request) != {"user_id"}:
+                    raise ValueError("Connection maintenance requires one host-selected user")
+                result = {"status": "checked", "changes": connections.maintain(request["user_id"])}
+            else:
+                if set(request) != {"command", "principal"}:
+                    raise ValueError("Invalid connection command")
+                _, principal = _host_prepare_payload({"request": {}, "principal": request["principal"]}, config)
+                result = connections.command(request["command"], principal)
+            _write(target, result)
+            return 0
         prepare_request = None
         prepare_principal = None
         tool_command = None
@@ -466,6 +505,10 @@ def main(
             tool_command, prepare_request, prepare_principal = _host_tool_payload(request, config)
         if prepare_principal is not None:
             plan_options = _plan_host_options(request, prepare_principal)
+        # This gate precedes all early returns and backend/ledger construction.
+        route_principal = prepare_principal or request.get("principal")
+        personal = connection_access(config, tool_command or command, route_principal)
+        personal_runner = PersonalReadRunner(personal, prepare_principal, action_token) if personal else None
         if tool_command == "open":
             # A host-configured navigation link needs neither CRM IO nor a ledger.
             _write(target, _open_result(prepare_request, config, prepare_principal))
@@ -476,7 +519,13 @@ def main(
             _write(target, tool(tool_command, prepare_request, prepare_principal,
                                 request.get("case_context"), config))
             return 0
-        backend, ledger = _runtime(config, path)
+        if personal_runner is None:
+            backend, ledger = _runtime(config, path)
+        else:
+            backend, ledger = _runtime(config, path, personal_runner=personal_runner)
+    except ConnectionBlocked as exc:
+        _write(target, {"status": "blocked", "code": exc.code})
+        return 0
     except (CliConfigurationError, LarkBackendError, OSError, TypeError, ValueError):
         result = _safe_failure(
             command,
@@ -556,6 +605,11 @@ def main(
             result = execute_claimed_approval(request, backend, ledger, config)
         else:
             result = decide_approval(request, backend, ledger, config)
+        if personal_runner is not None:
+            personal_runner.connections.check_version(personal_runner.binding)
+    except ConnectionBlocked as exc:
+        result = {"status": "blocked", "code": exc.code}
+        exit_code = 0
     except Exception:
         result = _safe_failure(
             command,
