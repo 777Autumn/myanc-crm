@@ -156,7 +156,7 @@ class CaseConfirmationTests(unittest.TestCase):
                 self.assertEqual(source, read_context['source_text'])
                 self.assertFalse(read_context['share_allowed'])
         for source in ('请看“' + name + '”，另看赵钱婚宴讨论。',
-                       '周' + name, '请看“周' + name + '”'):
+                       '周' + name, '请看“周' + name + '”', name + '二', '请查看' + name + '二'):
             with self.subTest(source=source):
                 result = self.call('case-read', {'case_name': name}, principal=self.private,
                                    context={**context, 'source_text': source})

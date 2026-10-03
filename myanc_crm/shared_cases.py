@@ -737,8 +737,9 @@ def tool(command, request, principal, context, config):
                     for left, right in (('“', '”'), ('‘', '’'), ('"', '"'), ("'", "'")):
                         mention_source = mention_source.replace(left + name + right, '\n' + name + '\n')
                     mention_source = mention_source.replace('、', '')
-                    if '婚宴' in comparison_name:
-                        ending += '(?:' + re.escape(comparison_name.split('婚宴', 1)[1]) + ')?'
+                    suffix = comparison_name.partition('婚宴')[2]
+                    if suffix:
+                        ending += '(?:' + re.escape(suffix) + r'''(?=$|[\s，,。；;：:！？!?、“”‘’"']))?'''
                 mention_pattern = (r'[^\s，,。；;：:]{1,40}?' + ending if command == 'case-read'
                                    else r'[^\s，,。；;：:]{1,40}婚宴(?!团队)')
                 mentioned = re.findall(mention_pattern, mention_source)
