@@ -136,6 +136,41 @@ class CaseConfirmationTests(unittest.TestCase):
                     **self.context, 'source_text': source, 'offer_confirmation': True})
                 self.assertEqual('needs_confirmation', result['status'], result)
 
+    def test_bound_full_name_and_exact_quotes_do_not_repeat_selection(self):
+        name = '林陈婚宴讨论'
+        context = {**self.context, 'source_text': name + '，22桌', 'offer_confirmation': True}
+        request = {**self.change(), 'case_name': name}
+        request['changes'][0]['quote'] = '22桌'
+        saved = self.call('case-update', request, principal=self.private,
+                         context=self.confirmed('case-update', request, context, 0))
+        self.assertEqual('recorded', saved['status'], saved)
+        for source in (name, '请查看' + name,
+                       '请把这轮文件作为“' + name + '”的共享版本，其他内容保留私人。',
+                       '我刚才已确认，请读取 "' + name + '" 当前的结果。'):
+            with self.subTest(source=source):
+                read_context = {**context, 'source_text': source, 'share_allowed': False}
+                result = self.call('case-read', {'case_name': name},
+                                   principal=self.private, context=read_context)
+                self.assertEqual('found', result['status'], result)
+                self.assertEqual(saved['case'], result['case'])
+                self.assertEqual(source, read_context['source_text'])
+                self.assertFalse(read_context['share_allowed'])
+        for source in ('请看“' + name + '”，另看赵钱婚宴讨论。',
+                       '周' + name, '请看“周' + name + '”'):
+            with self.subTest(source=source):
+                result = self.call('case-read', {'case_name': name}, principal=self.private,
+                                   context={**context, 'source_text': source})
+                self.assertEqual('needs_confirmation', result['status'], result)
+        source = '请把23桌记入“' + name + '”'
+        change = {**request, 'expected_revision': 1, 'changes': [dict(
+            field='桌数', value='23桌', state='proposed', quote='23桌')]}
+        pending = self.call('case-update', change, principal={**self.private, 'message_id': 'quoted-write'},
+                            context={**context, 'source_text': source})
+        self.assertEqual('needs_confirmation', pending['status'], pending)
+        unbound = self.call('case-read', {'case_name': name}, principal=self.private,
+                            context={**context, 'work_id': 'unbound-long-name', 'source_text': name})
+        self.assertEqual('needs_confirmation', unbound['status'], unbound)
+
     def test_name_separator_does_not_select_an_unbound_work(self):
         self.call('case-update', self.change())
         for principal in (self.principal, self.private):
