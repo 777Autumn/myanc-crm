@@ -27,6 +27,7 @@ class FakeCLI:
         self.fail = False
         self.login_user = "crm-manager"
         self.environments = []
+        self.scope = "auth:user.id:read base:field:read base:record:read offline_access"
 
     def __call__(self, argv, **kwargs):
         self.calls.append(argv)
@@ -41,7 +42,7 @@ class FakeCLI:
             value = dict(appId=self.app, identity="bot", verified=True,
                          identities=dict(bot=dict(available=True, verified=True),
                                          user=dict(openId=self.user, status=self.status if self.user else "missing", available=self.status == "ready" and bool(self.user),
-                                                   verified=self.status == "ready", expiresAt=stamp(self.expires),
+                                                   verified=self.status == "ready", scope=self.scope, expiresAt=stamp(self.expires),
                                                    refreshExpiresAt=stamp(self.refresh_expires))))
         elif argv[1:3] == ["auth", "login"]:
             if "--device-code" in argv:
@@ -113,6 +114,25 @@ class ConnectionTests(unittest.TestCase):
         self.assertBlocked("connection_required", lambda: self.connections.require(self.principal, self.token))
         self.assertEqual("reconnect_required", self.connections.command("check", self.principal)["status"])
 
+    def test_first_login_requests_scopes_required_by_pinned_cli_reads(self):
+        self.connections.command("connect", self.principal)
+        call = next(call for call in self.fake.calls if call[1:3] == ["auth", "login"])
+        requested = set(call[call.index("--scope") + 1].split())
+        # Observed 1.0.90 contract: bitable:app:readonly alone fails field/record commands.
+        self.assertEqual({"base:field:read", "base:record:read", "offline_access"}, requested)
+
+    def test_missing_read_scope_is_not_adopted_and_revokes_existing_work(self):
+        self.fake.user = "crm-manager"
+        self.fake.scope = "auth:user.id:read bitable:app:readonly offline_access"
+        self.assertEqual("pending", self.connections.command("connect", self.principal)["status"])
+        self.assertEqual("reconnect_required", self.connections.command("complete", self.principal)["status"])
+        self.fake.scope = "base:field:read base:record:read offline_access"
+        self.connect()
+        binding = self.connections.require(self.principal, self.token)
+        self.fake.scope = "base:field:read offline_access"
+        self.assertBlocked("connection_required", lambda: self.connections.require(self.principal, self.token))
+        self.assertBlocked("connection_session_expired", lambda: self.connections.check_version(binding))
+
     def test_wrong_scan_tenant_and_profile_replacement_are_rejected(self):
         self.connections.command("disconnect", self.principal)
         for field, value in (("user", "crm-other"), ("tenant", "other-tenant")):
@@ -164,6 +184,22 @@ class ConnectionTests(unittest.TestCase):
             return result
         self.connections.run = revoke
         self.assertBlocked("connection_session_expired", lambda: runner(["wrapper", "base", "+record-get"]))
+
+    def test_native_resource_denial_is_explicit_without_returning_cli_content(self):
+        self.connect()
+        runner = PersonalReadRunner(self.connections, self.principal, self.token)
+        original = self.connections.run
+        def denied(argv, **kwargs):
+            if argv[1] == "base":
+                return subprocess.CompletedProcess(argv, 1, "", json.dumps({"ok": False, "identity": "user",
+                    "error": {"type": "api", "subtype": "unknown", "code": 91403,
+                              "message": "untrusted-private-error-content"}}))
+            return original(argv, **kwargs)
+        self.connections.run = denied
+        self.assertBlocked("personal_read_permission_denied", lambda: runner(["wrapper", "base", "+record-get"]))
+        self.assertEqual("connected", self.connections.command("check", self.principal)["status"])
+        self.connections.run = original
+        self.assertEqual(0, runner(["wrapper", "base", "+record-get"]).returncode)
 
     def test_silent_refresh_uses_new_metadata_and_network_failure_does_not_log_out(self):
         self.connect()

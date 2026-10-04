@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 from . import core
 from .customers import STAGES
+from .connections import ConnectionBlocked
 
 
 BEIJING = timezone(timedelta(hours=8))
@@ -84,6 +85,8 @@ def customers(request, backend, ledger, config, principal, now=None):
             query["date_to"] = upper.isoformat()
         if due == "unscheduled":
             query["due"] = due
+    except ConnectionBlocked:
+        raise
     except (ValueError, TypeError, OverflowError) as exc:
         return core._blocked("invalid_customers_request", str(exc))
     except Exception:
@@ -99,6 +102,8 @@ def customers(request, backend, ledger, config, principal, now=None):
         return {"status": "found", "customers": [core._display_customer(row, backend) for row in rows],
                 "has_more": page["has_more"], "query": query, "read_at": core._iso(moment),
                 "next_request": {**query, "offset": offset + len(rows)} if page["has_more"] else None}
+    except ConnectionBlocked:
+        raise
     except Exception:
         return {"status": "unavailable", "code": "customers_read_failed"}
 
@@ -125,5 +130,7 @@ def customer_history(record_id, backend, offset=0):
         return {"history_status": "available", "history": [core._display_followup(row, backend) for row in rows],
                 "has_more": page["has_more"], "truncated": page["has_more"],
                 "next_offset": offset + len(rows) if page["has_more"] else None}
+    except ConnectionBlocked:
+        raise
     except Exception:
         return {"history_status": "unavailable", "history": None}

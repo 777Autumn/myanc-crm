@@ -70,6 +70,14 @@ isolation, not separate OS users. This does not claim equivalent Windows isolati
 The host clears CLI environment overrides and always supplies HOME and profile.
 It validates the user branch of auth status, app, tenant and open ID. A first-use
 native login provisioned by the operator can be adopted only after this verification.
+Enrollment requests `base:field:read base:record:read offline_access`, matching
+the pinned CLI's field and record read commands. Legacy `bitable:app:readonly`
+alone does not satisfy those commands. Missing scopes reject adoption and require
+reconnection; losing a required scope invalidates existing private work. Existing
+application grants can be cumulative, so inspect actual scopes rather than claiming
+that a narrow request reduced a previously broader grant. Native resource denial
+91403 returns `personal_read_permission_denied` without exposing upstream error text
+or using another identity; the same connection remains usable for permitted data.
 Wrong-account recovery invokes native logout for the failed flow's isolated store:
 CLI attempts remote token revocation before clearing that store. Verify the other
 account's real API and refresh still work; file isolation alone does not prove the

@@ -2,8 +2,10 @@
 
 import unittest
 from datetime import datetime, timezone
+from unittest import mock
 
 from myanc_crm import core, queries
+from myanc_crm.connections import ConnectionBlocked
 from test_core import PRINCIPAL, customer
 
 
@@ -87,6 +89,17 @@ class BusinessQueryTests(unittest.TestCase):
                      {"items": [customer()] * 21, "has_more": False}, {"items": [{}], "has_more": False}):
             self.backend.page = page
             self.assertEqual("unavailable", self.call({})["status"])
+
+    def test_personal_denials_and_revocation_reach_host_without_partial_results(self):
+        for code in ("personal_read_permission_denied", "connection_session_expired"):
+            with self.subTest(code=code):
+                with mock.patch.object(self.backend, "list_customers", side_effect=ConnectionBlocked(code)):
+                    with self.assertRaisesRegex(ConnectionBlocked, code):
+                        self.call({"owner": "all"})
+                with mock.patch.object(self.backend, "read_customer_history_page", side_effect=ConnectionBlocked(code)):
+                    with self.assertRaisesRegex(ConnectionBlocked, code):
+                        queries.customer_history("rec-1", self.backend)
+        self.assertEqual("found", self.call({"owner": "all"})["status"])
 
     def test_history_is_bounded_and_cross_customer_page_rejected(self):
         self.backend.page = {"items": [{"record_id": "recHistory", "customer_record_id": "rec-1",
