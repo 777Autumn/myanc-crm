@@ -28,6 +28,8 @@ class FakeCLI:
         self.login_user = "crm-manager"
         self.environments = []
         self.scope = "auth:user.id:read base:field:read base:record:read offline_access"
+        self.verify_failure = False
+        self.api_error = None
 
     def __call__(self, argv, **kwargs):
         self.calls.append(argv)
@@ -36,6 +38,9 @@ class FakeCLI:
             return subprocess.CompletedProcess(argv, 0, "1.0.90\n", "")
         if self.fail:
             raise subprocess.TimeoutExpired(argv, 10)
+        if self.api_error and argv[1] in {"api", "base"}:
+            return subprocess.CompletedProcess(argv, 1, "", json.dumps(
+                {"ok": False, "identity": "user", "error": self.api_error}))
         if argv[1:3] == ["auth", "status"]:
             if "--verify" in argv:
                 self.expires += 3600
@@ -44,6 +49,8 @@ class FakeCLI:
                                          user=dict(openId=self.user, status=self.status if self.user else "missing", available=self.status == "ready" and bool(self.user),
                                                    verified=self.status == "ready", scope=self.scope, expiresAt=stamp(self.expires),
                                                    refreshExpiresAt=stamp(self.refresh_expires))))
+            if self.verify_failure and "--verify" in argv:
+                value["identities"]["user"].update(status="verify_failed", available=False, verified=False)
         elif argv[1:3] == ["auth", "login"]:
             if "--device-code" in argv:
                 self.user = self.login_user
@@ -113,6 +120,53 @@ class ConnectionTests(unittest.TestCase):
         self.fake.status = "missing"
         self.assertBlocked("connection_required", lambda: self.connections.require(self.principal, self.token))
         self.assertEqual("reconnect_required", self.connections.command("check", self.principal)["status"])
+
+    def test_server_revocation_with_unexpired_local_token_invalidates_each_entry(self):
+        # Native CLI 1.0.90: auth status exits zero with verified bot while user
+        # verification fails; explicit user_info returns api/unknown code 20005.
+        for entry in ("status", "maintain", "read", "work-context", "file-deliver"):
+            with self.subTest(entry=entry):
+                self.fake.verify_failure, self.fake.api_error = False, None
+                self.connections.command("disconnect", self.principal)
+                self.connect()
+                token, work = self.token + entry, "private-" + entry
+                self.connections.guard("customer", self.principal, token, work)
+                binding = self.connections.require(self.principal, token)
+                runner = PersonalReadRunner(self.connections, self.principal, token)
+                self.fake.verify_failure = True
+                self.fake.api_error = {"type": "api", "subtype": "unknown", "code": 20005,
+                                       "message": "invalid access token"}
+                if entry == "status":
+                    self.assertEqual("reconnect_required", self.connections.command("status", self.principal)["status"])
+                elif entry == "maintain":
+                    self.clock = self.fake.expires - 200
+                    self.assertEqual("reconnect_required", self.connections.maintain("bot-manager")[0]["status"])
+                elif entry == "read":
+                    self.assertBlocked("connection_session_expired", lambda: runner(["wrapper", "base", "+record-get"]))
+                else:
+                    self.assertBlocked("connection_session_expired", lambda: self.connections.guard(entry, self.principal, token, work))
+                state = self.connections.command("check", self.principal)
+                self.assertEqual("reconnect_required", state["status"])
+                self.assertEqual(binding["version"] + 1, state["version"])
+                self.assertBlocked("connection_session_expired", lambda: self.connections.check_version(binding))
+                self.assertEqual("allowed", self.connections.guard("work-context", self.principal, "", "clean")["status"])
+
+    def test_failed_verification_does_not_guess_revocation_from_status_or_message(self):
+        self.connect()
+        self.connections.guard("customer", self.principal, self.token, "private")
+        original = self.connections.command("check", self.principal)
+        self.fake.verify_failure = True
+        for error in ({"type": "network", "subtype": "timeout", "message": "invalid access token"},
+                      {"type": "api", "subtype": "unknown", "code": 500, "message": "invalid access token"},
+                      {"type": "api", "subtype": "unknown", "code": "20005"}):
+            with self.subTest(error=error):
+                self.fake.api_error = error
+                self.assertBlocked("connection_temporarily_unavailable", lambda: self.connections.command("status", self.principal))
+                self.assertBlocked("connection_temporarily_unavailable", lambda: self.connections.guard("file-deliver", self.principal, self.token, "private"))
+                self.assertEqual(original, self.connections.command("check", self.principal))
+        self.fake.api_error = None
+        self.assertEqual("connected", self.connections.command("status", self.principal)["status"])
+        self.assertEqual("allowed", self.connections.guard("file-deliver", self.principal, self.token, "private")["status"])
 
     def test_first_login_requests_scopes_required_by_pinned_cli_reads(self):
         self.connections.command("connect", self.principal)

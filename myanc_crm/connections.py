@@ -176,6 +176,18 @@ class Connections:
             completed = self.run([self.cli, *args, "--profile", profile], capture_output=True,
                                  text=True, encoding="utf-8", timeout=timeout, env=env, check=False, shell=False)
             if completed.returncode:
+                # This endpoint's native 1.0.90 response distinguishes revoked
+                # user tokens from transport failures. Never parse message text.
+                if args == ["api", "GET", "/open-apis/authen/v1/user_info", "--as", "user"]:
+                    try:
+                        data = json.loads(completed.stderr)
+                    except (ValueError, TypeError):
+                        data = None
+                    error = data.get("error") if isinstance(data, dict) else None
+                    if isinstance(error, dict) and data.get("ok") is False and data.get("identity") == "user":
+                        if (error.get("type") == "api" and type(error.get("code")) is int and error["code"] == 20005
+                                or error.get("type") == "authentication" and error.get("subtype") == "token_missing"):
+                            raise ConnectionBlocked("connection_required")
                 raise ConnectionBlocked("connection_temporarily_unavailable")
             value = json.loads(completed.stdout)
             if not isinstance(value, dict):
@@ -230,7 +242,14 @@ class Connections:
         return user
 
     def _verify_identity(self, actor):
-        self.metadata(actor, verify=True)
+        try:
+            self.metadata(actor, verify=True)
+        except ConnectionBlocked as exc:
+            if exc.code != "connection_temporarily_unavailable":
+                raise
+            # --verify collapses network errors and revoked tokens into the same
+            # status. Check local binding, then use explicit user API evidence.
+            self.metadata(actor)
         info = self._cli(actor["connection_profile"],
                          ["api", "GET", "/open-apis/authen/v1/user_info", "--as", "user"])
         body = info.get("data", {})
@@ -409,6 +428,9 @@ class Connections:
         self.check_version(bound, require_connected=bool(bound["requires_connection"]))
         if command not in private_commands:
             raise ConnectionBlocked("personal_work_sharing_denied")
+        if bound["requires_connection"]:
+            self.command("status", principal)
+            self.check_version(bound)
         return {"status": "allowed", "private": True}
 
     def users(self):
@@ -477,6 +499,10 @@ class PersonalReadRunner:
         self.connections.require(self.principal, self.token)
         self.connections.check_version(self.binding)
         if completed.returncode:
+            # A failed resource call may expose revocation while local expiry
+            # metadata still says ready. Use the same identity check as status.
+            self.connections.command("status", self.principal)
+            self.connections.check_version(self.binding)
             try:
                 envelope = json.loads(completed.stderr)
             except (ValueError, TypeError):
