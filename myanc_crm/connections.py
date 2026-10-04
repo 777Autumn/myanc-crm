@@ -23,6 +23,7 @@ from . import core, write_locks
 
 READ_COMMANDS = frozenset({"customer", "customers"})
 CLI_READ_COMMANDS = frozenset({"+field-list", "+record-list", "+record-get", "+record-search"})
+READ_SCOPES = frozenset({"base:field:read", "base:record:read", "offline_access"})
 ROUTE_FIELDS = ("platform", "user_id", "chat_id", "project")
 
 
@@ -221,6 +222,9 @@ class Connections:
             raise ConnectionBlocked("connection_identity_mismatch")
         if not user.get("available") or (verify and user.get("verified") is not True):
             raise ConnectionBlocked("connection_temporarily_unavailable")
+        scopes = user.get("scope")
+        if not isinstance(scopes, str) or not READ_SCOPES.issubset(scopes.split()):
+            raise ConnectionBlocked("connection_required")
         _timestamp(user.get("expiresAt"))
         _timestamp(user.get("refreshExpiresAt"))
         return user
@@ -299,7 +303,7 @@ class Connections:
             if check.get("appId") != self.options["app_id"] or check.get("identities", {}).get("user", {}).get("openId"):
                 raise ConnectionBlocked("connection_identity_mismatch")
         data = self._cli(actor["connection_profile"], ["auth", "login", "--no-wait", "--json",
-                         "--scope", "bitable:app:readonly offline_access"])
+                         "--scope", " ".join(sorted(READ_SCOPES))])
         uri = data.get("verification_url")
         parsed = urlsplit(uri or "")
         if parsed.scheme != "https" or parsed.username or parsed.password or not (
@@ -469,6 +473,23 @@ class PersonalReadRunner:
         self.connections.check_version(self.binding)
         kwargs["env"] = self.connections.environment(self.binding["profile"])
         completed = self.connections.run([self.connections.cli, *args, "--profile", self.binding["profile"], "--as", "user"], **kwargs)
-        self.connections.metadata(self.connections.actor(self.principal))
         self.connections.check_version(self.binding)
+        self.connections.require(self.principal, self.token)
+        self.connections.check_version(self.binding)
+        if completed.returncode:
+            try:
+                envelope = json.loads(completed.stderr)
+            except (ValueError, TypeError):
+                envelope = None
+            error = envelope.get("error") if isinstance(envelope, dict) else None
+            if isinstance(error, dict):
+                if error.get("type") == "authorization" and error.get("subtype") == "missing_scope":
+                    with self.connections.locked(self.principal) as db:
+                        row = self.connections._row(db, self.principal)
+                        if row["version"] != self.binding["version"] or row["status"] != "connected":
+                            raise ConnectionBlocked("connection_session_expired")
+                        self.connections._set(db, row, "reconnect_required", invalidate=True)
+                    raise ConnectionBlocked("connection_required")
+                if error.get("type") == "api" and error.get("code") == 91403:
+                    raise ConnectionBlocked("personal_read_permission_denied")
         return completed
