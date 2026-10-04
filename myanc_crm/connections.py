@@ -473,6 +473,7 @@ class PersonalReadRunner:
         self.connections.check_version(self.binding)
         kwargs["env"] = self.connections.environment(self.binding["profile"])
         completed = self.connections.run([self.connections.cli, *args, "--profile", self.binding["profile"], "--as", "user"], **kwargs)
+        self.connections.check_version(self.binding)
         self.connections.require(self.principal, self.token)
         self.connections.check_version(self.binding)
         if completed.returncode:
