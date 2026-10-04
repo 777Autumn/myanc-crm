@@ -473,7 +473,7 @@ class PersonalReadRunner:
         self.connections.check_version(self.binding)
         kwargs["env"] = self.connections.environment(self.binding["profile"])
         completed = self.connections.run([self.connections.cli, *args, "--profile", self.binding["profile"], "--as", "user"], **kwargs)
-        self.connections.metadata(self.connections.actor(self.principal))
+        self.connections.require(self.principal, self.token)
         self.connections.check_version(self.binding)
         if completed.returncode:
             try:
@@ -483,6 +483,11 @@ class PersonalReadRunner:
             error = envelope.get("error") if isinstance(envelope, dict) else None
             if isinstance(error, dict):
                 if error.get("type") == "authorization" and error.get("subtype") == "missing_scope":
+                    with self.connections.locked(self.principal) as db:
+                        row = self.connections._row(db, self.principal)
+                        if row["version"] != self.binding["version"] or row["status"] != "connected":
+                            raise ConnectionBlocked("connection_session_expired")
+                        self.connections._set(db, row, "reconnect_required", invalidate=True)
                     raise ConnectionBlocked("connection_required")
                 if error.get("type") == "api" and error.get("code") == 91403:
                     raise ConnectionBlocked("personal_read_permission_denied")

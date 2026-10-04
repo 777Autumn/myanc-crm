@@ -201,6 +201,31 @@ class ConnectionTests(unittest.TestCase):
         self.connections.run = original
         self.assertEqual(0, runner(["wrapper", "base", "+record-get"]).returncode)
 
+    def test_scope_loss_during_read_invalidates_private_work_even_with_stale_metadata(self):
+        for stale_metadata in (False, True):
+            with self.subTest(stale_metadata=stale_metadata):
+                self.fake.scope = "base:field:read base:record:read offline_access"
+                self.connect()
+                token = self.token + str(stale_metadata)
+                work = "private-work-" + str(stale_metadata)
+                self.connections.guard("customer", self.principal, token, work)
+                runner = PersonalReadRunner(self.connections, self.principal, token)
+                original = self.connections.run
+                def lose_scope(argv, **kwargs):
+                    if argv[1] == "base":
+                        if not stale_metadata:
+                            self.fake.scope = "base:field:read offline_access"
+                        return subprocess.CompletedProcess(argv, 3, "", json.dumps({"ok": False,
+                            "error": {"type": "authorization", "subtype": "missing_scope"}}))
+                    return original(argv, **kwargs)
+                self.connections.run = lose_scope
+                try:
+                    self.assertBlocked("connection_required", lambda: runner(["wrapper", "base", "+record-get"]))
+                    self.assertEqual("reconnect_required", self.connections.command("check", self.principal)["status"])
+                    self.assertBlocked("connection_session_expired", lambda: self.connections.guard("file-deliver", self.principal, token, work))
+                finally:
+                    self.connections.run = original
+
     def test_silent_refresh_uses_new_metadata_and_network_failure_does_not_log_out(self):
         self.connect()
         self.clock = self.fake.expires - 200
