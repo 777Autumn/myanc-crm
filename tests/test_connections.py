@@ -354,6 +354,57 @@ class ConnectionTests(unittest.TestCase):
         config["allowed_actors"]["another"] = dict(config["allowed_actors"]["bot-manager"])
         self.assertBlocked("connection_profile_shared", lambda: Connections(config))
 
+    def test_connection_lock_contention_is_temporary_and_keeps_generation(self):
+        from myanc_crm import write_locks
+        self.connect()
+        before = self.connections.command("check", self.principal)
+        # Real OS lock, short deadline; the release check also uses the 10s default.
+        with write_locks.acquire(self.connections.path.parent, ["connection-" + self.connections.key(self.principal)]):
+            with mock.patch.object(write_locks, "WRITE_WAIT_SECONDS", 0.05):
+                self.assertBlocked("connection_temporarily_unavailable",
+                                   lambda: self.connections.command("status", self.principal))
+        self.assertEqual(before, self.connections.command("check", self.principal))
+        with mock.patch.object(write_locks, "acquire", side_effect=ValueError("unsafe lock")):
+            with self.assertRaisesRegex(ValueError, "unsafe lock"):
+                self.connections.command("status", self.principal)
+
+    def test_shared_reads_bind_generation_without_becoming_private(self):
+        self.config["personal_connections"]["resource_mode"] = "shared"
+        self.connect()
+        self.assertBlocked("personal_work_binding_required",
+                           lambda: self.connections.guard("customers", self.principal, self.token, ""))
+        result = self.connections.guard("customers", self.principal, self.token, "shared-work")
+        self.assertFalse(result["private"])
+        self.connections.guard("case-publish", self.principal, "", "shared-work")
+        self.connections.command("disconnect", self.principal)
+        self.assertBlocked("connection_session_expired",
+                           lambda: self.connections.guard("work-resume", self.principal, "", "shared-work"))
+        self.connect()
+        reopened = Connections(self.config, run=self.fake, now=lambda: self.clock)
+        for command in ("customer", "customers", "file-deliver", "work-resume", "case-publish"):
+            self.assertBlocked("connection_session_expired",
+                               lambda: reopened.guard(command, self.principal, self.token + "new", "shared-work"))
+        self.assertFalse(reopened.guard("customers", self.principal, self.token + "new", "new-work")["private"])
+        self.assertEqual("allowed", reopened.guard("work-resume", self.principal, "", "clean")["status"])
+
+    def test_work_privacy_only_increases_and_old_rows_remain_private(self):
+        self.config["personal_connections"]["resource_mode"] = "shared"
+        self.connect()
+        self.connections.guard("customers", self.principal, self.token, "mixed")
+        self.connections.guard("knowledge_read", self.principal, self.token, "mixed", "management")
+        self.assertTrue(self.connections.guard("customers", self.principal, self.token, "mixed")["private"])
+        self.assertBlocked("personal_work_sharing_denied",
+                           lambda: self.connections.guard("case-publish", self.principal, "", "mixed"))
+        binding = self.connections.require(self.principal, self.token)
+        with self.connections.database() as db:
+            db.execute("INSERT INTO connection_work VALUES(?,?,?,1)",
+                       ("legacy", binding["subject"], binding["version"]))
+            db.execute("INSERT INTO connection_work VALUES(?,?,?,1)", ("expired", binding["subject"], -1))
+            db.commit()
+        self.assertTrue(self.connections.guard("customers", self.principal, self.token, "legacy")["private"])
+        self.assertBlocked("connection_session_expired",
+                           lambda: self.connections.guard("customers", self.principal, self.token, "expired"))
+
     def test_successful_reconnect_delivers_generation_and_expires_both_private_works(self):
         self.connect()
         for work in ("private-one", "private-two"):

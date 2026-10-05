@@ -128,6 +128,8 @@ class Connections:
                            "subject TEXT NOT NULL, version INTEGER NOT NULL)")
                 db.execute("CREATE TABLE IF NOT EXISTS connection_work (work TEXT PRIMARY KEY, "
                            "subject TEXT NOT NULL, version INTEGER NOT NULL, requires_connection INTEGER NOT NULL)")
+                db.execute("CREATE TABLE IF NOT EXISTS connection_work_scope (work TEXT PRIMARY KEY, "
+                           "private INTEGER NOT NULL CHECK(private IN (0,1)))")
                 db.commit()
                 yield db
             finally:
@@ -136,8 +138,13 @@ class Connections:
     @contextmanager
     def locked(self, principal):
         with self.database() as db:
-            with write_locks.acquire(self.path.parent, ["connection-" + self.key(principal)]):
-                yield db
+            try:
+                with write_locks.acquire(self.path.parent, ["connection-" + self.key(principal)]):
+                    yield db
+            except write_locks.WriteBlocked as exc:
+                if exc.code == "crm_write_busy":
+                    raise ConnectionBlocked("connection_temporarily_unavailable") from None
+                raise
 
     def _row(self, db, principal):
         actor = self.actor(principal)
@@ -393,45 +400,61 @@ class Connections:
             if not row or (require_connected and row["status"] != "connected") or row["version"] != binding["version"]:
                 raise ConnectionBlocked("connection_session_expired")
 
+    def _bind_work(self, principal, work_id, *, private, requires_connection, binding=None):
+        if not isinstance(work_id, str) or not work_id:
+            raise ConnectionBlocked("personal_work_binding_required")
+        with self.locked(principal) as db:
+            row = self._row(db, principal)
+            if binding and (row["status"] != "connected" or row["subject"] != binding["subject"]
+                            or row["version"] != binding["version"]):
+                raise ConnectionBlocked("connection_session_expired")
+            inserted = db.execute("INSERT OR IGNORE INTO connection_work VALUES(?,?,?,?)",
+                                  (work_id, row["subject"], row["version"], int(requires_connection))).rowcount
+            bound = db.execute("SELECT * FROM connection_work WHERE work=?", (work_id,)).fetchone()
+            if bound["subject"] != row["subject"]:
+                raise ConnectionBlocked("personal_work_audience_denied")
+            if bound["version"] != row["version"]:
+                raise ConnectionBlocked("connection_session_expired")
+            # Missing scope belongs to the old private-only schema. Never relabel it.
+            if inserted:
+                db.execute("INSERT INTO connection_work_scope VALUES(?,?)", (work_id, int(private)))
+            elif private:
+                db.execute("INSERT OR REPLACE INTO connection_work_scope VALUES(?,1)", (work_id,))
+            if requires_connection:
+                db.execute("UPDATE connection_work SET requires_connection=1 WHERE work=?", (work_id,))
+            db.commit()
+
     def guard(self, command, principal, token, work_id, knowledge_subject=""):
         audience = self.route(principal)
         private_commands = {*READ_COMMANDS, "work-resume", "work-context", "file-deliver", "file-status",
                             "knowledge_catalog", "knowledge_search", "knowledge_read"}
-        # A whole restricted source is private. This persistent mark follows its
-        # existing work ID across process restarts, new tokens and config changes.
+        # Lifecycle dependence applies to every personal read, even shared data.
         if command in READ_COMMANDS and audience == "private":
+            if not work_id:
+                raise ConnectionBlocked("personal_work_binding_required")
             binding = self.require(principal, token)
-            if self.options["resource_mode"] == "restricted":
-                if not work_id:
-                    raise ConnectionBlocked("personal_work_binding_required")
-                with self.database() as db:
-                    db.execute("INSERT OR IGNORE INTO connection_work VALUES(?,?,?,1)",
-                               (work_id, binding["subject"], binding["version"]))
-                    db.execute("UPDATE connection_work SET requires_connection=1 WHERE work=?", (work_id,))
-                    db.commit()
+            self._bind_work(principal, work_id, private=self.options["resource_mode"] == "restricted",
+                            requires_connection=True, binding=binding)
         if command in {"knowledge_catalog", "knowledge_search", "knowledge_read"} and knowledge_subject != "team":
             # The existing knowledge host reserves team for universally shared
             # pages. Other subjects stay private even if their reader can see them.
             if audience != "private" or not work_id:
                 raise ConnectionBlocked("personal_work_audience_denied")
-            with self.locked(principal) as db:
-                row = self._row(db, principal)
-                db.execute("INSERT OR IGNORE INTO connection_work VALUES(?,?,?,0)",
-                           (work_id, row["subject"], row["version"]))
-                db.commit()
+            self._bind_work(principal, work_id, private=True, requires_connection=False)
         with self.database() as db:
-            bound = db.execute("SELECT * FROM connection_work WHERE work=?", (work_id,)).fetchone()
+            bound = db.execute("SELECT w.*, COALESCE(s.private,1) AS private FROM connection_work w "
+                               "LEFT JOIN connection_work_scope s ON w.work=s.work WHERE w.work=?", (work_id,)).fetchone()
         if not bound:
             return {"status": "allowed"}
         if audience != "private" or bound["subject"] != self.key(principal):
             raise ConnectionBlocked("personal_work_audience_denied")
         self.check_version(bound, require_connected=bool(bound["requires_connection"]))
-        if command not in private_commands:
+        if bound["private"] and command not in private_commands:
             raise ConnectionBlocked("personal_work_sharing_denied")
         if bound["requires_connection"]:
             self.command("status", principal)
             self.check_version(bound)
-        return {"status": "allowed", "private": True}
+        return {"status": "allowed", "private": bool(bound["private"])}
 
     def users(self):
         return list(dict.fromkeys(route["user_id"] for route in self.options["routes"] if route["audience"] == "private"))
