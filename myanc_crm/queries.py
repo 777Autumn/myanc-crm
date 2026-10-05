@@ -28,7 +28,7 @@ def _boundary(value, name):
     return core._parse_time(value, name).astimezone(BEIJING)
 
 
-def customers(request, backend, ledger, config, principal, now=None):
+def customers(request, backend, ledger, config, principal, now=None, *, assignee_lookup=None):
     """Read 20 customers; next_request freezes relative dates for later pages."""
     try:
         principal = core._principal(principal)
@@ -68,7 +68,7 @@ def customers(request, backend, ledger, config, principal, now=None):
             person = ledger.get_assignee(ref, principal)
             if person is None:
                 raise ValueError("owner_ref is not verified for this conversation")
-            current = backend.get_assignee(person["id"])
+            current = (assignee_lookup or backend.get_assignee)(person["id"])
             if current is None or current.get("id") != person["id"] or current.get("name") != person["name"]:
                 raise ValueError("the verified owner changed; resolve again")
             owner_id = person["id"]

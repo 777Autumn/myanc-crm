@@ -103,8 +103,20 @@ blocked, including delayed confirmation callbacks. Ordinary unmarked work keeps
 the existing project handoff and approval paths. To start an unrelated shared task,
 start a new work using the existing **换个事** command.
 
-Disconnect/rebind increments the generation. Old private work cannot resume or
-publish; dependent active sessions are cancelled. Per-person maintenance is due at
+Every personal customer read binds its host work to the connection generation,
+including reads of shared CRM. The binding does not by itself make shared data
+private; restricted CRM and non-team knowledge only increase the work's privacy.
+Old four-column bindings without a scope record remain private. Shared owner-ref
+queries may use the existing app for principal-scoped personnel verification;
+customer data still uses the person's CLI, never an application fallback.
+
+Disconnect/rebind increments the generation. Old dependent work cannot resume or
+publish; dependent active sessions are cancelled. Expired host sessions retain
+their native IDs as tombstones, so deletion, switching or a new token cannot
+reattach the old context. New work and previously authorized shared publications
+keep their existing behavior. Lock contention is temporary: block the current
+operation but preserve the connection generation and queued work.
+Per-person maintenance is due at
 access expiry minus four minutes, uses `auth status --verify --json`, and rereads
 metadata because CLI 1.0.90 can report the pre-refresh expiry. Transient failures
 back off. Current generations, including successful reconnects, are repeatably
@@ -116,8 +128,10 @@ login and a persisted verifying state instead of consuming the same code again.
 
 Follow [RELEASE.md](RELEASE.md) and [MAINTENANCE_START.md](MAINTENANCE_START.md).
 Keep business ledgers, connection registry and rotated native credentials during
-code rollback. Disable the new route before restoring compatible code; do not restore
-an old user token snapshot. Registry versions are local implementation state, not
+code rollback. Preserve the fixed connection/session guards and expiration marks;
+otherwise stop the affected private entrances before restoring code. Do not remove
+the connection policy or restore an old registry/session/token snapshot. Registry
+versions are local implementation state, not
 customer organizational policy.
 
 Required evidence remains separate: permission logic, real model, real Feishu and
@@ -127,3 +141,27 @@ search/all/exact ID and role-claim bypasses; group/summary/file/handoff containm
 per-account refresh, revocation, offline retries and restart; and paired normal
 CRM, knowledge, files and shared project journeys. Simulated annual time is not a
 year of observed operation. Resource ACL results do not establish row/column ACLs.
+
+## Historical work closeout
+
+`personal_connection_migration.py` contains offline planning/registry primitives,
+not an automatic startup migration. The reviewed maintenance caller must stop and
+drain the gateway, verify protected route/session mappings and frozen input hashes,
+back up state, apply the registry transaction, then atomically install the planned
+session snapshots with original ownership/modes. Do not start after partial failure.
+Retries require the original frozen plan: only matching existing tombstones are
+idempotent; changed identities/generations are conflicts.
+
+The approved two-account closeout preserves existing bindings, permanently expires
+unbound work whose authority cannot be established, and marks context-bearing
+private sessions without a file work as expired. Positively attributed orphan
+native IDs become expired Session placeholders, never new file work. Keep the
+old current/past native IDs and business history. Remove only expired active-session
+pointers so the next new request starts clean; explicit old-message recovery is
+rejected. No files, approvals, publications, business ledgers or CLI tokens are deleted.
+
+Knowledge supports two to five members with exactly two protected entrances each.
+Check the full gateway principal/session/project mapping and complete subject
+policy for every entrant. Five-person synthetic tests do not establish five live
+authorizations; actual acceptance uses the manager and test accounts. Each future
+member needs their own mapping, first authorization and real normal/denied checks.

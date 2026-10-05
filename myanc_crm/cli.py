@@ -133,7 +133,11 @@ def _runtime(config: Mapping[str, Any], config_path: Path, *, personal_runner=No
             "CRM ledger_path must be outside the Claude working directory."
         )
     ledger_path.parent.mkdir(parents=True, exist_ok=True)
-    backend = LarkCliBackend(
+    return _backend(config, personal_runner=personal_runner), Ledger(ledger_path)
+
+
+def _backend(config, *, personal_runner=None):
+    return LarkCliBackend(
         wrapper_path=_required_text(config, "wrapper_path"),
         base_token=_required_text(config, "base_token"),
         customer_table_id=_required_text(config, "customer_table_id"),
@@ -142,7 +146,6 @@ def _runtime(config: Mapping[str, Any], config_path: Path, *, personal_runner=No
         fields=_required_mapping(config, "fields"),
         **({"runner": personal_runner, "identity": "user"} if personal_runner is not None else {}),
     )
-    return backend, Ledger(ledger_path)
 
 
 def _read_command(stream: TextIO) -> Mapping[str, Any]:
@@ -540,7 +543,11 @@ def main(
             result = _customer_result(prepare_request, backend, prepare_principal, ledger)
         elif tool_command == "customers":
             from .queries import customers
-            result = customers(prepare_request, backend, ledger, config, prepare_principal)
+            # Personnel verification may use the existing shared app; every
+            # customer read stays on the requesting person's fixed CLI identity.
+            lookup = (_backend(config).get_assignee if personal_runner is not None
+                      and personal.options["resource_mode"] == "shared" and "owner_ref" in prepare_request else None)
+            result = customers(prepare_request, backend, ledger, config, prepare_principal, assignee_lookup=lookup)
         elif tool_command == "result":
             result = _change_result(prepare_request, prepare_principal, ledger)
         elif tool_command == "assignee":

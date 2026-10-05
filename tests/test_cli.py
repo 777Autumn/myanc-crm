@@ -94,6 +94,68 @@ class CliBoundaryTests(unittest.TestCase):
 
         self.assertNotEqual(attacker_path.resolve(), selected)
 
+    def test_personal_owner_ref_uses_host_contact_lookup_but_user_customer_reads(self):
+        from test_connections import ConnectionTests
+        from test_queries import QueryBackend
+        from test_lark import CUSTOMER_FIELD_IDS, FOLLOWUP_FIELD_IDS, completed
+        from myanc_crm import core
+        from myanc_crm.lark import LarkCliBackend
+        fixture = ConnectionTests()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        fixture.connect()
+        fixture.config["personal_connections"]["resource_mode"] = "shared"
+        self.config.update(fixture.config)
+        self.config.update(customer_table_id="tblCustomers", followup_table_id="tblFollowups",
+                           fields={"customers": CUSTOMER_FIELD_IDS, "followups": FOLLOWUP_FIELD_IDS})
+        self.config_path.write_text(json.dumps(self.config), encoding="utf-8")
+        person = QueryBackend().person
+        ledger = core.Ledger(self.ledger_path)
+        try:
+            ref = ledger.remember_assignee(fixture.principal, person)
+        finally:
+            ledger.close()
+        contact_calls, record_calls = [], []
+
+        def contact(argv, **kwargs):
+            contact_calls.append(argv)
+            self.assertEqual(["contact", "+get-user"], argv[1:3])
+            value = {"user": {"open_id": person["id"], "name": person["name"],
+                              "status": {"is_activated": True, "is_frozen": False, "is_resigned": False}}}
+            return completed(value)
+
+        def backend(**kwargs):
+            kwargs.setdefault("runner", contact)
+            return LarkCliBackend(**kwargs)
+
+        def read(backend, **kwargs):
+            result = backend.runner(["wrapper", "base", "+record-list"])
+            self.assertEqual(0, result.returncode)
+            record_calls.append(kwargs)
+            return QueryBackend().page
+
+        with mock.patch.object(cli, "connection_access", return_value=fixture.connections), \
+             mock.patch.object(cli, "LarkCliBackend", side_effect=backend), \
+             mock.patch.object(LarkCliBackend, "list_customers", read):
+            for request in ({"owner_ref": ref}, {"owner": "me"}, {"owner": "all"}):
+                code, result = self.run_cli(["host-tool"], json.dumps(dict(command="customers", request=request,
+                                                                         principal=fixture.principal)), host=True)
+                self.assertEqual((0, "found"), (code, result["status"]), result)
+            self.assertEqual([person["id"], "crm-manager", None], [r["owner_id"] for r in record_calls])
+            self.assertEqual(1, len(contact_calls))
+            record_calls.clear()
+            for principal, request in ((dict(fixture.principal, chat_id="other"), {"owner_ref": ref}),
+                                       (fixture.principal, {"owner_ref": "forged"})):
+                _, result = self.run_cli(["host-tool"], json.dumps(dict(command="customers", request=request,
+                                                                        principal=principal)), host=True)
+                self.assertEqual("blocked", result["status"])
+            self.assertEqual([], record_calls)
+            self.assertEqual(1, len(contact_calls))
+        self.assertFalse(any(call[1] == "contact" for call in fixture.fake.calls))
+        records = [call for call in fixture.fake.calls if call[1] == "base"]
+        self.assertEqual(3, len(records))
+        self.assertTrue(all(call[-4:] == ["--profile", "anc-user-manager", "--as", "user"] for call in records))
+
     def test_personal_connection_host_endpoints_require_host_secret(self):
         for command in ("host-connection", "host-connection-config", "host-connection-guard", "host-connection-tick"):
             with self.subTest(command=command):
