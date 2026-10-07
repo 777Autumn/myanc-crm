@@ -1,0 +1,26 @@
+[
+  {
+    "table": "banquets",
+    "name": "展示·记录ID",
+    "type": "formula",
+    "expression": "RECORD_ID()"
+  },
+  {
+    "table": "handoffs",
+    "name": "展示·婚宴ID",
+    "type": "formula",
+    "expression": "[关联婚宴].[展示·记录ID]"
+  },
+  {
+    "table": "handoffs",
+    "name": "展示·版本判定",
+    "type": "formula",
+    "expression": "IFERROR(IFS(OR([展示·婚宴ID].COUNTA()!=1,[签单交接（演练）].COUNTIF(AND(CurrentValue.[展示·婚宴ID].CONTAIN([展示·婚宴ID].FIRST()),OR(CurrentValue.[展示·婚宴ID].COUNTA()!=1,NOT(ISNUMBER(CurrentValue.[交接版本])),CurrentValue.[交接版本]<1,MOD(CurrentValue.[交接版本],1)!=0)))>0,[签单交接（演练）].FILTER(CurrentValue.[展示·婚宴ID].CONTAIN([展示·婚宴ID].FIRST())).[交接版本].UNIQUE().COUNTA()!=[签单交接（演练）].COUNTIF(CurrentValue.[展示·婚宴ID].CONTAIN([展示·婚宴ID].FIRST()))),\"异常\",[交接版本]=[签单交接（演练）].FILTER(CurrentValue.[展示·婚宴ID].CONTAIN([展示·婚宴ID].FIRST())).[交接版本].MAX(),\"当前\",TRUE(),\"历史\"),\"异常\")"
+  },
+  {
+    "table": "banquets",
+    "name": "展示·交接状态",
+    "type": "formula",
+    "expression": "IFERROR(IFS([签单交接（演练）].COUNTIF(CurrentValue.[展示·婚宴ID].CONTAIN([展示·记录ID]))=0,\"未提交\",[签单交接（演练）].COUNTIF(AND(CurrentValue.[展示·婚宴ID].CONTAIN([展示·记录ID]),CurrentValue.[展示·版本判定]=\"异常\"))>0,\"异常\",[签单交接（演练）].COUNTIF(AND(CurrentValue.[展示·婚宴ID].CONTAIN([展示·记录ID]),CurrentValue.[展示·版本判定]=\"当前\"))!=1,\"异常\",NOT(LIST(\"待接手\",\"已接手\",\"已退回\").CONTAIN([签单交接（演练）].FILTER(AND(CurrentValue.[展示·婚宴ID].CONTAIN([展示·记录ID]),CurrentValue.[展示·版本判定]=\"当前\")).[确认状态].LISTCOMBINE().ARRAYJOIN(\"\"))),\"异常\",TRUE(),[签单交接（演练）].FILTER(AND(CurrentValue.[展示·婚宴ID].CONTAIN([展示·记录ID]),CurrentValue.[展示·版本判定]=\"当前\")).[确认状态].LISTCOMBINE().ARRAYJOIN(\"\")),\"异常\")"
+  }
+]

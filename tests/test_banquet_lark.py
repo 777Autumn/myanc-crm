@@ -47,6 +47,13 @@ class BanquetAdapterTests(unittest.TestCase):
             self.schema['tblBanquets']['关联客户']['link_table']='tblOther'
             with self.assertRaises(ValueError):self.store.read_schema()
 
+    def test_display_formulas_do_not_change_approval_schema(self):
+        with mock.patch.object(self.backend,'_read_table_schema',side_effect=lambda table,_:copy.deepcopy(self.schema[table])):
+            before=self.store.read_schema()
+            for table in ('tblBanquets','tblHandoffs'):
+                self.schema[table]['展示·状态']={'field_id':'fldDisplay','type':'formula','name':'展示·状态'}
+            self.assertEqual(before,self.store.read_schema())
+
     def test_workbench_selects_configured_actor_and_rejects_other_resource(self):
         config=copy.deepcopy(CONFIG)
         actor=config['allowed_actors'][PRINCIPAL['user_id']]['feishu_user_id']
@@ -57,6 +64,11 @@ class BanquetAdapterTests(unittest.TestCase):
         result=banquet.open_workbench({'target':'banquet-mine'},config,PRINCIPAL)
         self.assertIn('view=vewMine',result['url'])
         self.assertEqual('blocked',banquet.open_workbench({'target':'handoff-mine'},config,PRINCIPAL)['status'])
+        config['banquet_workbench'].update({'handoff-pending':'vewPending','handoff-mine':{actor:'vewCurrent'}})
+        pending=banquet.open_workbench({'target':'handoff-pending'},config,PRINCIPAL)
+        mine=banquet.open_workbench({'target':'handoff-mine'},config,PRINCIPAL)
+        self.assertIn('table=tblBanquets&view=vewPending',pending['url'])
+        self.assertIn('table=tblHandoffs&view=vewCurrent',mine['url'])
         config['banquet_workbench']['base_token']='anotherBase'
         with self.assertRaises(ValueError):banquet.open_workbench({'target':'banquet-mine'},config,PRINCIPAL)
 

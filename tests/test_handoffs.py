@@ -4,11 +4,13 @@ import sqlite3
 import tempfile
 import unittest
 from datetime import timedelta
+from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
 from myanc_crm import core, handoffs
+from myanc_crm.connections import Connections
 from test_core import NOW, PRINCIPAL, TOKEN
 import test_banquet as sales
 
@@ -151,6 +153,58 @@ class HandoffJourneyTests(unittest.TestCase):
         self.current_version = 2
         self.assertEqual('failed', self.decide(staged)['status'])
         self.assertIsNone(handoffs.latest(self.store, self.business))
+
+    def _check_connection_after_last_shared_read(self, command):
+        if command != 'stage-handoff-submit':
+            self.decide(self.proposal())
+        principal = PRINCIPAL if command == 'stage-handoff-submit' else self.recipient
+        fields = {} if command == 'stage-handoff-submit' else {'version': 1}
+        if command == 'stage-handoff-return':
+            fields['reason'] = '补充菜单'
+        # Use the real version guard and committed database transitions; only
+        # Feishu IO is simulated. The shared final read invalidates the binding.
+        db = sqlite3.connect(':memory:')
+        self.addCleanup(db.close)
+        db.row_factory = sqlite3.Row
+        db.execute('CREATE TABLE connections(subject TEXT, version INT, status TEXT)')
+        db.execute("INSERT INTO connections VALUES('owner',1,'connected')")
+        db.commit()
+        connection = Connections.__new__(Connections)
+        @contextmanager
+        def database():
+            yield db
+        connection.database = database
+        self.backend.runner.connections = connection
+        for version, status in ((2, 'disconnected'), (2, 'connected'), (1, 'connected')):
+            with self.subTest(command=command, version=version, status=status):
+                db.execute("UPDATE connections SET version=1, status='connected'")
+                db.commit()
+                staged = self.proposal(command, principal, **fields)
+                writes = len(self.store.writes)
+                writer = mock.Mock(wraps=self.store)
+                def final_read(kind):
+                    db.execute('UPDATE connections SET version=?, status=?', (version, status))
+                    db.commit()
+                    return self.store.list(kind)
+                writer.list.side_effect = final_read
+                with mock.patch.object(sales.banquet, 'Store', side_effect=[self.store, writer]):
+                    receipt = self.decide(staged, principal)
+                valid = version == 1
+                self.assertEqual('verified' if valid else 'failed', receipt['status'])
+                self.assertEqual(writes + int(valid), len(self.store.writes))
+                replay = handoffs.apply(self.ledger.get(staged['change_id']), self.backend,
+                    self.ledger, NOW, personal_backend=self.backend, files_verified=True)
+                self.assertTrue(replay['replayed'])
+                self.assertEqual(writes + int(valid), len(self.store.writes))
+
+    def test_submit_rechecks_connection_after_last_shared_read(self):
+        self._check_connection_after_last_shared_read('stage-handoff-submit')
+
+    def test_accept_rechecks_connection_after_last_shared_read(self):
+        self._check_connection_after_last_shared_read('stage-handoff-accept')
+
+    def test_return_rechecks_connection_after_last_shared_read(self):
+        self._check_connection_after_last_shared_read('stage-handoff-return')
 
     def test_lost_write_response_recovers_submit_and_accept_without_rewriting(self):
         write = self.store.write

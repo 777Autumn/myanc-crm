@@ -221,6 +221,7 @@ def apply(staged, backend, ledger, moment, *, personal_backend=None, files_verif
             writer = banquet.Store(backend)
             if writer.read_schema() != store.read_schema() or latest(writer, business['record_id']) != before:
                 return finish('replan_required', 'handoff_scope_changed')
+            personal_backend.runner.connections.check_version(staged['connection_binding'])
         except Exception:
             return finish('failed', 'prewrite_read_failed')
         identifier = None if submit else before['record_id']

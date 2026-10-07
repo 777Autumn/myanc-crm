@@ -67,7 +67,7 @@ def open_workbench(request, config, principal):
     parts = urlsplit(lark._base_url(config['base_url']))
     if parts.path.rstrip('/') != '/base/' + config['base_token']:
         raise ValueError('Workbench URL belongs to another Base.')
-    table = schema['handoff_table_id'] if target.startswith('handoff-') else schema['table_id']
+    table = schema['handoff_table_id'] if target == 'handoff-mine' else schema['table_id']
     url = urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode({'table': table, 'view': view}), ''))
     return {'status': 'available', 'target': target, 'label': labels[target], 'url': url,
             'message': '按当前飞书权限打开；视图筛选不构成数据权限隔离。'}
