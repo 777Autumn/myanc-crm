@@ -390,7 +390,8 @@ class ConnectionTests(unittest.TestCase):
     def test_banquet_reads_and_handoff_stages_bind_work_and_cannot_revive_old_generation(self):
         self.config['personal_connections']['resource_mode']='shared'
         self.connect()
-        commands=('banquet','banquets','handoff','stage-handoff-submit','stage-handoff-accept','stage-handoff-return')
+        commands=('banquet','banquets','handoff','stage-handoff-submit','stage-handoff-accept','stage-handoff-return',
+                  'stage-banquet-create','stage-banquet-update','stage-banquet-followup')
         for command in commands:
             self.assertBlocked('personal_work_binding_required',
                                lambda: self.connections.guard(command,self.principal,self.token,''))
@@ -405,6 +406,19 @@ class ConnectionTests(unittest.TestCase):
             self.assertBlocked('connection_session_expired',lambda: reopened.guard(
                 command,self.principal,self.token+'new',command))
         self.assertFalse(reopened.guard('banquet',self.principal,self.token+'new','fresh')['private'])
+
+    def test_banquet_staging_requires_personal_connection_but_keeps_shared_group(self):
+        self.config['personal_connections']['resource_mode'] = 'shared'
+        group = dict(self.principal, chat_id='shared-group', project='manager-group')
+        for command in ('stage-banquet-create', 'stage-banquet-update', 'stage-banquet-followup'):
+            self.assertBlocked('connection_required', lambda: self.connections.guard(
+                command, self.principal, self.token, 'fresh-' + command))
+            self.assertIsInstance(access(self.config, command, self.principal), Connections)
+            self.assertIsNone(access(self.config, command, group))
+            self.assertEqual('allowed', self.connections.guard(command, group, self.token, 'group')['status'])
+            self.config['personal_connections']['resource_mode'] = 'restricted'
+            self.assertBlocked('restricted_resource_operation_denied', lambda: access(self.config, command, self.principal))
+            self.config['personal_connections']['resource_mode'] = 'shared'
 
     def test_work_privacy_only_increases_and_old_rows_remain_private(self):
         self.config["personal_connections"]["resource_mode"] = "shared"

@@ -594,8 +594,9 @@ def main(
                                prepare_principal, context=request.get("handoff_context"), personal_backend=reader)
             elif tool_command and tool_command.startswith("stage-banquet-"):
                 from .banquet import stage
+                lookup = _backend(config).get_assignee if personal_runner is not None else None
                 staged = stage(tool_command, prepare_request, backend, ledger, config,
-                               action_token, prepare_principal)
+                               action_token, prepare_principal, assignee_lookup=lookup)
             elif tool_command in {"stage-customer-create", "stage-customer-update"}:
                 from .customers import stage_customer
                 operation = "customer_create" if tool_command.endswith("create") else "customer_update"
@@ -656,14 +657,14 @@ def main(
             options = {}
             approval = ledger.get_approval(request.get("approval_id"))
             staged = ledger.get(approval['change_id']) if approval else None
-            if staged and staged.get('operation_type', '').startswith('banquet_handoff_'):
+            if staged and staged.get('operation_type', '').startswith('banquet_') and staged.get('connection_binding'):
                 if not core._same_principal(approval['principal'], request['principal']) or approval['card_message_id'] != request['principal']['message_id']:
-                    raise ValueError("Handoff approval mismatch.")
+                    raise ValueError("Banquet approval mismatch.")
                 connections = Connections(config)
                 connections.check_version(staged['connection_binding'])
                 reader = _backend(config, personal_runner=PersonalReadRunner(connections, staged['principal'],
-                                                                           'handoff-approval:' + staged['change_id']))
-                options = {'handoff_personal_backend': reader, 'handoff_files_verified': proof}
+                                                                           'banquet-approval:' + staged['change_id']))
+                options = {'personal_backend': reader, 'handoff_files_verified': proof}
             result = execute_claimed_approval({k: v for k, v in request.items() if k != 'handoff_files_verified'},
                                              backend, ledger, config, **options)
         else:

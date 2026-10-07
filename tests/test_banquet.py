@@ -1,6 +1,7 @@
 """Banquet sales use the real approval ledger; only Feishu IO is simulated."""
 import copy
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 from myanc_crm import core, banquet
@@ -108,6 +109,51 @@ class BanquetJourneyTests(unittest.TestCase):
         self.assertEqual(identifier, row['banquet_id'])
         self.assertEqual('rec-1', row['customer_record_id'])
         self.assertEqual([], self.backend.actions)
+
+    def test_followup_never_approves_an_invisible_tail(self):
+        identifier = self.approve(self.create())['banquet']['record_id']
+        request = {'banquet_id': identifier, 'occurred_at': '2026-09-03T10:00:00+08:00'}
+        for length in (2000, 2001):
+            text = '甲' * (length - 4) + '末尾可见'
+            staged = self.stage('stage-banquet-followup', dict(request, content=text))
+            if length == 2000:
+                self.assertEqual('staged', staged['status'])
+                preview = next(c for c in staged['preview']['banquet_changes'] if c['field'] == 'content')
+                self.assertIn(text, preview['after'])
+            else:
+                self.assertEqual('blocked', staged['status'])
+        self.assertEqual(1, len(self.store.writes))
+
+    def test_private_preview_and_apply_use_reader_and_frozen_connection(self):
+        from myanc_crm.connections import ConnectionBlocked
+        connection = mock.Mock()
+        binding = {'subject': 'person', 'version': 1}
+        self.backend.runner = SimpleNamespace(binding=binding, connections=connection)
+        self.config['personal_connections'] = {'resource_mode': 'shared'}
+        writer = CustomerBackend()
+        writer.get_customer = mock.Mock(side_effect=AssertionError('application customer read'))
+        self.backend.get_assignee = mock.Mock(side_effect=AssertionError('personal personnel lookup'))
+        request = {'customer_query': 'C-001', 'name': '虚构宴会', 'owner_ref': self.owner, 'stage': '新线索'}
+        with mock.patch('myanc_crm.connections.access', return_value=connection):
+            for revoked in (False, True):
+                staged = banquet.stage('stage-banquet-create', request, self.backend, self.ledger,
+                    self.config, TOKEN, PRINCIPAL, NOW, assignee_lookup=writer.get_assignee)
+                self.assertEqual('staged', staged['status'], staged)
+                frozen = self.ledger.get(staged['change_id'])
+                self.assertEqual(binding, frozen['connection_binding'])
+                if revoked:
+                    connection.check_version.side_effect = ConnectionBlocked('connection_session_expired')
+                result = banquet.apply(frozen, writer, self.ledger, NOW, personal_backend=self.backend)
+                self.assertEqual('failed' if revoked else 'verified', result['status'], result)
+        writer.get_customer.assert_not_called()
+        self.assertEqual(1, len(self.store.writes))
+
+    def test_private_staging_without_personal_reader_fails_before_reads(self):
+        self.config['personal_connections'] = {'resource_mode': 'shared'}
+        with mock.patch('myanc_crm.connections.access', return_value=mock.Mock()), \
+             mock.patch.object(self.backend, 'get_customer') as read:
+            self.assertEqual('blocked', self.create()['status'])
+            read.assert_not_called()
 
 
 if __name__ == '__main__':

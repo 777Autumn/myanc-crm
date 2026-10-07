@@ -1421,7 +1421,7 @@ def execute_claimed_approval(
     ledger: Ledger,
     config: Mapping[str, Any],
     now: datetime | None = None,
-    *, handoff_personal_backend=None, handoff_files_verified=False,
+    *, personal_backend=None, handoff_files_verified=False,
 ) -> dict[str, Any]:
     """Execute only an approval already claimed by the authenticated host."""
 
@@ -1488,11 +1488,11 @@ def execute_claimed_approval(
     customer_operation = staged.get("operation_type") in {"customer_create", "customer_update"}
     if staged.get("operation_type", "").startswith("banquet_handoff_"):
         from .handoffs import apply
-        result = apply(staged, backend, ledger, moment, personal_backend=handoff_personal_backend,
+        result = apply(staged, backend, ledger, moment, personal_backend=personal_backend,
                        files_verified=handoff_files_verified, started=started)
     elif staged.get("operation_type", "").startswith("banquet_"):
         from .banquet import apply
-        result = apply(staged, backend, ledger, moment, started=started)
+        result = apply(staged, backend, ledger, moment, personal_backend=personal_backend, started=started)
     elif customer_operation:
         from .customers import apply_customer
         result = apply_customer(staged, backend, ledger, moment, started=started)

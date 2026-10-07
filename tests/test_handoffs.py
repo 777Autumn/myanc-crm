@@ -47,7 +47,7 @@ class HandoffJourneyTests(unittest.TestCase):
         self.assertTrue(claim['execute'], claim)
         self.assertIn('file_check', claim)
         return core.execute_claimed_approval({'approval_id': result['approval_id'], 'principal': p},
-            self.backend, self.ledger, self.config, NOW, handoff_personal_backend=self.backend,
+            self.backend, self.ledger, self.config, NOW, personal_backend=self.backend,
             handoff_files_verified=files_verified)
 
     def test_submit_return_revise_and_named_recipient_accepts_current_version(self):

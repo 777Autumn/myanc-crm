@@ -268,10 +268,17 @@ def read(command, request, backend, config, principal):
             'has_more': offset + 20 < len(rows), 'next_offset': offset + 20 if offset + 20 < len(rows) else None}
 
 
-def stage(command, request, backend, ledger, config, token, principal, now=None):
+def stage(command, request, backend, ledger, config, token, principal, now=None, *, assignee_lookup=None):
     try:
         principal = core._principal(principal)
         actor = core._actor_for_principal(principal, config)
+        binding = None
+        if 'personal_connections' in config:
+            from .connections import access
+            connection = access(config, command, principal)
+            if connection is not None:
+                binding = backend.runner.binding
+                connection.check_version(binding)
         token_hash = core._action_token_hash(token)
         intent = ledger.note_write_intent(principal)
         core._only_keys(core._mapping(request, 'request'), FIELDS[command])
@@ -305,7 +312,7 @@ def stage(command, request, backend, ledger, config, token, principal, now=None)
             if person is None:
                 raise ValueError('Resolve the owner in this conversation first.')
             person = customers._person(person)
-            if customers._person(backend.get_assignee(person['id'])) != person:
+            if customers._person((assignee_lookup or backend.get_assignee)(person['id'])) != person:
                 raise ValueError('Owner changed; resolve again.')
             patch['owner'] = [person]
         if operation == 'banquet_create':
@@ -314,6 +321,7 @@ def stage(command, request, backend, ledger, config, token, principal, now=None)
         if effective.get('date_status') == '已确认' and not effective.get('banquet_date'):
             raise ValueError('A confirmed date requires an exact date.')
         if operation == 'banquet_followup':
+            core._required_text(request.get('content'), 'content', 2000)
             followup = core._followup({k: v for k, v in request.items() if k != 'banquet_id'})
             patch = {k: followup[k] for k in ('occurred_at', 'content', 'channel') if k in followup}
             patch.update(title=before['name'] + ' · ' + followup['occurred_at'],
@@ -326,7 +334,7 @@ def stage(command, request, backend, ledger, config, token, principal, now=None)
         body = {'change_id': 'chg_' + secrets.token_urlsafe(18), 'operation_type': operation,
                 'principal': principal, 'actor': actor, 'customer_record_id': core._record_id(customer),
                 'customer_snapshot': {'record_id': core._record_id(customer), **core._snapshot(customer)}, 'schema_hash': core._hash(schema),
-                'banquet_before': before, 'banquet_patch': patch, 'assignee': person,
+                'banquet_before': before, 'banquet_patch': patch, 'assignee': person, 'connection_binding': binding,
                 'created_at': core._iso(moment), 'expires_at': core._iso(moment + timedelta(seconds=ttl))}
         ledger.stage(body, token_hash, intent_version=intent)
         return {'status': 'staged', 'change_id': body['change_id'], 'preview': approval_preview(body, backend)}
@@ -352,7 +360,7 @@ def approval_preview(staged, backend):
             'expires_at': staged['expires_at']}
 
 
-def apply(staged, backend, ledger, moment, *, started=None):
+def apply(staged, backend, ledger, moment, *, personal_backend=None, started=None):
     started = time.monotonic() if started is None else started
     change_id = staged['change_id']
     if staged.get('receipt'):
@@ -360,18 +368,23 @@ def apply(staged, backend, ledger, moment, *, started=None):
     if staged['state'] != 'staged' or not ledger.claim(change_id):
         return {'status': 'verification_unknown', 'code': 'apply_in_progress', 'change_id': change_id}
     return core._run_customer_write(staged, ledger, moment,
-        lambda effective: _apply(staged, backend, ledger, effective), started)
+        lambda effective: _apply(staged, backend, ledger, effective, personal_backend), started)
 
 
-def _apply(staged, backend, ledger, moment):
+def _apply(staged, backend, ledger, moment, personal_backend):
     change_id = staged['change_id']
     def finish(status, code, **details):
         return core._finish(ledger, change_id, status, {'status': status, 'code': code, 'change_id': change_id, **details})
     try:
-        store = Store(backend)
+        if staged.get('connection_binding'):
+            if personal_backend is None:
+                return finish('failed', 'personal_connection_required')
+            personal_backend.runner.connections.check_version(staged['connection_binding'])
+        reader = personal_backend or backend
+        store = Store(reader)
         if core._hash(store.read_schema()) != staged['schema_hash']:
             return finish('replan_required', 'schema_changed')
-        customer = backend.get_customer(staged['customer_record_id'])
+        customer = reader.get_customer(staged['customer_record_id'])
         if customer is None or {'record_id': core._record_id(customer), **core._snapshot(customer)} != staged['customer_snapshot']:
             return finish('replan_required', 'customer_changed')
         person = staged.get('assignee')
@@ -389,7 +402,9 @@ def _apply(staged, backend, ledger, moment):
     expected = {**(before if identifier else {}), **fields}
     actual = None
     try:
-        identifier = store.write(kind, identifier, fields)
+        if staged.get('connection_binding'):
+            personal_backend.runner.connections.check_version(staged['connection_binding'])
+        identifier = Store(backend).write(kind, identifier, fields)
     except Exception:
         # The transport may have committed before failing. Reconcile reads only;
         # never send the write twice or claim a failed response rolled it back.

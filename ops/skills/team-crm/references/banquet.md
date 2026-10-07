@@ -14,7 +14,7 @@
 | `banquet` | `banquet_id`，读取最新业务和最近 10 条真实沟通，`history_has_more` 为 true 时不得称已读全部历史 |
 | `stage-banquet-create` | 必填 `customer_query/name/owner_ref/stage`，可选下列业务字段，先用 `assignee` 核验负责人 |
 | `stage-banquet-update` | `banquet_id` 和仅包含实际变更的 `changes` |
-| `stage-banquet-followup` | `banquet_id/occurred_at/content`，可选 `channel`，记录实际发生的沟通 |
+| `stage-banquet-followup` | `banquet_id/occurred_at/content`，可选 `channel`，记录实际发生的沟通；content 最多 2000 字符，超过时拆分并分别审批 |
 
 可写业务字段：`name`、`source`、`owner_ref`、`banquet_date`、`date_note`、
 `date_status`、`session`、`venue`、`estimated_tables`、`budget`、`visit_at`、

@@ -23,6 +23,7 @@ from . import core, write_locks
 
 READ_COMMANDS = frozenset({"customer", "customers", "banquet", "banquets", "handoff"})
 HANDOFF_STAGES = frozenset({"stage-handoff-submit", "stage-handoff-accept", "stage-handoff-return"})
+BANQUET_STAGES = frozenset({"stage-banquet-create", "stage-banquet-update", "stage-banquet-followup"})
 CLI_READ_COMMANDS = frozenset({"+field-list", "+record-list", "+record-get", "+record-search"})
 READ_SCOPES = frozenset({"base:field:read", "base:record:read", "offline_access"})
 ROUTE_FIELDS = ("platform", "user_id", "chat_id", "project")
@@ -430,7 +431,7 @@ class Connections:
         private_commands = {*READ_COMMANDS, "work-resume", "work-context", "file-deliver", "file-status",
                             "knowledge_catalog", "knowledge_search", "knowledge_read"}
         # Lifecycle dependence applies to every personal read, even shared data.
-        if command in READ_COMMANDS | HANDOFF_STAGES and audience == "private":
+        if command in READ_COMMANDS | HANDOFF_STAGES | BANQUET_STAGES and audience == "private":
             if not work_id:
                 raise ConnectionBlocked("personal_work_binding_required")
             binding = self.require(principal, token)
@@ -500,6 +501,8 @@ def access(config, command, principal):
         return connections
     if connections.options["resource_mode"] != "shared" and not command.startswith("case-"):
         raise ConnectionBlocked("restricted_resource_operation_denied")
+    if audience == "private" and command in BANQUET_STAGES:
+        return connections
     return None
 
 
