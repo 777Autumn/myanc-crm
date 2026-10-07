@@ -6,6 +6,7 @@ This JSON fake is for serial integration journeys, not concurrent-writer tests.
 """
 
 import copy
+from contextlib import nullcontext
 import json
 import os
 from pathlib import Path
@@ -28,6 +29,7 @@ class PersistentFakeFeishu(HistoryBackend):
         super().__init__()
         self.people = {"ou_member": {"id": "ou_member", "name": "示例同事"}}
         self.profile_mode = "normal"
+        self.banquet_rows = {}
         self.path = directory / "fake-feishu.json"
         if self.path.exists():
             data = json.loads(self.path.read_text(encoding="utf-8"))
@@ -40,6 +42,7 @@ class PersistentFakeFeishu(HistoryBackend):
             self.people = data.get("people", self.people)
             self.profile_mode = data.get("profile_mode", "normal")
             self.schema = data.get("schema", self.schema)
+            self.banquet_rows = data.get("banquet_rows", {})
         else:
             # Eval-only paired fixtures: do not add these claims to demo/live data.
             seed = os.environ.get("MYANC_SPIKE_SEED", "")
@@ -84,7 +87,7 @@ class PersistentFakeFeishu(HistoryBackend):
         data = {name: copy.deepcopy(getattr(self, name)) for name in (
             "customers", "followups", "actions", "update_mode", "create_mode",
             "hide_followup_readback",
-            "people", "profile_mode", "schema",
+            "people", "profile_mode", "schema", "banquet_rows",
         )}
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=self.path.parent,
                                          prefix="fake-", suffix=".json", delete=False) as stream:
@@ -119,6 +122,31 @@ class PersistentFakeFeishu(HistoryBackend):
             return CustomerBackend.update_customer_profile(self, record_id, fields)
         finally:
             self.save()
+
+
+class PersistentSalesStore:
+    """Synthetic Feishu tables only; staged writes/claims/receipts stay real."""
+    def __init__(self, backend):
+        self.backend = backend
+
+    def read_schema(self):
+        return {'banquets': 'synthetic-fixed-schema'}
+
+    def get(self, kind, identifier):
+        return copy.deepcopy(self.backend.banquet_rows.get(kind, {}).get(identifier))
+
+    def list(self, kind):
+        return copy.deepcopy(list(self.backend.banquet_rows.get(kind, {}).values()))
+
+    def write(self, kind, identifier, fields):
+        rows = self.backend.banquet_rows.setdefault(kind, {})
+        identifier = identifier or 'recSales' + str(len(rows) + 1)
+        rows.setdefault(identifier, {'record_id': identifier}).update(copy.deepcopy(fields))
+        self.backend.save()
+        return identifier
+
+    def url(self, kind, identifier):
+        return 'https://example.invalid/base/fixture?record=' + identifier
 
 
 def main():
@@ -157,6 +185,8 @@ def main():
         if os.environ["MYANC_SPIKE_SEED"] == "customer-roster-ambiguous":
             config["allowed_actors"]["sender-1"]["display_name"] = "示例同事"
     with (
+        mock.patch('myanc_crm.banquet.Store', side_effect=PersistentSalesStore)
+        if os.environ.get('MYANC_SPIKE_BANQUET') == '1' else nullcontext(),
         mock.patch.object(cli, "_config_path", return_value=directory / "fixture-config-unused"),
         mock.patch.object(cli, "_load_config", return_value=config),
         mock.patch.object(cli, "_runtime", side_effect=lambda *_: (

@@ -144,6 +144,7 @@ def _backend(config, *, personal_runner=None):
         followup_table_id=_required_text(config, "followup_table_id"),
         base_url=_required_text(config, "base_url"),
         fields=_required_mapping(config, "fields"),
+        **({"banquet_config": config["banquet"]} if "banquet" in config else {}),
         **({"runner": personal_runner, "identity": "user"} if personal_runner is not None else {}),
     )
 
@@ -224,11 +225,13 @@ def _host_prepare_payload(
 
 
 def _host_tool_payload(value, config):
+    from .banquet import FIELDS as BANQUET_FIELDS
+    from .handoffs import FIELDS as HANDOFF_FIELDS
     from .queries import CUSTOMER_FIELDS
     from .shared_cases import FIELDS as CASE_FIELDS
     required = {"command", "request", "principal"}
     case_tool = value.get("command") in CASE_FIELDS
-    extra = {"case_context"} if case_tool else PLAN_HOST_FIELDS
+    extra = {"case_context"} if case_tool else {"handoff_context"} if value.get("command") == "stage-handoff-submit" else PLAN_HOST_FIELDS
     if not required <= set(value) or set(value) - required - extra:
         raise ValueError("host-tool requires command, request, principal and supported host options.")
     fields = {"open": frozenset({"target"}), "customer": frozenset({"customer_query", "history_offset"}),
@@ -236,14 +239,14 @@ def _host_tool_payload(value, config):
               "stage": BUSINESS_FIELDS, "result": frozenset({"change_id"}),
               "assignee": frozenset({"query"}),
               "stage-customer-create": CREATE_FIELDS,
-              "stage-customer-update": UPDATE_FIELDS, **CASE_FIELDS}
+              "stage-customer-update": UPDATE_FIELDS, **CASE_FIELDS, **BANQUET_FIELDS, **HANDOFF_FIELDS}
     command = value.get("command")
     if not isinstance(command, str) or command not in fields:
         raise ValueError("Unsupported controlled tool.")
     if set(value) & PLAN_HOST_FIELDS and command not in {"stage", "stage-customer-create", "stage-customer-update"}:
         raise ValueError("Host plan options require a staging command.")
     request, principal = _host_prepare_payload(
-        {key: item for key, item in value.items() if key not in {"command", "case_context"}}, config, fields[command]
+        {key: item for key, item in value.items() if key not in {"command", "case_context", "handoff_context"}}, config, fields[command]
     )
     if command == "customer":
         core._required_text(request.get("customer_query"), "customer_query", 256)
@@ -255,6 +258,9 @@ def _host_tool_payload(value, config):
 def _open_result(request, config, principal):
     """Select native pages from protected configuration, never model identity/URLs."""
     requested = request.get("target", "mine")
+    if isinstance(requested, str) and requested.startswith(('banquet-', 'handoff-')):
+        from .banquet import open_workbench
+        return open_workbench(request, config, principal)
     labels = {"mine": "我的客户", "team": "全团队跟进", "stages": "全团队阶段看板",
               "overview": "全团队今日跟进总览"}
     if not isinstance(requested, str) or requested not in labels:
@@ -442,6 +448,7 @@ def main(
         "host-connection-tick",
         "host-connection-config",
         "host-connection-guard",
+        "host-handoff-access",
     }:
         result = {
             "status": "failed",
@@ -539,7 +546,26 @@ def main(
         return 2
 
     try:
-        if tool_command == "customer":
+        if command == "host-handoff-access":
+            from .handoffs import authorize_file
+            core._only_keys(request, {"publication_id", "principal", "work_id"})
+            p = core._principal(request.get("principal"))
+            connections = Connections(config)
+            if connections.route(p) != "private":
+                raise ValueError("Handoff files require the requester's private conversation.")
+            internal_token = core._hash(["handoff-file-access", p, request["work_id"]])
+            connections.guard("handoff", p, internal_token, request["work_id"])
+            reader = _backend(config, personal_runner=PersonalReadRunner(connections, p, internal_token))
+            result = authorize_file(request["publication_id"], reader, ledger, config, p)
+        elif tool_command == "handoff":
+            from .handoffs import read
+            if personal_runner is None or personal.route(prepare_principal) != "private":
+                raise ValueError("Read handoff materials in the requester's private conversation.")
+            result = read(prepare_request, backend, ledger, config, prepare_principal)
+        elif tool_command in {"banquet", "banquets"}:
+            from .banquet import read
+            result = read(tool_command, prepare_request, backend, config, prepare_principal)
+        elif tool_command == "customer":
             result = _customer_result(prepare_request, backend, prepare_principal, ledger)
         elif tool_command == "customers":
             from .queries import customers
@@ -555,8 +581,22 @@ def main(
             result = resolve_assignee(prepare_request, backend, ledger, config, prepare_principal)
         elif command == "host-prepare" or tool_command in {
             "stage", "stage-customer-create", "stage-customer-update",
+            "stage-banquet-create", "stage-banquet-update", "stage-banquet-followup",
+            "stage-handoff-submit", "stage-handoff-accept", "stage-handoff-return",
         }:
-            if tool_command in {"stage-customer-create", "stage-customer-update"}:
+            if tool_command and tool_command.startswith("stage-handoff-"):
+                from .handoffs import stage
+                connections = Connections(config)
+                if connections.route(prepare_principal) != "private":
+                    raise ValueError("Handle handoff in a private conversation.")
+                reader = _backend(config, personal_runner=PersonalReadRunner(connections, prepare_principal, action_token))
+                staged = stage(tool_command, prepare_request, backend, ledger, config, action_token,
+                               prepare_principal, context=request.get("handoff_context"), personal_backend=reader)
+            elif tool_command and tool_command.startswith("stage-banquet-"):
+                from .banquet import stage
+                staged = stage(tool_command, prepare_request, backend, ledger, config,
+                               action_token, prepare_principal)
+            elif tool_command in {"stage-customer-create", "stage-customer-update"}:
                 from .customers import stage_customer
                 operation = "customer_create" if tool_command.endswith("create") else "customer_update"
                 staged = stage_customer(prepare_request, operation, backend, ledger, config,
@@ -609,7 +649,23 @@ def main(
         elif command == "host-claim":
             result = claim_approval_decision(request, ledger, config, backend=backend)
         elif command == "host-execute":
-            result = execute_claimed_approval(request, backend, ledger, config)
+            proof = request.get("handoff_files_verified", False)
+            if type(proof) is not bool:
+                raise ValueError("Invalid host file check.")
+            core._only_keys(request, {"approval_id", "principal", "handoff_files_verified"})
+            options = {}
+            approval = ledger.get_approval(request.get("approval_id"))
+            staged = ledger.get(approval['change_id']) if approval else None
+            if staged and staged.get('operation_type', '').startswith('banquet_handoff_'):
+                if not core._same_principal(approval['principal'], request['principal']) or approval['card_message_id'] != request['principal']['message_id']:
+                    raise ValueError("Handoff approval mismatch.")
+                connections = Connections(config)
+                connections.check_version(staged['connection_binding'])
+                reader = _backend(config, personal_runner=PersonalReadRunner(connections, staged['principal'],
+                                                                           'handoff-approval:' + staged['change_id']))
+                options = {'handoff_personal_backend': reader, 'handoff_files_verified': proof}
+            result = execute_claimed_approval({k: v for k, v in request.items() if k != 'handoff_files_verified'},
+                                             backend, ledger, config, **options)
         else:
             result = decide_approval(request, backend, ledger, config)
         if personal_runner is not None:

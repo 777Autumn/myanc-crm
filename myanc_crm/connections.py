@@ -21,7 +21,8 @@ from urllib.parse import urlsplit
 from . import core, write_locks
 
 
-READ_COMMANDS = frozenset({"customer", "customers"})
+READ_COMMANDS = frozenset({"customer", "customers", "banquet", "banquets", "handoff"})
+HANDOFF_STAGES = frozenset({"stage-handoff-submit", "stage-handoff-accept", "stage-handoff-return"})
 CLI_READ_COMMANDS = frozenset({"+field-list", "+record-list", "+record-get", "+record-search"})
 READ_SCOPES = frozenset({"base:field:read", "base:record:read", "offline_access"})
 ROUTE_FIELDS = ("platform", "user_id", "chat_id", "project")
@@ -429,7 +430,7 @@ class Connections:
         private_commands = {*READ_COMMANDS, "work-resume", "work-context", "file-deliver", "file-status",
                             "knowledge_catalog", "knowledge_search", "knowledge_read"}
         # Lifecycle dependence applies to every personal read, even shared data.
-        if command in READ_COMMANDS and audience == "private":
+        if command in READ_COMMANDS | HANDOFF_STAGES and audience == "private":
             if not work_id:
                 raise ConnectionBlocked("personal_work_binding_required")
             binding = self.require(principal, token)

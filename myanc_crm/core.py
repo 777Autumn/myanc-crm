@@ -1330,6 +1330,10 @@ def claim_approval_decision(
     if approval["state"] not in {"pending", "executing"}:
         return _blocked("approval_not_pending", "This approval cannot be executed.")
 
+    file_check = {}
+    if staged.get("operation_type", "").startswith("banquet_handoff_"):
+        from .handoffs import file_check as handoff_file_check
+        file_check = {"file_check": handoff_file_check(staged)}
     return {
         "status": "executing",
         "approval_id": approval_id,
@@ -1337,6 +1341,7 @@ def claim_approval_decision(
         "change_id": approval["change_id"],
         "execute": True,
         "preview": preview,
+        **file_check,
         "message": "The approval was accepted and the original plan is executing.",
     }
 
@@ -1416,6 +1421,7 @@ def execute_claimed_approval(
     ledger: Ledger,
     config: Mapping[str, Any],
     now: datetime | None = None,
+    *, handoff_personal_backend=None, handoff_files_verified=False,
 ) -> dict[str, Any]:
     """Execute only an approval already claimed by the authenticated host."""
 
@@ -1480,7 +1486,14 @@ def execute_claimed_approval(
         }
 
     customer_operation = staged.get("operation_type") in {"customer_create", "customer_update"}
-    if customer_operation:
+    if staged.get("operation_type", "").startswith("banquet_handoff_"):
+        from .handoffs import apply
+        result = apply(staged, backend, ledger, moment, personal_backend=handoff_personal_backend,
+                       files_verified=handoff_files_verified, started=started)
+    elif staged.get("operation_type", "").startswith("banquet_"):
+        from .banquet import apply
+        result = apply(staged, backend, ledger, moment, started=started)
+    elif customer_operation:
         from .customers import apply_customer
         result = apply_customer(staged, backend, ledger, moment, started=started)
     else:
@@ -2126,7 +2139,8 @@ def _approval_material(staged: Mapping[str, Any]) -> dict[str, Any]:
             material[key] = staged.get(key)
     if "parent_change_id" in staged:
         material["parent_change_id"] = staged["parent_change_id"]
-    for key in ("plan", "plan_reminder_binding"):
+    for key in ("plan", "plan_reminder_binding", "banquet_before", "banquet_patch",
+                "handoff_before", "handoff_patch", "handoff_source", "connection_binding"):
         if key in staged:
             material[key] = staged[key]
     return material
@@ -2135,6 +2149,9 @@ def _approval_material(staged: Mapping[str, Any]) -> dict[str, Any]:
 def _approval_preview(
     staged: Mapping[str, Any], backend: Backend
 ) -> dict[str, Any]:
+    if staged.get("operation_type", "").startswith("banquet_"):
+        from .banquet import approval_preview
+        return approval_preview(staged, backend)
     if staged.get("operation_type") in {"customer_create", "customer_update"}:
         from .customers import approval_preview
         return approval_preview(staged, backend)

@@ -387,6 +387,25 @@ class ConnectionTests(unittest.TestCase):
         self.assertFalse(reopened.guard("customers", self.principal, self.token + "new", "new-work")["private"])
         self.assertEqual("allowed", reopened.guard("work-resume", self.principal, "", "clean")["status"])
 
+    def test_banquet_reads_and_handoff_stages_bind_work_and_cannot_revive_old_generation(self):
+        self.config['personal_connections']['resource_mode']='shared'
+        self.connect()
+        commands=('banquet','banquets','handoff','stage-handoff-submit','stage-handoff-accept','stage-handoff-return')
+        for command in commands:
+            self.assertBlocked('personal_work_binding_required',
+                               lambda: self.connections.guard(command,self.principal,self.token,''))
+            self.assertFalse(self.connections.guard(command,self.principal,self.token,command)['private'])
+        self.connections.guard('knowledge_read',self.principal,self.token,'stage-handoff-submit','management')
+        self.assertBlocked('personal_work_sharing_denied',lambda: self.connections.guard(
+            'stage-handoff-submit',self.principal,self.token,'stage-handoff-submit'))
+        self.connections.command('disconnect',self.principal)
+        self.connect()
+        reopened=Connections(self.config,run=self.fake,now=lambda:self.clock)
+        for command in commands:
+            self.assertBlocked('connection_session_expired',lambda: reopened.guard(
+                command,self.principal,self.token+'new',command))
+        self.assertFalse(reopened.guard('banquet',self.principal,self.token+'new','fresh')['private'])
+
     def test_work_privacy_only_increases_and_old_rows_remain_private(self):
         self.config["personal_connections"]["resource_mode"] = "shared"
         self.connect()
