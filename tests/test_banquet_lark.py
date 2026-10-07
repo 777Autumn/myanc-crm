@@ -3,9 +3,9 @@ import copy
 import unittest
 from unittest import mock
 
-from myanc_crm import banquet, lark
+from myanc_crm import banquet, core, lark
 from test_lark import CUSTOMER_FIELD_IDS, FOLLOWUP_FIELD_IDS
-from test_core import CONFIG, PRINCIPAL
+from test_core import CONFIG, PRINCIPAL, NOW, TOKEN, customer
 
 
 class BanquetAdapterTests(unittest.TestCase):
@@ -80,6 +80,60 @@ class BanquetAdapterTests(unittest.TestCase):
             with self.assertRaises(ValueError):self.store.list('banquets')
         with mock.patch.object(self.backend,'_read_records',return_value=[{'record_id':'recWrong'}]):
             with self.assertRaises(ValueError):self.store.get('banquets','recRequested')
+
+    def test_business_number_resolves_in_same_store_and_rechecks_exact_record(self):
+        row={'record_id':'recBanquet','fields':{'业务编号':'YAN-0006'}}
+        with mock.patch.object(self.backend,'_read_record_page',return_value={'items':[row],'has_more':False}) as listing, \
+                mock.patch.object(self.backend,'_read_records',return_value=[row]) as read:
+            self.assertEqual('recBanquet',self.store.get('banquets','YAN-0006')['record_id'])
+            self.assertIn('tblBanquets',listing.call_args.args[0])
+            self.assertIn('recBanquet',read.call_args.args[0])
+            listing.reset_mock()
+            self.store.get('banquets','recBanquet')
+            listing.assert_not_called()
+            read.return_value=[{'record_id':'recBanquet','fields':{'业务编号':'YAN-0007'}}]
+            with self.assertRaises(ValueError):self.store.get('banquets','YAN-0006')
+
+    def test_business_number_missing_duplicate_denied_and_overflow_fail_closed(self):
+        row={'record_id':'recBanquet','fields':{'业务编号':'YAN-0006'}}
+        cases=[([],False,None),([row,{**row,'record_id':'recOther'}],False,ValueError),
+               ([row],True,ValueError)]
+        with mock.patch.object(self.backend,'_read_records') as read:
+            for rows,more,error in cases:
+                with self.subTest(rows=rows,more=more), mock.patch.object(self.backend,'_read_record_page',
+                        return_value={'items':rows,'has_more':more}):
+                    if error:
+                        with self.assertRaises(error):self.store.get('banquets','YAN-0006')
+                    else:self.assertIsNone(self.store.get('banquets','YAN-0006'))
+            with mock.patch.object(self.backend,'_read_record_page',side_effect=PermissionError('denied')):
+                with self.assertRaises(PermissionError):self.store.get('banquets','YAN-0006')
+            read.assert_not_called()
+        with mock.patch.object(self.backend,'_read_record_page') as listing:
+            for kind,value in [('handoffs','YAN-0006'),('banquets','YAN-0006 extra'),('banquets',None)]:
+                with self.assertRaises(lark.LarkBackendError):self.store.get(kind,value)
+            listing.assert_not_called()
+
+    def test_number_preview_freezes_record_and_changed_number_cannot_redirect_apply(self):
+        row={'record_id':'recBanquet','fields':{'业务编号':'YAN-0006','宴会名称':'虚构宴会',
+             '关联客户':[{'id':'recCustomer'}],'销售阶段':['跟进中']}}
+        ledger=core.Ledger()
+        self.addCleanup(ledger.close)
+        with mock.patch.object(self.backend,'_read_table_schema',side_effect=lambda table,_:copy.deepcopy(self.schema[table])), \
+                mock.patch.object(self.backend,'_read_record_page',return_value={'items':[row],'has_more':False}) as listing, \
+                mock.patch.object(self.backend,'_read_records',side_effect=lambda *args:[copy.deepcopy(row)]) as read, \
+                mock.patch.object(self.backend,'get_customer',return_value=customer('recCustomer')), \
+                mock.patch.object(self.backend,'_write_records') as write:
+            result=banquet.stage('stage-banquet-update',{'banquet_id':'YAN-0006','changes':{'venue':'待确认'}},
+                                 self.backend,ledger,CONFIG,TOKEN,PRINCIPAL,NOW)
+            self.assertEqual('staged',result['status'],result)
+            staged=ledger.get(result['change_id'])
+            self.assertEqual('recBanquet',staged['banquet_before']['record_id'])
+            row['fields']['业务编号']='YAN-0007'
+            listing.reset_mock();read.reset_mock()
+            applied=banquet.apply(staged,self.backend,ledger,NOW)
+            self.assertEqual('banquet_changed',applied['code'],applied)
+            self.assertIn('recBanquet',read.call_args.args[0])
+            listing.assert_not_called();write.assert_not_called()
 
 
 if __name__=='__main__':unittest.main()
