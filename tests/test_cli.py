@@ -164,6 +164,57 @@ class CliBoundaryTests(unittest.TestCase):
                 code, result = self.run_cli([command], host=True)
                 self.assertEqual((0, "disabled"), (code, result["status"]))
 
+    def test_banquet_approval_uses_personal_reads_and_rejects_old_connection(self):
+        from test_connections import ConnectionTests
+        from test_customers import CustomerBackend
+        from test_banquet import SalesStore
+        from myanc_crm import core, banquet
+        fixture = ConnectionTests()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        fixture.config['personal_connections']['resource_mode'] = 'shared'
+        fixture.connect()
+        self.config.update(fixture.config)
+        self.config_path.write_text(json.dumps(self.config), encoding='utf-8')
+        store, reader, writer = SalesStore(), CustomerBackend(), CustomerBackend()
+        writer.get_customer = mock.Mock(side_effect=AssertionError('app read'))
+        writer.search_customers = mock.Mock(side_effect=AssertionError('app search'))
+        reader.get_assignee = mock.Mock(side_effect=AssertionError('user personnel lookup'))
+        ledger = core.Ledger(self.ledger_path)
+        try:
+            owner = ledger.remember_assignee(fixture.principal, writer.people['ou_member'])
+        finally:
+            ledger.close()
+
+        def backend(config, *, personal_runner=None):
+            if personal_runner is None:
+                return writer
+            reader.runner = personal_runner
+            return reader
+
+        with mock.patch('myanc_crm.connections.Connections', return_value=fixture.connections), \
+             mock.patch.object(cli, 'Connections', return_value=fixture.connections), \
+             mock.patch.object(cli, '_backend', side_effect=backend), \
+             mock.patch.object(banquet, 'Store', return_value=store):
+            for revoked in (False, True):
+                payload = dict(command='stage-banquet-create', principal=fixture.principal,
+                    request=dict(customer_query='C-001', name='Fixture banquet', stage='新线索', owner_ref=owner))
+                code, staged = self.run_cli(['host-tool'], json.dumps(payload), host=True)
+                self.assertEqual((0, 'pending'), (code, staged['status']), staged)
+                principal = dict(fixture.principal, message_id='fixture-card-' + staged['approval_id'])
+                payload = dict(approval_id=staged['approval_id'], principal=principal)
+                _, bound = self.run_cli(['host-bind-card'], json.dumps(payload), host=True)
+                self.assertEqual('bound', bound['status'])
+                _, claimed = self.run_cli(['host-claim'], json.dumps(dict(payload, decision='approve')), host=True)
+                self.assertTrue(claimed['execute'], claimed)
+                if revoked:
+                    fixture.connections.command('disconnect', fixture.principal)
+                    fixture.connect()
+                _, result = self.run_cli(['host-execute'], json.dumps(payload), host=True)
+                self.assertEqual('blocked' if revoked else 'verified', result['status'], result)
+        self.assertEqual(1, len(store.writes))
+        writer.get_customer.assert_not_called()
+
     def test_restricted_personal_source_blocks_all_crm_bypasses_before_runtime(self):
         principal = dict(platform="feishu", user_id="sender-test", chat_id="chat-test",
                          session_key="session-test", project="project-test", message_id="message-test")

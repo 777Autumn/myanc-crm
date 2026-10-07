@@ -83,6 +83,8 @@ _FOLLOWUP_CANONICAL = {
 }
 
 _TYPE_ALIASES: dict[Any, str] = {
+    2: "number",
+    "number": "number",
     1: "text",
     3: "select",
     4: "select",
@@ -159,11 +161,13 @@ class LarkCliBackend:
         fields: Mapping[str, Mapping[str, str]],
         runner=None,
         identity: str = "bot",
+        banquet_config=None,
     ) -> None:
         if identity not in {"bot", "user"}:
             raise ValueError("Invalid backend identity")
         self.runner = runner
         self.identity = identity
+        self.banquet_config = banquet_config
         self.wrapper_path = _wrapper_path(wrapper_path)
         self.base_token = _config_value("base_token", base_token)
         self.customer_table_id = _table_id("customer_table_id", customer_table_id)
@@ -1089,6 +1093,10 @@ def _field_type(field: Mapping[str, Any]) -> str:
 
 
 def _link_target(field: Mapping[str, Any]) -> str | None:
+    # CLI 1.0.90 returns link_table; raw OpenAPI uses property.table_id.
+    if "link_table" in field:
+        value = field["link_table"]
+        return value if isinstance(value, str) else None
     properties = field.get("property", field.get("properties"))
     if not isinstance(properties, Mapping):
         return None
@@ -1114,7 +1122,7 @@ def _stable_schema(
         )
         if include_rules:
             # New profile writes also bind select/person constraints; legacy hashes stay unchanged.
-            for key in ("multiple", "options", "style", "property", "properties"):
+            for key in ("multiple", "options", "style", "property", "properties", "link_table", "bidirectional"):
                 if key in item:
                     result[-1][key] = item[key]
     return result

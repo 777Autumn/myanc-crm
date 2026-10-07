@@ -1,6 +1,6 @@
 ---
 name: team-crm
-description: 使用团队 CRM 打开我的客户、全团队跟进、今日总览或阶段看板、口语找客户、筛选待跟进/逾期清单、历史翻页、核验负责人、建档、记录真实沟通、修改独立跟进计划以及查看审批结果时使用。也处理从提醒清单发起的 CRM 关联计划修改；纯个人提醒用 team-reminders，团队方法与资料查询用 team-brain。
+description: 使用团队 CRM 查询客户和婚宴商机、婚期与到店安排、销售阶段、建档、记录沟通、修改跟进计划、签单交接与确认接手、查看审批结果时使用。也处理客户筛选、负责人核验、历史查询与工作台入口；纯个人提醒用 team-reminders，团队方法与资料查询用 team-brain。
 ---
 
 # Team CRM
@@ -10,6 +10,8 @@ description: 使用团队 CRM 打开我的客户、全团队跟进、今日总�
    approval, shared plans and receipt interpretation.
 2. Identify the user's current intent and the real object shown in this conversation.
    Follow the protocol's read/clarify/stage/result steps for that intent.
+   For a banquet opportunity, date, venue, table count, budget, visit or handoff, read
+   [the banquet protocol](references/banquet.md) before choosing fields or tools.
 3. For a write proposal, preserve the confirmed draft and use the existing host
    approval workflow and its exact post-stage reply from the protocol.
 4. On the next user turn, follow that turn's intent. Read the matching receipt

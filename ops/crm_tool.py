@@ -14,6 +14,17 @@ TIMEOUT_SECONDS = 35
 MAX_INPUT_BYTES = 64 * 1024
 MAX_RESPONSE_BYTES = 1024 * 1024
 FIELDS = {
+    "handoff": {"banquet_id"},
+    "stage-handoff-submit": {"banquet_id", "recipient_ref", "delivery_ids", "missing"},
+    "stage-handoff-accept": {"banquet_id", "version"},
+    "stage-handoff-return": {"banquet_id", "version", "reason"},
+    "banquet": {"banquet_id"},
+    "banquets": {"keyword", "owner", "stages", "date_from", "date_to", "offset"},
+    "stage-banquet-create": {"customer_query", "name", "source", "owner_ref", "banquet_date", "date_note",
+        "date_status", "session", "venue", "estimated_tables", "budget", "visit_at", "visited_at", "stage",
+        "next_action", "next_followup_at", "followup_status"},
+    "stage-banquet-update": {"banquet_id", "changes"},
+    "stage-banquet-followup": {"banquet_id", "occurred_at", "content", "channel"},
     "case-list": {"query"},
     "case-read": {"case_name"},
     "case-update": {"case_name", "expected_revision", "changes", "source_message_id"},
