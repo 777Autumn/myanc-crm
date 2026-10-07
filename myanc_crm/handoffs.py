@@ -104,7 +104,8 @@ def read(request, backend, ledger, config, principal):
     origin = publication(ledger, row)
     if actor['feishu_user_id'] not in customers._owner_ids(row['recipient']) + customers._owner_ids(row['submitted_by']):
         return core._blocked('handoff_actor_denied', '此交接由指定提交人与接手人处理。')
-    return {'status': 'found', 'handoff': _view(row, store, origin)}
+    return {'status': 'found', 'handoff': _view(row, store, origin),
+            'is_recipient': actor['feishu_user_id'] in customers._owner_ids(row['recipient'])}
 
 
 def stage(command, request, backend, ledger, config, token, principal, *, context=None, personal_backend=None, now=None):

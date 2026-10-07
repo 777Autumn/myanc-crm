@@ -4,6 +4,12 @@ For the configured CRM Base, use `/usr/local/bin/crm-tool` with one command
 and one stdin JSON object. These tools retrieve facts or stage a proposal; the
 gateway owns every CRM write and the authenticated sender/session binding.
 
+When running these commands through `exec_command`, retain the full result,
+including `session_id` and `exit_code`. If it returns a running session, use
+`write_stdin` with that exact session ID until completion and read its output.
+Empty output while running is not a CRM result. Poll the existing process rather
+than repeating the command; only then interpret the CRM status or approval ID.
+
 When personal connections are enabled, private CRM reads use the requester's
 verified Feishu connection. Group reads use only the host-approved shared CRM.
 Keep the same tool arguments: the host selects identity and resource. If a tool
