@@ -1,3 +1,4 @@
+import multiprocessing
 import os
 import sqlite3
 import tempfile
@@ -258,17 +259,23 @@ class HandoffJourneyTests(unittest.TestCase):
         def exit_after_write(*args):
             write(*args)
             os._exit(77)
-        pid = os.fork()
-        if pid == 0:
+        def execute():
             try:
                 self.ledger = core.Ledger(path)
                 with mock.patch.object(self.store, 'write', side_effect=exit_after_write):
                     self.decide(staged)
             finally:
                 os._exit(78)
-        _, status = os.waitpid(pid, 0)
-        self.assertTrue(os.WIFEXITED(status))
-        self.assertEqual(77, os.WEXITSTATUS(status))
+        worker = multiprocessing.get_context('fork').Process(target=execute)
+        worker.start()
+        try:
+            worker.join(5)
+            self.assertEqual(77, worker.exitcode)
+        finally:
+            if worker.is_alive():
+                worker.kill()
+                worker.join(5)
+            worker.close()
         reopened = core.Ledger(path)
         self.addCleanup(reopened.close)
         self.ledger = reopened
