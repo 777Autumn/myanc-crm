@@ -135,6 +135,16 @@ class Store:
         return result
 
     def get(self, kind, identifier):
+        if kind == 'banquets' and isinstance(identifier, str) and re.fullmatch(r'YAN-[0-9]{4,}', identifier):
+            matches = [row for row in self.list(kind) if row.get('number') == identifier]
+            if len(matches) > 1:
+                raise ValueError('Duplicate banquet number; reconcile the Base.')
+            if not matches:
+                return None
+            row = self.get(kind, matches[0]['record_id'])
+            if row is None or row.get('number') != identifier:
+                raise ValueError('Banquet number changed; read again.')
+            return row
         identifier = lark._record_id(identifier)
         rows = self.backend._read_records(['base', '+record-get', '--base-token', self.backend.base_token,
             '--table-id', self.tables[kind], '--record-id', identifier], tuple(self.fields[kind].values()), 'read banquet record')
