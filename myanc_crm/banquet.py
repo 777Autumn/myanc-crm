@@ -355,7 +355,7 @@ def approval_preview(staged, backend):
     return {'operation_type': staged['operation_type'], 'actor': staged['actor']['display_name'],
             'customer': core._display_customer(staged['customer_snapshot'], backend),
             'banquet': core._fence_value(staged['banquet_before'] or {}),
-            'banquet_changes': [{**change, 'before': core._fence_value(change['before']), 'after': core._fence_value(change['after'])}
+            'banquet_changes': [{**change, 'after': core._fence_value(change['after'])}
                                 for change in core._field_changes(staged['banquet_before'] or {}, staged['banquet_patch'])],
             'expires_at': staged['expires_at']}
 
