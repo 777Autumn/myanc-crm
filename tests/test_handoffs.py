@@ -80,6 +80,20 @@ class HandoffJourneyTests(unittest.TestCase):
             handoffs.authorize_file(pub, self.backend, self.ledger, self.config, self.recipient)
         self.assertEqual('blocked', self.proposal('stage-handoff-accept', self.recipient, version=1)['status'])
 
+    def test_reader_role_uses_host_mapping_not_source_app_id_or_display_name(self):
+        self.decide(self.proposal())
+        request = {'banquet_id': self.business}
+        self.assertNotEqual(self.recipient['user_id'], 'ou_member')
+        for principal, expected in ((self.recipient, True), (PRINCIPAL, False)):
+            value = handoffs.read(request, self.backend, self.ledger, self.config, principal)
+            self.assertIs(value['is_recipient'], expected)
+        other = {**self.recipient, 'user_id': 'same-name-other'}
+        self.config['allowed_actors']['same-name-other'] = {
+            'display_name': '示例同事', 'feishu_user_id': 'ou_other'}
+        denied = handoffs.read(request, self.backend, self.ledger, self.config, other)
+        self.assertEqual('blocked', denied['status'])
+        self.assertNotIn('is_recipient', denied)
+
     def test_file_failure_and_revocation_do_not_publish_or_acknowledge(self):
         staged = self.proposal()
         self.assertEqual('failed', self.decide(staged, files_verified=False)['status'])
