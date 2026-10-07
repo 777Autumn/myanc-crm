@@ -26,12 +26,21 @@ def latest(store, banquet_id):
     return max(rows, key=lambda r: r['version']) if rows else None
 
 
+def _executed_patch(change):
+    patch = dict(change['handoff_patch'])
+    executed_at = (change.get('receipt') or {}).get('executed_at')
+    if executed_at is not None:
+        key = 'submitted_at' if change['operation_type'] == 'banquet_handoff_submit' else 'acknowledged_at'
+        patch[key] = core._iso(core._parse_time(executed_at, 'executed_at'))
+    return patch
+
+
 def publication(ledger, row):
     """Editable Base cells never grant filesystem access."""
     origin = ledger.get(row.get('publication_id', ''))
     if not origin or origin.get('operation_type') != 'banquet_handoff_submit' or origin.get('state') != 'verified':
         raise ValueError('Handoff publication is not verified.')
-    approved = origin['handoff_patch']
+    approved = _executed_patch(origin)
     immutable = {key: approved.get(key) for key in ('banquet_id', 'version', 'recipient', 'submitted_by',
                                                    'materials', 'missing', 'submitted_at', 'publication_id')}
     if not banquet._matches(row, immutable):
@@ -49,7 +58,7 @@ def publication(ledger, row):
                 or decision.get('actor', {}).get('feishu_user_id') not in customers._owner_ids(row['recipient'])
                 or decision.get('handoff_before', {}).get('publication_id') != origin['change_id']
                 or decision['receipt'].get('handoff', {}).get('record_id') != row['record_id']
-                or not banquet._matches(row, decision['handoff_patch'])):
+                or not banquet._matches(row, _executed_patch(decision))):
             raise ValueError('The named recipient has not verified this acknowledgment.')
     else:
         raise ValueError('Invalid handoff state.')
@@ -144,7 +153,7 @@ def stage(command, request, backend, ledger, config, token, principal, *, contex
                      'submitted_by': [{'id': actor['feishu_user_id'], 'name': actor['display_name']}],
                      'materials': core._json(material_labels(source['files'])),
                      'missing': core._required_text(request.get('missing'), 'missing (explicitly state none if complete)', 2000),
-                     'status': '待接手', 'submitted_at': core._iso(moment), 'publication_id': change_id}
+                     'status': '待接手', 'submitted_at': None, 'publication_id': change_id}
         else:
             if before is None or type(request.get('version')) is not int or request['version'] != before['version']:
                 raise ValueError('Handoff version changed; read again.')
@@ -153,7 +162,7 @@ def stage(command, request, backend, ledger, config, token, principal, *, contex
                 raise ValueError('Only the named recipient may handle the pending version.')
             source = origin['handoff_source']
             patch = {'status': '已接手' if command == 'stage-handoff-accept' else '已退回',
-                     'acknowledged_at': core._iso(moment)}
+                     'acknowledged_at': None}
             if command == 'stage-handoff-return':
                 patch['return_reason'] = core._required_text(request.get('reason'), 'reason', 2000)
         binding = getattr(personal_backend.runner, 'binding', None)
@@ -215,7 +224,9 @@ def apply(staged, backend, ledger, moment, *, personal_backend=None, files_verif
         except Exception:
             return finish('failed', 'prewrite_read_failed')
         identifier = None if submit else before['record_id']
-        fields = {**staged['handoff_patch'], 'operation_id': change_id}
+        executed_at = core._iso(effective.replace(microsecond=0))
+        time_key = 'submitted_at' if submit else 'acknowledged_at'
+        fields = {**staged['handoff_patch'], time_key: executed_at, 'operation_id': change_id}
         expected = {**(before if not submit else {}), **fields}
         try:
             identifier = writer.write('handoffs', identifier, fields)
@@ -236,7 +247,7 @@ def apply(staged, backend, ledger, moment, *, personal_backend=None, files_verif
             actual = None
         if actual is None:
             return finish('verification_unknown', 'handoff_write_unverified')
-        return finish('verified', 'handoff_write_verified', handoff=_view(actual, store))
+        return finish('verified', 'handoff_write_verified', handoff=_view(actual, store), executed_at=executed_at)
     import time
     if staged.get('receipt'):
         return {**staged['receipt'], 'replayed': True}

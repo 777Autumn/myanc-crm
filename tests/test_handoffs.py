@@ -1,5 +1,7 @@
 import unittest
+from datetime import timedelta
 from types import SimpleNamespace
+from unittest import mock
 
 from myanc_crm import core, handoffs
 from test_core import NOW, PRINCIPAL, TOKEN
@@ -27,14 +29,14 @@ class HandoffJourneyTests(unittest.TestCase):
         self.files = [{'delivery_id': 'delivery1', 'name': '虚构交接.docx', 'sha256': 'a' * 64,
                        'version': 1, 'message_receipt': 'file-receipt'}]
 
-    def proposal(self, command='stage-handoff-submit', principal=PRINCIPAL, **fields):
+    def proposal(self, command='stage-handoff-submit', principal=PRINCIPAL, now=NOW, **fields):
         request = {'banquet_id': self.business, **fields}
         if command == 'stage-handoff-submit':
             request = {'recipient_ref': self.owner, 'delivery_ids': ['delivery1'], 'missing': '菜单待确认', **request}
         return handoffs.stage(command, request, self.backend, self.ledger, self.config, TOKEN + principal['user_id'],
-            principal, context={'work_id': 'work1', 'files': self.files}, personal_backend=self.backend, now=NOW)
+            principal, context={'work_id': 'work1', 'files': self.files}, personal_backend=self.backend, now=now)
 
-    def decide(self, staged, principal=PRINCIPAL, files_verified=True):
+    def decide(self, staged, principal=PRINCIPAL, files_verified=True, now=NOW):
         self.assertEqual('staged', staged['status'], staged)
         result = core.begin_approval({'change_id': staged['change_id'], 'principal': principal},
             self.backend, self.ledger, self.config, TOKEN + principal['user_id'], NOW)
@@ -43,12 +45,54 @@ class HandoffJourneyTests(unittest.TestCase):
         bound = core.bind_approval_card({'approval_id': result['approval_id'], 'principal': p}, self.ledger, self.config)
         self.assertEqual('bound', bound['status'], bound)
         claim = core.claim_approval_decision({'approval_id': result['approval_id'], 'decision': 'approve', 'principal': p},
-            self.ledger, self.config, NOW, backend=self.backend)
+            self.ledger, self.config, now, backend=self.backend)
         self.assertTrue(claim['execute'], claim)
         self.assertIn('file_check', claim)
         return core.execute_claimed_approval({'approval_id': result['approval_id'], 'principal': p},
-            self.backend, self.ledger, self.config, NOW, personal_backend=self.backend,
+            self.backend, self.ledger, self.config, now, personal_backend=self.backend,
             handoff_files_verified=files_verified)
+
+    def test_delayed_approval_records_execution_time_and_preserves_publication(self):
+        steps = [('stage-handoff-submit', PRINCIPAL, {}),
+                 ('stage-handoff-return', self.recipient, {'version': 1, 'reason': '补菜单'}),
+                 ('stage-handoff-submit', PRINCIPAL, {'missing': '菜单待确认'}),
+                 ('stage-handoff-accept', self.recipient, {'version': 2})]
+        for index, (command, principal, fields) in enumerate(steps):
+            staged_at = NOW + timedelta(minutes=index * 2)
+            executed_at = staged_at + timedelta(minutes=1)
+            staged = self.proposal(command, principal, now=staged_at, **fields)
+            receipt = self.decide(staged, principal, now=executed_at)
+            self.assertEqual('verified', receipt['status'])
+            row = handoffs.latest(self.store, self.business)
+            key = 'submitted_at' if command == 'stage-handoff-submit' else 'acknowledged_at'
+            self.assertEqual(core._iso(executed_at), row[key])
+            handoffs.publication(self.ledger, row)
+            writes = len(self.store.writes)
+            replay = handoffs.apply(self.ledger.get(staged['change_id']), self.backend, self.ledger,
+                                    executed_at + timedelta(seconds=30), personal_backend=self.backend,
+                                    files_verified=True)
+            self.assertTrue(replay['replayed'])
+            self.assertEqual(writes, len(self.store.writes))
+            changed = {**row, key: core._iso(staged_at)}
+            with self.assertRaises(ValueError):
+                handoffs.publication(self.ledger, changed)
+
+    def test_legacy_publications_keep_their_original_timestamp_evidence(self):
+        submitted = self.proposal()
+        self.decide(submitted)
+        accepted = self.proposal('stage-handoff-accept', self.recipient, version=1)
+        self.decide(accepted, self.recipient)
+        row = handoffs.latest(self.store, self.business)
+        legacy = {}
+        for staged, key in ((submitted, 'submitted_at'), (accepted, 'acknowledged_at')):
+            record = self.ledger.get(staged['change_id'])
+            record['handoff_patch'][key] = row[key]
+            record['receipt'].pop('executed_at')
+            legacy[record['change_id']] = record
+        with mock.patch.object(self.ledger, 'get', side_effect=legacy.get):
+            self.assertEqual(submitted['change_id'], handoffs.publication(self.ledger, row)['change_id'])
+            with self.assertRaises(ValueError):
+                handoffs.publication(self.ledger, {**row, 'acknowledged_at': core._iso(NOW + timedelta(minutes=1))})
 
     def test_submit_return_revise_and_named_recipient_accepts_current_version(self):
         first = self.proposal()
