@@ -1,5 +1,10 @@
+import multiprocessing
+import os
+import sqlite3
+import tempfile
 import unittest
 from datetime import timedelta
+from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
@@ -146,6 +151,151 @@ class HandoffJourneyTests(unittest.TestCase):
         self.current_version = 2
         self.assertEqual('failed', self.decide(staged)['status'])
         self.assertIsNone(handoffs.latest(self.store, self.business))
+
+    def test_lost_write_response_recovers_submit_and_accept_without_rewriting(self):
+        write = self.store.write
+        def lose_response(*args):
+            write(*args)
+            raise TimeoutError('fixture: response lost after committing')
+        for command, principal, fields in (
+                ('stage-handoff-submit', PRINCIPAL, {}),
+                ('stage-handoff-accept', self.recipient, {'version': 1})):
+            with self.subTest(command=command):
+                staged = self.proposal(command, principal, **fields)
+                before = len(self.store.writes)
+                with mock.patch.object(self.store, 'write', side_effect=lose_response) as attempted:
+                    receipt = self.decide(staged, principal)
+                self.assertEqual('verified', receipt['status'], receipt)
+                attempted.assert_called_once()
+                self.assertEqual(before + 1, len(self.store.writes))
+                replay = handoffs.apply(self.ledger.get(staged['change_id']), self.backend,
+                    self.ledger, NOW, personal_backend=self.backend, files_verified=True)
+                self.assertTrue(replay['replayed'])
+                self.assertEqual(before + 1, len(self.store.writes))
+                handoffs.publication(self.ledger, handoffs.latest(self.store, self.business))
+
+    def persistent_ledger(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        path = Path(directory.name) / 'handoff.sqlite3'
+        ledger = core.Ledger(path)
+        self.ledger._db.backup(ledger._db)
+        self.ledger = ledger
+        self.addCleanup(ledger.close)
+        return path
+
+    def test_unobservable_write_keeps_fence_after_reopen_and_never_replays(self):
+        for committed in (False, True):
+            with self.subTest(committed=committed):
+                self.setUp()
+                path = self.persistent_ledger()
+                staged = self.proposal()
+                write, read = self.store.write, self.store.list
+                writing = False
+                def lose_response(*args):
+                    nonlocal writing
+                    writing = True
+                    if committed:
+                        write(*args)
+                    raise TimeoutError('fixture: write outcome unknown')
+                def unavailable(kind):
+                    if writing:
+                        raise TimeoutError('fixture: readback unavailable')
+                    return read(kind)
+                with mock.patch.object(self.store, 'write', side_effect=lose_response) as attempted, \
+                     mock.patch.object(self.store, 'list', side_effect=unavailable), \
+                     mock.patch.object(core, 'READBACK_TIMEOUT_SECONDS', 0):
+                    receipt = self.decide(staged)
+                self.assertEqual('verification_unknown', receipt['status'], receipt)
+                attempted.assert_called_once()
+                writes = len(self.store.writes)
+                reopened = core.Ledger(path)
+                self.addCleanup(reopened.close)
+                self.ledger = reopened
+                replay = handoffs.apply(reopened.get(staged['change_id']), self.backend,
+                    reopened, NOW, personal_backend=self.backend, files_verified=True)
+                self.assertTrue(replay['replayed'])
+                self.assertEqual('verification_unknown', replay['status'])
+                self.assertGreater(reopened._db.execute('SELECT count(*) FROM write_fences').fetchone()[0], 0)
+                with self.assertRaises(ValueError):
+                    handoffs.authorize_file('bh_' + staged['change_id'] + '_0', self.backend,
+                                            reopened, self.config, self.recipient)
+                blocked = self.decide(self.proposal(missing='故障后另一次提交'))
+                self.assertEqual('crm_write_unresolved', blocked['code'], blocked)
+                self.assertEqual(writes, len(self.store.writes))
+
+    def test_receipt_commit_failure_preserves_handoff_fence_and_no_publication(self):
+        path = self.persistent_ledger()
+        staged = self.proposal()
+        self.ledger._db.execute("CREATE TRIGGER receipt_failure BEFORE DELETE ON write_fences "
+                               "BEGIN SELECT RAISE(ABORT, 'fixture receipt commit failure'); END")
+        before = len(self.store.writes)
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.decide(staged)
+        self.assertEqual(before + 1, len(self.store.writes))
+        reopened = core.Ledger(path)
+        self.addCleanup(reopened.close)
+        approval = reopened.get_approval_for_change(staged['change_id'])
+        self.assertEqual('executing', approval['state'])
+        self.assertIsNone(approval['receipt'])
+        self.assertEqual('applying', reopened.get(staged['change_id'])['state'])
+        decision = core.claim_approval_decision({'approval_id': approval['approval_id'],
+            'decision': 'approve', 'principal': {**PRINCIPAL, 'message_id': approval['card_message_id']}},
+            reopened, self.config, NOW + timedelta(seconds=core.APPROVAL_EXECUTION_UNCERTAIN_SECONDS + 1),
+            backend=self.backend)
+        self.assertFalse(decision['execute'])
+        self.assertEqual('execution_result_unknown', decision['code'])
+        with self.assertRaises(ValueError):
+            handoffs.authorize_file('bh_' + staged['change_id'] + '_0', self.backend,
+                                    reopened, self.config, self.recipient)
+        self.assertGreater(reopened._db.execute('SELECT count(*) FROM write_fences').fetchone()[0], 0)
+        self.assertEqual(before + 1, len(self.store.writes))
+
+    @unittest.skipUnless(hasattr(os, 'fork'), 'real worker exit requires POSIX')
+    def test_worker_exit_after_write_blocks_replay_and_following_handoff(self):
+        path = self.persistent_ledger()
+        staged = self.proposal()
+        write = self.store.write
+        def exit_after_write(*args):
+            write(*args)
+            os._exit(77)
+        def execute():
+            try:
+                self.ledger = core.Ledger(path)
+                with mock.patch.object(self.store, 'write', side_effect=exit_after_write):
+                    self.decide(staged)
+            finally:
+                os._exit(78)
+        worker = multiprocessing.get_context('fork').Process(target=execute)
+        worker.start()
+        try:
+            worker.join(5)
+            self.assertEqual(77, worker.exitcode)
+        finally:
+            if worker.is_alive():
+                worker.kill()
+                worker.join(5)
+            worker.close()
+        reopened = core.Ledger(path)
+        self.addCleanup(reopened.close)
+        self.ledger = reopened
+        approval = reopened.get_approval_for_change(staged['change_id'])
+        self.assertEqual('executing', approval['state'])
+        self.assertIsNone(approval['receipt'])
+        self.assertEqual('applying', reopened.get(staged['change_id'])['state'])
+        writes = len(self.store.writes)
+        replay = core.claim_approval_decision({'approval_id': approval['approval_id'],
+            'decision': 'approve', 'principal': {**PRINCIPAL, 'message_id': approval['card_message_id']}},
+            reopened, self.config, NOW + timedelta(seconds=core.APPROVAL_EXECUTION_UNCERTAIN_SECONDS + 1),
+            backend=self.backend)
+        self.assertFalse(replay['execute'])
+        self.assertEqual('execution_result_unknown', replay['code'])
+        blocked = self.decide(self.proposal(missing='进程退出后新预览'))
+        self.assertEqual('crm_write_unresolved', blocked['code'], blocked)
+        self.assertEqual(writes, len(self.store.writes))
+        with self.assertRaises(ValueError):
+            handoffs.authorize_file('bh_' + staged['change_id'] + '_0', self.backend,
+                                    reopened, self.config, self.recipient)
 
     def test_manual_status_edit_cannot_forge_recipient_confirmation(self):
         first = self.proposal()
