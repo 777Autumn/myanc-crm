@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 from myanc_crm.connections import ConnectionBlocked, Connections, access
 
@@ -16,6 +17,19 @@ spec.loader.exec_module(fixture)
 
 
 class CapacityFixtureTests(unittest.TestCase):
+    def test_source_startup_keeps_app_and_cli_version_checks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = fixture.capacity_config(Path(tmp))
+            run = mock.Mock(return_value=subprocess.CompletedProcess([], 0, '1.0.90\n', ''))
+            connection = Connections(config, run=run)
+            self.assertEqual('enabled', connection.validate_source('capacity-app')['status'])
+            self.assertEqual([config['personal_connections']['cli_path'], '--version'], run.call_args.args[0])
+            with self.assertRaises(ConnectionBlocked):
+                connection.validate_source('wrong-app')
+            run.return_value.stdout = '1.0.91\n'
+            with self.assertRaises(ConnectionBlocked):
+                connection.validate_source('capacity-app')
+
     def test_real_cli_envelope_shared_read_and_private_rejection(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = fixture.capacity_config(Path(tmp))

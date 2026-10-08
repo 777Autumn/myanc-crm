@@ -1,7 +1,8 @@
 """OFFLINE ONLY: real authenticated CLI/core/SQLite, persisted synthetic Feishu.
 
 Invoke with one host command and JSON stdin. MYANC_SPIKE_DIR must name an
-existing absolute scratch directory. Never reads real CRM config or uses Lark.
+existing absolute scratch directory. Never reads real CRM config or uses Lark
+authentication/API commands. Capacity startup checks the installed CLI version.
 This JSON fake is for serial integration journeys, not concurrent-writer tests.
 """
 
@@ -152,7 +153,7 @@ class PersistentSalesStore:
 def capacity_config(directory):
     """Two fictional participants, four fixed routes, real connection checks.
 
-    No personal account is enrolled and no real CLI is invoked. File-only
+    No personal account is enrolled; startup only reads the installed CLI version. File-only
     private work and shared reads are allowed by the production guard; private
     CRM reads must fail. Each caller supplies a separate cohort scratch root.
     """
@@ -166,7 +167,7 @@ def capacity_config(directory):
                                project=f"capacity-{2*n+offset}", audience=audience))
     config["personal_connections"] = dict(
         app_id="capacity-crm", tenant_key="capacity-tenant", source_app_id="capacity-app",
-        source_tenant_key="capacity-tenant", cli_path=str(directory / "unavailable-cli"),
+        source_tenant_key="capacity-tenant", cli_path=str(Path('/usr/local/libexec/lark-cli-1.0.90').absolute()),
         database_path=str(directory / "connections.sqlite3"), cli_home_root=str(directory / "no-credentials"),
         resource_mode="shared", routes=routes)
     return config
