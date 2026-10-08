@@ -1,7 +1,8 @@
 """OFFLINE ONLY: real authenticated CLI/core/SQLite, persisted synthetic Feishu.
 
 Invoke with one host command and JSON stdin. MYANC_SPIKE_DIR must name an
-existing absolute scratch directory. Never reads real CRM config or uses Lark.
+existing absolute scratch directory. Never reads real CRM config or uses Lark
+authentication/API commands. Capacity startup checks the installed CLI version.
 This JSON fake is for serial integration journeys, not concurrent-writer tests.
 """
 
@@ -47,15 +48,15 @@ class PersistentFakeFeishu(HistoryBackend):
             # Eval-only paired fixtures: do not add these claims to demo/live data.
             seed = os.environ.get("MYANC_SPIKE_SEED", "")
             if seed not in {"", "term-ambiguous", "term-defined", "customer-trial",
-                            "customer-roster", "customer-roster-ambiguous", "daily-followup"}:
+                            "customer-roster", "customer-roster-ambiguous", "daily-followup", "capacity"}:
                 raise ValueError("Unknown offline fixture seed")
-            if seed == "daily-followup":
+            if seed in {"daily-followup", "capacity"}:
                 self.schema["customers"].append("operation_id")
                 self.people.update({f"ou_fixture_sender-{n}": {
                     "id": f"ou_fixture_sender-{n}", "name": f"Fixture sender-{n}"}
                     for n in (1, 2)})
                 self.customers = {}
-                for n in range(1, 23):
+                for n in range(1, 6 if seed == "capacity" else 23):
                     row = customer(f"rec-{n}", f"C-{n:03d}", f"虚构日常客户{n:03d}")
                     row.update(stage="新线索", owner=[self.people[
                         "ou_fixture_sender-1" if n <= 21 else "ou_fixture_sender-2"]],
@@ -149,10 +150,34 @@ class PersistentSalesStore:
         return 'https://example.invalid/base/fixture?record=' + identifier
 
 
+def capacity_config(directory):
+    """Two fictional participants, four fixed routes, real connection checks.
+
+    No personal account is enrolled; startup only reads the installed CLI version. File-only
+    private work and shared reads are allowed by the production guard; private
+    CRM reads must fail. Each caller supplies a separate cohort scratch root.
+    """
+    config = copy.deepcopy(CONFIG)
+    routes = []
+    for n, user in enumerate(("sender-1", "sender-2")):
+        config["allowed_actors"][user]["connection_profile"] = f"anc-user-capacity-{n}"
+        for offset, audience in enumerate(("private", "shared")):
+            routes.append(dict(platform="feishu", user_id=user,
+                               chat_id=f"private-{user}" if offset == 0 else "group-1",
+                               project=f"capacity-{2*n+offset}", audience=audience))
+    config["personal_connections"] = dict(
+        app_id="capacity-crm", tenant_key="capacity-tenant", source_app_id="capacity-app",
+        source_tenant_key="capacity-tenant", cli_path=str(Path('/usr/local/libexec/lark-cli-1.0.90').absolute()),
+        database_path=str(directory / "connections.sqlite3"), cli_home_root=str(directory / "no-credentials"),
+        resource_mode="shared", routes=routes)
+    return config
+
+
 def main():
     if len(sys.argv) != 2 or sys.argv[1] not in {
         "host-tool", "host-bind-card", "host-claim", "host-execute",
         "host-plan-events", "host-plan-read", "host-plan-ack",
+        "host-connection-config", "host-connection-guard",
     }:
         raise SystemExit("Offline fixture accepts only the documented host commands.")
     directory = Path(os.environ.get("MYANC_SPIKE_DIR", ""))
@@ -164,6 +189,16 @@ def main():
     # Configuration and external Feishu are the injected system boundaries.
     # Host authentication, envelope checks, SQLite, claim and apply stay real.
     config = copy.deepcopy(CONFIG)
+    if os.environ.get("MYANC_SPIKE_SEED") == "capacity":
+        config = capacity_config(directory)
+        if sys.argv[1] not in {"host-tool", "host-connection-config", "host-connection-guard"}:
+            raise SystemExit("Capacity fixture is read-only.")
+        # Reject any business write before the real CLI can stage it.
+        import io
+        payload = json.load(sys.stdin)
+        if sys.argv[1] == "host-tool" and payload.get("command") not in {"customer", "customers"}:
+            raise SystemExit("Capacity fixture accepts only customer reads.")
+        sys.stdin = io.StringIO(json.dumps(payload))
     if os.environ.get('MYANC_SPIKE_SEED') in {'shared-cases', 'project-context'}:
         from myanc_crm import shared_cases
         test_store = directory / 'mock-cases.sqlite3'
