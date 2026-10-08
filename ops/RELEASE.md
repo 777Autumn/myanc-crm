@@ -1,15 +1,33 @@
 # CRM / gateway delivery contract
 
 This is the authoritative development handoff and VPS release contract for the
-private repositories `robinavery6784-spec/myanc-crm`, `robinavery6784-spec/cc-connect-anc` and
-`robinavery6784-spec/myanc-team-brain` when the knowledge runtime is in the candidate.
+private repositories `777Autumn/myanc-crm`, `777Autumn/cc-connect-anc` and
+`777Autumn/myanc-team-brain` when the knowledge runtime is in the candidate.
 
-These repositories were formally transferred from `77AutumN` on 2026-09-28.
+These repositories were transferred from `77AutumN` to `robinavery6784-spec` on
+2026-09-28, returned to `77AutumN` on 2026-10-09, and then transferred to
+`777Autumn` on the same day with explicit Owner approval. Repository IDs, main
+SHAs and Git trees were verified unchanged at both transfers; all remain private.
 Use the current owner for new checks and candidate manifests. Keep historical
 receipts, links and review records unchanged. If reusing a pre-transfer review,
 retain it and record the repository-ID and exact base/head equivalence alongside
 the review bound to the current name. The transfer does not waive any CI or review
 requirement.
+
+Ownership-transfer identity anchors (full main SHA at transfer):
+
+| Repository | GitHub ID | Main SHA |
+| --- | --- | --- |
+| cc-connect-anc | 1356152199 | 999d081ceebc2cb393d98c365e110efb32b82641 |
+| myanc-crm | 1355763479 | 7cf80802eb7faa493731917ae0d7a34c1d6fa673 |
+| myanc-team-brain | 1362463134 | de936941d80d064a6860289676129a2dd67dfb2f |
+
+Use the independently reviewed gate in this ownership-transfer branch for its own
+head-matched merge after required PR CI passes, since the old gate rejects the
+new PR owner. Exact merge-SHA push CI remains required afterward. Failed or
+billing-blocked CI is not waived by transfer. Do not rewrite historical reviews,
+candidates or the shared incident ledger. The ownership-transfer audit found no
+open incidents; this change does not initialize or migrate release state.
 
 ## Completion
 
