@@ -11,11 +11,11 @@ from contextlib import contextmanager
 from pathlib import Path
 
 REPOS = {
-    "77AutumN/myanc-crm": {"test"},
-    "77AutumN/cc-connect-anc": {
+    "777Autumn/myanc-crm": {"test"},
+    "777Autumn/cc-connect-anc": {
         "lint", "unit-test", "smoke-test", "regression-test", "performance-test"
     },
-    "77AutumN/myanc-team-brain": {
+    "777Autumn/myanc-team-brain": {
         f"test ({runner}, {python})"
         for runner in ("ubuntu-latest", "windows-latest") for python in ("3.11", "3.13")
     },
@@ -35,9 +35,9 @@ def sha(value):
 
 
 def source_commits(crm_sha, gateway_sha, knowledge_sha=None):
-    sources = {"77AutumN/myanc-crm": sha(crm_sha), "77AutumN/cc-connect-anc": sha(gateway_sha)}
+    sources = {"777Autumn/myanc-crm": sha(crm_sha), "777Autumn/cc-connect-anc": sha(gateway_sha)}
     if knowledge_sha is not None:
-        sources["77AutumN/myanc-team-brain"] = sha(knowledge_sha)
+        sources["777Autumn/myanc-team-brain"] = sha(knowledge_sha)
     return sources
 
 
