@@ -29,6 +29,11 @@ Native Feishu images appear in `work-context.inputs`, with saved paths and hashe
   unverified until actually opened and checked.
 - Use `openpyxl` or `XlsxWriter` for the editable budget. Store assumptions,
   sources, selected items and pending decisions in the workbook itself.
+  Generate XLSX first, then use the installed helper below to recalculate it and
+  export its companion PDF through LibreOffice. This workflow does not require
+  `reportlab`; do not add an unrelated PDF-library import as a prerequisite.
+  Diagnose unavailable conversion from the supported workflow's actual error,
+  while preserving the existing permission-denial stop rule and no-install rule.
   Write explanations as text (`write_string`, or an explicit string cell type),
   especially text beginning with `=`. Use formulas only for actual calculations;
   preserve valid formulas when revising an imported workbook.
