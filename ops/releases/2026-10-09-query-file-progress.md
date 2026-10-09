@@ -5,6 +5,10 @@ limitations below. This record does not replace the prior
 capacity findings or claim arbitrary file latency, eight-user access or long-term
 reliability. Two existing test identities and fictional records are used.
 
+Subsequent review fixes and additional controls are recorded separately in
+[Experience review closeout](2026-10-09-experience-review-closeout.md). The results
+and limitations below remain the historical evidence for this release.
+
 ## Source delivery
 
 | Component | Merge | Delivery |
