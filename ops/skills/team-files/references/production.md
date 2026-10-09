@@ -37,6 +37,10 @@ Native Feishu images appear in `work-context.inputs`, with saved paths and hashe
   row height explicitly for merged titles. Set column widths, orientation,
   repeated headers and one pagination strategy before the first render; check
   these on every sheet, including summaries. Preserve required source identifiers.
+  For long detail tables, budget the printable page height against repeated title
+  rows and body row heights; oversized repeated headings can double the page count.
+  Keep body text readable while adjusting margins and row heights to the requested
+  page range, then verify the actual exported pages.
 
 ## Update, render, inspect
 

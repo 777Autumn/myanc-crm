@@ -186,7 +186,7 @@ def fictional_large_budget(path):
         sheet['A1'] = title
         sheet.merge_cells(f'A2:{last}2')
         sheet['A2'] = label
-        for cell, height, size in (('A1', 28, 15), ('A2', 42, 10)):
+        for cell, height, size in (('A1', 24, 15), ('A2', 30, 10)):
             sheet[cell].alignment = Alignment(wrap_text=True, vertical='center')
             sheet[cell].font = Font(name='Noto Sans CJK SC', size=size)
             sheet.row_dimensions[sheet[cell].row].height = height
@@ -198,12 +198,14 @@ def fictional_large_budget(path):
         sheet.page_setup.fitToWidth = 1
         sheet.page_setup.fitToHeight = 0
         sheet.print_title_rows = '1:3'
+        sheet.page_margins.top = sheet.page_margins.bottom = 0.25
+        sheet.page_margins.left = sheet.page_margins.right = 0.25
     detail.append(('序号', '分类', '项目', '数量', '单价', '金额', '备用金', '备注'))
     for i in range(1, 501):
         row = i + 3
         detail.append((i, f'分类{(i-1)%20+1:02}', f'虚构条目{i}', i%3+1, 100+i,
                        f'=D{row}*E{row}', f'=F{row}*10%', '演练资料'))
-        detail.row_dimensions[row].height = 22
+        detail.row_dimensions[row].height = 17
     summary.append(('分类', '条目数', '数量', '金额', '备用金'))
     for i in range(1, 21):
         row = i + 3
@@ -217,6 +219,9 @@ def fictional_large_budget(path):
     # Reserve the third row for a header consistently across all sheets.
     overview.insert_rows(3)
     for sheet in book:
+        for row in sheet.iter_rows(min_row=3):
+            for cell in row:
+                cell.font = Font(name='Noto Sans CJK SC', size=10)
         sheet.print_area = f'A1:{"H" if sheet is detail else "E"}{sheet.max_row}'
     book.save(path)
 
