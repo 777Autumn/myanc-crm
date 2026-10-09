@@ -10,8 +10,9 @@ description: 使用团队 CRM 查询客户和婚宴商机、婚期与到店安�
    approval, shared plans and receipt interpretation.
 2. Identify the user's current intent and the real object shown in this conversation.
    Follow the protocol's read/clarify/stage/result steps for that intent.
-   For a banquet opportunity, date, venue, table count, budget, visit or handoff, read
-   [the banquet protocol](references/banquet.md) before choosing fields or tools.
+   For a banquet number (such as `YAN-0006`), opportunity, date, venue, table count,
+   budget, visit or handoff, read [the banquet protocol](references/banquet.md)
+   before choosing fields or tools.
 3. For a write proposal, preserve the confirmed draft and use the existing host
    approval workflow and its exact post-stage reply from the protocol.
 4. On the next user turn, follow that turn's intent. Read the matching receipt

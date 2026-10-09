@@ -13,7 +13,7 @@ import time
 import unittest
 import zipfile
 import xml.etree.ElementTree as ET
-from contextlib import redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 from unittest.mock import patch
 
 from docx import Document
@@ -24,8 +24,41 @@ from pptx import Presentation
 from pptx.util import Inches
 from pypdf import PdfReader
 from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Alignment, Font
 
 from team_file_render import check_xlsx_result, main, office_check, prepare_paths, render, run, xlsx_cells
+
+
+class RenderReceiptTests(unittest.TestCase):
+    def test_large_workbook_cli_receipt_is_bounded_and_keeps_full_manifest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp).resolve() / 'outputs' / 'v1'
+            target.mkdir(parents=True)
+            result = {'status': 'rendered_not_visually_verified', 'pages': 14,
+                      'source_sha256': 'a' * 64,
+                      'files': {'预算.xlsx': 'b' * 64, '预算.pdf': 'c' * 64,
+                                **{f'page-{i:02}.png': 'd' * 64 for i in range(1, 15)}},
+                      'xlsx': {'formula_count': 1084, 'formula_caches_checked': True,
+                               'equals_text_requires_task_review': False,
+                               'formula_cells': [f'明细!E{i}' for i in range(1, 1085)]}}
+            manifest = target / 'render.json'
+            manifest.write_text(json.dumps(result, ensure_ascii=False), encoding='utf-8')
+            before = manifest.read_bytes()
+            output = io.StringIO()
+            with patch('sys.argv', ['render', '--work-root', tmp, '--input', '预算.xlsx',
+                                    '--output-dir', str(target)]), \
+                    patch('team_file_render.render', return_value=result), redirect_stdout(output):
+                main()
+            receipt = json.loads(output.getvalue())
+            self.assertLess(len(output.getvalue()), 2048)
+            self.assertEqual(receipt['status'], result['status'])
+            self.assertEqual(receipt['pages'], 14)
+            self.assertEqual(receipt['manifest'], str(manifest))
+            self.assertEqual(set(receipt['files']), {str(target / '预算.xlsx'), str(target / '预算.pdf')})
+            self.assertEqual(receipt['xlsx'], {'formula_count': 1084, 'formula_caches_checked': True,
+                                              'equals_text_requires_task_review': False})
+            self.assertEqual(manifest.read_bytes(), before)
+            self.assertEqual(len(result['xlsx']['formula_cells']), 1084)
 
 
 def deny_unix_sockets():
@@ -136,6 +169,56 @@ def fictional_budget(path):
     reference.append(('虚构 Wiki v2 A 套餐单价', 4080))
     reference.column_dimensions['A'].width = 32
     workbook.save(path)
+
+
+def fictional_large_budget(path):
+    """Three sheets, long Chinese source labels and 1084 independently checked formulas."""
+    book = Workbook()
+    overview = book.active
+    overview.title = '预算总览'
+    detail = book.create_sheet('预算明细')
+    summary = book.create_sheet('分类汇总')
+    label = '来源：ANC 虚构资料预算演练；长中文标识必须完整保留，不能挤进业务标题。'
+    for sheet, last, title in ((overview, 'E', '婚宴预算总览'),
+                               (detail, 'H', '婚宴预算明细'),
+                               (summary, 'E', '婚宴分类汇总')):
+        sheet.merge_cells(f'A1:{last}1')
+        sheet['A1'] = title
+        sheet.merge_cells(f'A2:{last}2')
+        sheet['A2'] = label
+        for cell, height, size in (('A1', 28, 15), ('A2', 42, 10)):
+            sheet[cell].alignment = Alignment(wrap_text=True, vertical='center')
+            sheet[cell].font = Font(name='Noto Sans CJK SC', size=size)
+            sheet.row_dimensions[sheet[cell].row].height = height
+        for col in range(1, ord(last) - ord('A') + 2):
+            sheet.column_dimensions[chr(ord('A') + col - 1)].width = 18
+        sheet.page_setup.orientation = 'landscape'
+        sheet.page_setup.paperSize = sheet.PAPERSIZE_A4
+        sheet.sheet_properties.pageSetUpPr.fitToPage = True
+        sheet.page_setup.fitToWidth = 1
+        sheet.page_setup.fitToHeight = 0
+        sheet.print_title_rows = '1:3'
+    detail.append(('序号', '分类', '项目', '数量', '单价', '金额', '备用金', '备注'))
+    for i in range(1, 501):
+        row = i + 3
+        detail.append((i, f'分类{(i-1)%20+1:02}', f'虚构条目{i}', i%3+1, 100+i,
+                       f'=D{row}*E{row}', f'=F{row}*10%', '演练资料'))
+        detail.row_dimensions[row].height = 22
+    summary.append(('分类', '条目数', '数量', '金额', '备用金'))
+    for i in range(1, 21):
+        row = i + 3
+        summary.append((f'分类{i:02}',
+                        f'=COUNTIF(预算明细!B4:B503,A{row})',
+                        *[f'=SUMIF(预算明细!B4:B503,A{row},预算明细!{c}4:{c}503)' for c in ('D', 'F', 'G')]))
+    for label_text, formula in (('预算合计', '=SUM(分类汇总!D4:D23)'),
+                                ('备用金', '=SUM(分类汇总!E4:E23)'),
+                                ('含备用金', '=SUM(B4:B5)'), ('每项均值', '=B4/500')):
+        overview.append((label_text, formula))
+    # Reserve the third row for a header consistently across all sheets.
+    overview.insert_rows(3)
+    for sheet in book:
+        sheet.print_area = f'A1:{"H" if sheet is detail else "E"}{sheet.max_row}'
+    book.save(path)
 
 
 def saved_budget_formulas(formulas, *, cached='6', extra_sheets=()):
@@ -422,6 +505,45 @@ with patch('team_file_render.os.execv') as execute:
                      and os.environ.get('TEAM_FILES_TEST_GATEWAY') and sys.platform in ('linux', 'darwin'),
                      'requires explicit ordinary Linux/Mac Office fixture and matching gateway')
 class NativeXlsxRenderTests(unittest.TestCase):
+    def test_large_budget_recalculates_all_rows_and_preserves_long_titles(self):
+        self.assertNotEqual(os.geteuid(), 0)
+        if sys.platform == 'linux':
+            deny_unix_sockets()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp).resolve()
+            (root / 'inputs').mkdir(); (root / 'outputs').mkdir()
+            source = root / 'inputs' / 'fictional-large-budget.xlsx'
+            fictional_large_budget(source)
+            target = root / 'outputs' / 'v1'
+            result = render(root, source, target, os.environ['TEAM_FILES_TEST_GATEWAY'])
+            self.assertEqual(result['xlsx']['formula_count'], 1084)
+            self.assertTrue(result['xlsx']['formula_caches_checked'])
+            book = load_workbook(target / source.name, data_only=True)
+            try:
+                expected = sum((i%3+1)*(100+i) for i in range(1, 501))
+                self.assertAlmostEqual(book['预算总览']['B4'].value, expected)
+                self.assertAlmostEqual(book['预算总览']['B5'].value, expected/10)
+                self.assertAlmostEqual(book['预算总览']['B6'].value, expected*1.1)
+                self.assertAlmostEqual(book['预算总览']['B7'].value, expected/500)
+                for i in range(1, 501):
+                    self.assertEqual(book['预算明细'][f'F{i+3}'].value, (i%3+1)*(100+i))
+                    self.assertAlmostEqual(book['预算明细'][f'G{i+3}'].value, (i%3+1)*(100+i)/10)
+                for i in range(1, 21):
+                    rows = [j for j in range(1, 501) if (j-1)%20+1 == i]
+                    self.assertEqual(book['分类汇总'][f'B{i+3}'].value, len(rows))
+                    self.assertEqual(book['分类汇总'][f'C{i+3}'].value, sum(j%3+1 for j in rows))
+                    subtotal = sum((j%3+1)*(100+j) for j in rows)
+                    self.assertAlmostEqual(book['分类汇总'][f'D{i+3}'].value, subtotal)
+                    self.assertAlmostEqual(book['分类汇总'][f'E{i+3}'].value, subtotal/10)
+            finally:
+                book.close()
+            text = ''.join(p.extract_text() for p in PdfReader(target / source.with_suffix('.pdf').name).pages)
+            for title in ('婚宴预算总览', '婚宴预算明细', '婚宴分类汇总'):
+                self.assertIn(title, text)
+            self.assertGreaterEqual(result['pages'], 10)
+            self.assertLessEqual(result['pages'], 20)
+            self.assertEqual(len(list(target.glob('page-*.png'))), result['pages'])
+
     def test_optional_sheet_quotes_recalculate_and_preview(self):
         self.assertNotEqual(os.geteuid(), 0)
         if sys.platform == 'linux':

@@ -22,14 +22,18 @@ Personal work may return its file to the original private chat; a blocked shared
 publication remains private. Starting an unrelated work does not authorize copying
 private material into it.
 
-Current-state requests start with a fresh `customer` call in this user turn,
-including when the user puts a proposed change on hold and asks only to look at
-the record. Reuse the known customer identifier, then read and answer; a read
-from an earlier turn is not the current record. This applies to latest history
-and advice based on the customer's present situation too. If an operation receipt
-is also requested, read `result` first, then `customer`: the receipt proves the
-earlier write, not today's state. If the refresh fails, state that limitation and
-label any earlier facts as historical. Read-only queries preserve pending plans.
+Current-state requests start with a fresh read of the requested business object
+in this user turn: `customer` for a customer, `banquet` for a specific banquet
+(including a known `YAN-` business number). For banquet reads, first load
+[the banquet protocol](banquet.md). Reuse the known identifier for that object;
+a read from an earlier turn is historical. This also applies when a proposed
+change is on hold, or when giving advice about current facts or latest history.
+If an operation receipt is also requested, read `result` first, then refresh the
+matching object: the receipt proves the earlier write, not today's state.
+Interpret not-found only for the object actually queried; a failed customer
+lookup does not establish that a banquet is absent. If the refresh fails, state
+that limitation and label earlier facts as historical. Read-only queries preserve
+pending plans.
 
 | Command | Input fields | Purpose |
 |---|---|---|
