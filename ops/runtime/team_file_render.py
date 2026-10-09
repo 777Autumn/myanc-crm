@@ -637,7 +637,17 @@ def main():
             reason = 'office_profile_busy'
         detail = f' ({reason})' if reason else ''
         parser.exit(1, f'Document preparation failed{detail}; originals retained. No delivery was attempted.\n')
-    print(json.dumps(result, ensure_ascii=False))
+    # Keep the complete evidence on disk rather than flooding the model's tool output.
+    target = Path(args.output_dir).resolve()
+    receipt = {'status': result['status'], 'pages': result['pages'],
+               'manifest': str(target / 'render.json'),
+               'files': [str(target / name) for name in result['files']
+                         if Path(name).suffix.lower() in ('.docx', '.xlsx', '.pptx', '.pdf')]}
+    if 'xlsx' in result:
+        receipt['xlsx'] = {key: value for key, value in result['xlsx'].items()
+                           if key in ('formula_count', 'formula_caches_checked',
+                                      'equals_text_requires_task_review')}
+    print(json.dumps(receipt, ensure_ascii=False))
 
 
 if __name__ == '__main__':

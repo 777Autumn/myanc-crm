@@ -32,6 +32,15 @@ Native Feishu images appear in `work-context.inputs`, with saved paths and hashe
   Write explanations as text (`write_string`, or an explicit string cell type),
   especially text beginning with `=`. Use formulas only for actual calculations;
   preserve valid formulas when revising an imported workbook.
+  For a new budget, put a short business title on its own row and retain long
+  source/test identifiers on a separate wrapped row. Set wrap and sufficient
+  row height explicitly for merged titles. Set column widths, orientation,
+  repeated headers and one pagination strategy before the first render; check
+  these on every sheet, including summaries. Preserve required source identifiers.
+  For long detail tables, budget the printable page height against repeated title
+  rows and body row heights; oversized repeated headings can double the page count.
+  Keep body text readable while adjusting margins and row heights to the requested
+  page range, then verify the actual exported pages.
 
 ## Update, render, inspect
 
@@ -80,6 +89,9 @@ original. XLSX produces a recalculated editable copy and a PDF with page preview
 the input workbook stays unchanged. PDF input is retained unchanged. Every PDF page receives a PNG preview;
 `render.json` records hashes and page count. It deliberately says
 `rendered_not_visually_verified`: this is preparation, not acceptance.
+The CLI returns a compact receipt with artifact paths, page count, formula-check
+summary and the `manifest` path. Read that `render.json` for complete page names,
+hashes and formula coordinates; bounded sections avoid truncated inspection.
 
 Before delivery, reopen the saved outputs and read all relevant cells,
 paragraphs, tables, summaries, statuses and sources. If readback is truncated or
@@ -94,6 +106,14 @@ only when saved-content readback has no gaps and every final page is covered.
 Rendering and technical checks do not establish visual correctness. Keep this
 reconciliation internal; explain actual blocked or unverified parts in ordinary
 language under the existing permission and delivery rules.
+
+For each revision, identify the observed defect by page, sheet or cell and the
+specific correction. Collect the defects found in the current inspection and
+fix them together before rendering again. Preserve already-correct styling;
+revise layout only to fix an observed defect or an explicit user request. After
+rerendering, recheck each defect at its actual location, including summary titles.
+Aim for one consolidated revision; unresolved defects still require correction
+or an honest unfinished result, never unchecked delivery to meet that target.
 
 Check poster prices and small-print legibility. Inspect saved PPTX text/shapes to
 confirm editability. For Word, compare the saved DOCX's TOC entries, page fields
