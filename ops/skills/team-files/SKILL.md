@@ -29,7 +29,11 @@ description: 读取员工选定的文档、表格、PDF和图片，制作或修�
    Check the protocol's format limits first. For every Word document (including
    an ordinary draft), Excel workbook, slides, posters or PDF/scanned materials, read and follow
    [document production](references/production.md), including rendering and
-   whole-bundle revision. Unsupported content
+   whole-bundle revision. A from-scratch task needs no attached original; revisions
+   that depend on an original still require that selected source. Office companion
+   PDFs use the installed renderer below; an optional library you chose failing
+   to import does not establish that this supported workflow is unavailable.
+   Unsupported content
    requires a static source or a separately prepared compatible file. Preserve
    originals and earlier artifacts. Missing dependencies need
    an operations check, not an improvised format library or an installation. The
