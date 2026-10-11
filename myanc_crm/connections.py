@@ -27,6 +27,7 @@ BANQUET_STAGES = frozenset({"stage-banquet-create", "stage-banquet-update", "sta
 CLI_READ_COMMANDS = frozenset({"+field-list", "+record-list", "+record-get", "+record-search"})
 READ_SCOPES = frozenset({"base:field:read", "base:record:read", "offline_access"})
 ROUTE_FIELDS = ("platform", "user_id", "chat_id", "project")
+MEMBER_ROUTE_FIELDS = {"member_id", "source_app_id", "source_tenant_key"}
 
 
 class ConnectionBlocked(ValueError):
@@ -46,6 +47,26 @@ def _timestamp(value):
         return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
     except (AttributeError, TypeError, ValueError):
         raise ConnectionBlocked("connection_metadata_invalid") from None
+
+
+def resolve_member_id(config, principal):
+    """Resolve business membership without changing the transport principal."""
+    options = config.get("personal_connections", {})
+    if "routes" in options:
+        matches = [route for route in options["routes"]
+                   if all(route.get(key) == principal.get(key) for key in ROUTE_FIELDS)]
+        if len(matches) != 1:
+            raise ConnectionBlocked("connection_route_denied")
+        return matches[0].get("member_id", matches[0]["user_id"])
+    return principal["user_id"]
+
+
+def resolve_actor(config, principal):
+    member = resolve_member_id(config, principal)
+    actor = config.get("allowed_actors", {}).get(member)
+    if not isinstance(actor, dict):
+        raise ValueError("principal is not configured")
+    return actor
 
 
 class Connections:
@@ -76,15 +97,20 @@ class Connections:
         routes = self.options.get("routes")
         if not isinstance(routes, list) or not routes:
             raise ConnectionBlocked("connection_configuration_invalid")
-        seen = set()
+        seen, sources = set(), {}
         for route in routes:
-            if not isinstance(route, dict) or set(route) != {*ROUTE_FIELDS, "audience"}:
+            if not isinstance(route, dict) or set(route) not in ({*ROUTE_FIELDS, "audience"}, {*ROUTE_FIELDS, "audience", *MEMBER_ROUTE_FIELDS}):
                 raise ConnectionBlocked("connection_configuration_invalid")
             key = tuple(_text(route.get(field)) for field in ROUTE_FIELDS)
             if key in seen or route["audience"] not in {"private", "shared"}:
                 raise ConnectionBlocked("connection_configuration_invalid")
-            if route["user_id"] not in config["allowed_actors"]:
+            member = route.get("member_id", route["user_id"])
+            if member not in config["allowed_actors"]:
                 raise ConnectionBlocked("connection_configuration_invalid")
+            source = tuple(_text(route.get(field, self.options[field])) for field in ("source_app_id", "source_tenant_key"))
+            if route["project"] in sources and sources[route["project"]] != source:
+                raise ConnectionBlocked("connection_configuration_invalid")
+            sources[route["project"]] = source
             seen.add(key)
 
     def route(self, principal):
@@ -97,14 +123,14 @@ class Connections:
     def actor(self, principal):
         if self.route(principal) != "private":
             raise ConnectionBlocked("connection_private_chat_required")
-        actor = self.config["allowed_actors"][principal["user_id"]]
+        actor = resolve_actor(self.config, principal)
         _text(actor.get("connection_profile"))
         _text(actor.get("feishu_user_id"))
         return actor
 
     def key(self, principal):
         identity = [self.options[k] for k in ("source_app_id", "source_tenant_key", "app_id", "tenant_key")]
-        identity.append(_text(principal.get("user_id")))
+        identity.append(_text(resolve_member_id(self.config, principal)))
         return hashlib.sha256(json.dumps(identity).encode()).hexdigest()
 
     @contextmanager
@@ -207,14 +233,25 @@ class Connections:
                 raise
             raise ConnectionBlocked("connection_temporarily_unavailable") from None
 
-    def validate_source(self, app_id):
-        if app_id != self.options["source_app_id"]:
+    def validate_source(self, app_id, project=None, tenant_key=None):
+        routed = any("member_id" in route for route in self.options["routes"])
+        matches = self.options["routes"] if project is None else [route for route in self.options["routes"] if route["project"] == project]
+        if (routed and (project is None or tenant_key is None)) or not matches or any(
+            route.get("source_app_id", self.options["source_app_id"]) != app_id or
+            (tenant_key is not None and route.get("source_tenant_key", self.options["source_tenant_key"]) != tenant_key)
+            for route in matches
+        ):
             raise ConnectionBlocked("connection_source_app_mismatch")
         result = self.run([self.cli, "--version"], capture_output=True, text=True,
                           encoding="utf-8", timeout=10, check=False, shell=False)
         if result.returncode or not re.fullmatch(r"(?:lark-cli\s+)?(?:version\s+)?v?1\.0\.90\s*", result.stdout):
             raise ConnectionBlocked("connection_cli_version_mismatch")
-        return {"status": "enabled", "users": self.users()}
+        result = {"status": "enabled", "users": self.users(members=routed)}
+        if project is not None:
+            result.update(project=project, source_app_id=app_id, source_tenant_key=tenant_key,
+                          bindings=[{**{key: route[key] for key in (*ROUTE_FIELDS, "audience")},
+                                     "member_id": route.get("member_id", route["user_id"])} for route in matches])
+        return result
 
     def qrcode(self, profile, uri):
         with tempfile.TemporaryDirectory(prefix="connection-qr-", dir=self.path.parent) as directory:
@@ -458,14 +495,18 @@ class Connections:
             self.check_version(bound)
         return {"status": "allowed", "private": bool(bound["private"])}
 
-    def users(self):
-        return list(dict.fromkeys(route["user_id"] for route in self.options["routes"] if route["audience"] == "private"))
+    def users(self, *, members=False):
+        return list(dict.fromkeys(route.get("member_id", route["user_id"]) if members else route["user_id"]
+                                 for route in self.options["routes"] if route["audience"] == "private"))
 
-    def maintain(self, user_id):
-        if user_id not in self.users():
+    def maintain(self, user_id, *, member=False):
+        if user_id not in self.users(members=member):
             raise ConnectionBlocked("connection_route_denied")
-        route = next(route for route in self.options["routes"]
-                     if route["audience"] == "private" and route["user_id"] == user_id)
+        routes = [route for route in self.options["routes"] if route["audience"] == "private" and
+                  (route.get("member_id", route["user_id"]) if member else route["user_id"]) == user_id]
+        if len({route.get("member_id", route["user_id"]) for route in routes}) != 1:
+            raise ConnectionBlocked("connection_route_denied")
+        route = routes[0]
         with self.locked(route) as db:
             row = self._row(db, route)
             if row["status"] == "connected" and max(row["expires"] - 240, row["retry_at"]) <= self.now():
@@ -483,7 +524,7 @@ class Connections:
             # Consumers compare work bindings; only stale personal work is stopped.
             # Repeating this state survives interrupted calls and gateway restarts.
             row = self._row(db, route)
-            return ([{"user_id": user_id, "status": row["status"], "version": row["version"]}]
+            return ([{"member_id" if member else "user_id": user_id, "status": row["status"], "version": row["version"]}]
                     if row["version"] else [])
 
 

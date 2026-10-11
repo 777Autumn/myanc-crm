@@ -257,7 +257,7 @@ def read(command, request, backend, config, principal):
     bounds = {key: date.fromisoformat(request[key]) for key in ('date_from', 'date_to') if key in request}
     if len(bounds) == 2 and bounds['date_from'] > bounds['date_to']:
         raise ValueError('Date range is reversed.')
-    actor = config['allowed_actors'][principal['user_id']]['feishu_user_id']
+    actor = core._actor_for_principal(principal, config)['feishu_user_id']
     rows = []
     for row in store.list('banquets'):
         if owner == 'me' and actor not in customers._owner_ids(row.get('owner')):

@@ -164,6 +164,14 @@ class CliBoundaryTests(unittest.TestCase):
                 code, result = self.run_cli([command], host=True)
                 self.assertEqual((0, "disabled"), (code, result["status"]))
 
+    def test_handoff_notification_endpoints_require_host_secret_before_runtime(self):
+        with mock.patch.object(cli, '_runtime') as runtime:
+            for command in ('host-handoff-events', 'host-handoff-notify-claim', 'host-handoff-notify-ack', 'host-handoff-start'):
+                with self.subTest(command=command):
+                    code, _ = self.run_cli([command])
+                    self.assertEqual(2, code)
+            runtime.assert_not_called()
+
     def test_banquet_approval_uses_personal_reads_and_rejects_old_connection(self):
         from test_connections import ConnectionTests
         from test_customers import CustomerBackend

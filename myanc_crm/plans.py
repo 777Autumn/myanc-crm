@@ -111,15 +111,34 @@ def preview(staged):
         "message": "本客户旧计划的关联通知会被替换；其他个人提醒不受影响。"}}
 
 
-def verify_binding(plan, principal):
+def verify_binding(plan, principal, config=None):
     if plan is None or not plan["enabled"]:
         return
     binding = core._mapping(plan["reminder_binding"], "reminder binding")
-    core._only_keys(binding, {"user_id", "source_chat_id", "project", "private_chat_id"})
+    fields = {"user_id", "source_chat_id", "project", "private_chat_id"}
+    member_fields = {"member_id", "private_project", "private_user_id", "private_app_id"}
+    if set(binding) not in (fields, fields | member_fields):
+        raise ValueError("Invalid host reminder binding.")
+    for value in binding.values():
+        core._required_text(value, 'reminder binding', 1024)
     core._required_text(binding.get("private_chat_id"), "private reminder route", 256)
     if any(binding.get(key) != principal.get(source) for key, source in
            (("user_id", "user_id"), ("source_chat_id", "chat_id"), ("project", "project"))):
         raise ValueError("The host reminder route does not match the requesting principal.")
+    if config and 'personal_connections' in config:
+        from .connections import Connections, resolve_member_id
+        connections = Connections(config)
+        member = resolve_member_id(config, principal)
+        connections.route(principal)
+        if any('member_id' in route for route in connections.options['routes']):
+            if not member_fields <= set(binding) or binding['member_id'] != member:
+                raise ValueError('Reminder member does not match the source entrance.')
+            targets = [route for route in connections.options['routes'] if route['audience'] == 'private' and
+                       route.get('member_id', route['user_id']) == member and route['project'] == binding['private_project'] and
+                       route['user_id'] == binding['private_user_id'] and route['chat_id'] == binding['private_chat_id'] and
+                       route.get('source_app_id', connections.options['source_app_id']) == binding['private_app_id']]
+            if len(targets) != 1:
+                raise ValueError('Reminder target does not match the member private entrance.')
 
 
 def check(staged, ledger, moment):
