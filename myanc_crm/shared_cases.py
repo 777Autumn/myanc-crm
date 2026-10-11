@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 
 from . import core
+from .connections import resolve_actor, resolve_member_id
 
 
 FIELDS = {
@@ -107,7 +108,7 @@ def initialize_config(config):
     for member in options.get('members', []):
         principal = dict(member, message_id='maintenance', session_key='maintenance')
         _scope(config,principal,dict(work_id='maintenance',source_text='',share_allowed=False))
-        if principal['user_id'] not in config.get('allowed_actors',{}):
+        if resolve_member_id(config, principal) not in config.get('allowed_actors',{}):
             raise ValueError('case member lacks an existing authenticated actor')
     if not options.get('members'):
         raise ValueError('case members required')
@@ -157,7 +158,11 @@ def _scope(config, principal, context):
     if type(context['share_allowed']) is not bool:
         raise ValueError('invalid sharing permission')
     _text(principal['message_id'])
-    return options
+    return {**options, '_member_ids': {tuple(m[k] for k in fields): resolve_member_id(config, m) for m in members}}
+
+
+def _member(options, principal):
+    return options['_member_ids'][tuple(principal[k] for k in ('platform', 'user_id', 'chat_id', 'project'))]
 
 
 def _project_policy(options, config):
@@ -169,7 +174,7 @@ def _project_policy(options, config):
     if not options['namespace'].startswith('mock-project-'):
         raise ValueError('project context requires a fresh mock-project namespace')
     _text(policy['group_case'], 120)
-    registered = {m['user_id'] for m in options['members']}
+    registered = {resolve_member_id(config, m) for m in options['members']}
     if (len({m['platform'] for m in options['members']}) != 1 or
             not registered <= config['allowed_actors'].keys() or
             not isinstance(policy['managers'], list) or
@@ -183,19 +188,20 @@ def _can_read(options, body, principal):
     if not policy.get('enabled'):
         return True
     project = (body or {}).get('project', {})
-    return bool(project) and (principal['user_id'] in project['members'] or
-                              principal['user_id'] in policy['managers'])
+    return bool(project) and (_member(options, principal) in project['members'] or
+                              _member(options, principal) in policy['managers'])
 
 
 def _new_project(options, principal, config, name):
-    users = {principal['user_id']}
+    member = _member(options, principal)
+    users = {member}
     if name == options['project_context']['group_case']:
         # The configured project group is a frozen shared audience, not a
         # claim that an attachment already posted there can be kept secret.
-        users.update(m['user_id'] for m in options['members'] if m['chat_id'] == options['group_chat_id'])
-    return dict(owner=principal['user_id'], members={user: dict(
+        users.update(resolve_member_id(config, m) for m in options['members'] if m['chat_id'] == options['group_chat_id'])
+    return dict(owner=member, members={user: dict(
         name=config['allowed_actors'][user]['display_name'],
-        responsibility='项目负责' if user == principal['user_id'] else '项目协作') for user in sorted(users)})
+        responsibility='项目负责' if user == member else '项目协作') for user in sorted(users)})
 
 
 def _save_version(db, options, key, body, message, digest):
@@ -257,11 +263,11 @@ def _confirmation(command, request, context, options, config, principal, body, n
         elif command == 'case-member-add':
             if body is None or not options.get('project_context', {}).get('enabled'):
                 return fallback
-            if principal['user_id'] != body['project']['owner'] and principal['user_id'] not in options['project_context']['managers']:
+            if _member(options, principal) != body['project']['owner'] and _member(options, principal) not in options['project_context']['managers']:
                 return dict(status='blocked', code='project_owner_required')
             member = _text(request.get('member_name'), 100)
             responsibility = _text(request.get('responsibility'), 100)
-            registered = {m['user_id'] for m in options['members'] if config['allowed_actors'][m['user_id']]['display_name'] == member}
+            registered = {resolve_member_id(config, m) for m in options['members'] if resolve_actor(config, m)['display_name'] == member}
             if len(registered) != 1 or responsibility not in INVITE_RESPONSIBILITIES:
                 return fallback
             question = f'让「{member}」加入「{name}」，负责「{responsibility}」，可以读取该项目的共享记录和成果，项目负责人不变。确认吗？'
@@ -313,7 +319,7 @@ def _add_member(db, options, request, principal, context, config, key, body):
     policy = options.get('project_context', {})
     if not policy.get('enabled') or body is None:
         return dict(status='blocked', code='project_context_required')
-    if principal['user_id'] != body['project']['owner'] and principal['user_id'] not in policy['managers']:
+    if _member(options, principal) != body['project']['owner'] and _member(options, principal) not in policy['managers']:
         return dict(status='blocked', code='project_owner_required')
     if request.get('source_message_id', principal['message_id']) != principal['message_id']:
         return dict(status='blocked', code='case_share_not_authorized')
@@ -321,8 +327,8 @@ def _add_member(db, options, request, principal, context, config, key, body):
     responsibility = _text(request.get('responsibility'), 100)
     if responsibility not in INVITE_RESPONSIBILITIES:
         return dict(status='needs_selection', code='project_responsibility_required')
-    candidates = {m['user_id'] for m in options['members']
-                  if config['allowed_actors'][m['user_id']]['display_name'] == name}
+    candidates = {resolve_member_id(config, m) for m in options['members']
+                  if resolve_actor(config, m)['display_name'] == name}
     if len(candidates) != 1:
         return dict(status='needs_selection', code='project_member_name_not_unique')
     source = context.get('original_text', '')
@@ -354,7 +360,7 @@ def _add_member(db, options, request, principal, context, config, key, body):
     if context.get('confirmation'):
         source = f'确认邀请{name}负责{responsibility}'
     body['project']['members'][user] = dict(name=name, responsibility=responsibility,
-        source=dict(speaker=config['allowed_actors'][principal['user_id']]['display_name'], quote=source))
+        source=dict(speaker=resolve_actor(config, principal)['display_name'], quote=source))
     return _save_version(db, options, key, body, message, digest)
 
 
@@ -597,7 +603,7 @@ def _changes(request, context, principal, config, interpreted=False):
                 raise ValueError('explicit_correction_required')
         seen.add(field)
         result.append((field, dict(value=value, state=state, source={
-            'speaker': config['allowed_actors'][principal['user_id']]['display_name'],
+            'speaker': resolve_actor(config, principal)['display_name'],
             'quote': f'{field}：{value}（{state}）' if interpreted else quote,
             'origin': 'confirmed_interpretation' if interpreted else ('group' if principal['chat_id'] == config['shared_cases']['group_chat_id'] else 'explicit_private_share'),
         }), replaces))

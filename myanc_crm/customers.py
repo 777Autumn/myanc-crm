@@ -212,7 +212,7 @@ def stage_customer(command, operation_type, backend, ledger, config, action_toke
                                                 binding=trusted_plan_binding,
                                                 expected_revision=trusted_expected_plan_revision,
                                                 expected_target=trusted_expected_plan_target)
-        plans.verify_binding(plan, principal)
+        plans.verify_binding(plan, principal, config)
         identifier = None if create else core._record_id(customer)
         duplicates = _duplicates(fields["name"], backend, identifier)
         renamed = not create and core._normal(fields["name"]) != core._normal(customer["name"])

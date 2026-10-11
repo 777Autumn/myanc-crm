@@ -113,8 +113,10 @@ def read(request, backend, ledger, config, principal):
     origin = publication(ledger, row)
     if actor['feishu_user_id'] not in customers._owner_ids(row['recipient']) + customers._owner_ids(row['submitted_by']):
         return core._blocked('handoff_actor_denied', '此交接由指定提交人与接手人处理。')
+    from . import handoff_notifications
     return {'status': 'found', 'handoff': _view(row, store, origin),
-            'is_recipient': actor['feishu_user_id'] in customers._owner_ids(row['recipient'])}
+            'is_recipient': actor['feishu_user_id'] in customers._owner_ids(row['recipient']),
+            'notifications': handoff_notifications.summary(ledger, row)}
 
 
 def stage(command, request, backend, ledger, config, token, principal, *, context=None, personal_backend=None, now=None):
@@ -248,7 +250,9 @@ def apply(staged, backend, ledger, moment, *, personal_backend=None, files_verif
             actual = None
         if actual is None:
             return finish('verification_unknown', 'handoff_write_unverified')
-        return finish('verified', 'handoff_write_verified', handoff=_view(actual, store), executed_at=executed_at)
+        return finish('verified', 'handoff_write_verified', handoff=_view(actual, store), executed_at=executed_at,
+                      notification_note='业务已发布；助手通知单独记录，可在交接查询查看通知状态。' if submit else
+                                        '交接业务处理已完成；助手通知单独记录，可在交接查询查看通知状态。')
     import time
     if staged.get('receipt'):
         return {**staged['receipt'], 'replayed': True}

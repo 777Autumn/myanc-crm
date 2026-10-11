@@ -54,13 +54,14 @@ UPDATE_FIELDS = frozenset({"customer_query", "changes", "allow_same_name", "foll
 PLAN_HOST_FIELDS = frozenset({"plan_reminder_binding", "expected_plan_revision", "expected_plan_target"})
 
 
-def _plan_host_options(value, principal):
+def _plan_host_options(value, principal, config=None):
     """These options come from the authenticated gateway, never its model input."""
     options = {}
     if "plan_reminder_binding" in value:
         binding = value["plan_reminder_binding"]
         fields = {"user_id", "source_chat_id", "project", "private_chat_id"}
-        if not isinstance(binding, Mapping) or set(binding) != fields or any(
+        member_fields = {"member_id", "private_project", "private_user_id", "private_app_id"}
+        if not isinstance(binding, Mapping) or set(binding) not in (fields, fields | member_fields) or any(
             not isinstance(item, str) or not item.strip() or len(item) > 1024
             for item in binding.values()
         ):
@@ -69,6 +70,8 @@ def _plan_host_options(value, principal):
             ("user_id", "user_id"), ("source_chat_id", "chat_id"), ("project", "project")
         )):
             raise ValueError("Reminder binding differs from the trusted principal.")
+        from . import plans
+        plans.verify_binding({'enabled': True, 'reminder_binding': binding}, principal, config)
         options["trusted_plan_binding"] = dict(binding)
     if "expected_plan_revision" in value:
         revision = value["expected_plan_revision"]
@@ -214,13 +217,8 @@ def _host_prepare_payload(
             raise ValueError("principal contains an invalid transport field.")
         principal[name] = item.strip()
 
-    allowed = _required_mapping(config, "allowed_actors")
-    actor = allowed.get(principal["user_id"])
-    if not isinstance(actor, Mapping):
-        raise ValueError("principal is not configured.")
-    _required_text(actor, "display_name")
-    _required_text(actor, "feishu_user_id")
-    _plan_host_options(value, principal)
+    core._actor_for_principal(principal, config)
+    _plan_host_options(value, principal, config)
     return request, principal
 
 
@@ -288,7 +286,7 @@ def _open_result(request, config, principal):
         if "overview" in views and (not isinstance(views["overview"], str) or
                                    not re.fullmatch(r"blk[A-Za-z0-9]+", views["overview"])):
             raise ValueError("Invalid CRM dashboard identifier.")
-        actor = config["allowed_actors"][principal["user_id"]]
+        actor = core._actor_for_principal(principal, config)
         view_id = owners.get(actor["feishu_user_id"]) if requested == "mine" else views.get(requested)
         if view_id:
             # Discard record/filter/old view parameters and fragments from the Base link.
@@ -449,6 +447,10 @@ def main(
         "host-connection-config",
         "host-connection-guard",
         "host-handoff-access",
+        "host-handoff-events",
+        "host-handoff-notify-claim",
+        "host-handoff-notify-ack",
+        "host-handoff-start",
     }:
         result = {
             "status": "failed",
@@ -491,13 +493,14 @@ def main(
                     raise ValueError("Invalid knowledge subject")
                 result = connections.guard(operation, principal, token, work_id, subject)
             elif command == "host-connection-config":
-                if set(request) != {"source_app_id"}:
+                if set(request) not in ({"source_app_id"}, {"source_app_id", "source_tenant_key", "project"}):
                     raise ValueError("Invalid source binding")
-                result = connections.validate_source(request["source_app_id"])
+                result = connections.validate_source(request["source_app_id"], request.get("project"), request.get("source_tenant_key"))
             elif command == "host-connection-tick":
-                if set(request) != {"user_id"}:
+                if set(request) not in ({"user_id"}, {"member_id"}):
                     raise ValueError("Connection maintenance requires one host-selected user")
-                result = {"status": "checked", "changes": connections.maintain(request["user_id"])}
+                member = "member_id" in request
+                result = {"status": "checked", "changes": connections.maintain(request["member_id" if member else "user_id"], member=member)}
             else:
                 if set(request) != {"command", "principal"}:
                     raise ValueError("Invalid connection command")
@@ -514,7 +517,7 @@ def main(
         elif command == "host-tool":
             tool_command, prepare_request, prepare_principal = _host_tool_payload(request, config)
         if prepare_principal is not None:
-            plan_options = _plan_host_options(request, prepare_principal)
+            plan_options = _plan_host_options(request, prepare_principal, config)
         # This gate precedes all early returns and backend/ledger construction.
         route_principal = prepare_principal or request.get("principal")
         personal = connection_access(config, tool_command or command, route_principal)
@@ -546,7 +549,21 @@ def main(
         return 2
 
     try:
-        if command == "host-handoff-access":
+        if command in {"host-handoff-events", "host-handoff-notify-claim", "host-handoff-notify-ack", "host-handoff-start"}:
+            from . import handoff_notifications
+            connections = Connections(config)
+            if command == "host-handoff-notify-ack":
+                result = handoff_notifications.acknowledge(request, ledger)
+            elif command == "host-handoff-start":
+                p = core._principal(request.get("principal"))
+                token = core._hash(["handoff-start", p, request.get("event_id")])
+                runner = PersonalReadRunner(connections, p, token)
+                reader = _backend(config, personal_runner=runner)
+                result = handoff_notifications.start(request, reader, ledger, config, connections, runner.binding)
+            else:
+                operation = handoff_notifications.events if command == "host-handoff-events" else handoff_notifications.claim
+                result = operation(request, backend, ledger, config, connections)
+        elif command == "host-handoff-access":
             from .handoffs import authorize_file
             core._only_keys(request, {"publication_id", "principal", "work_id"})
             p = core._principal(request.get("principal"))

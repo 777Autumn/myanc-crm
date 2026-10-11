@@ -239,6 +239,8 @@ class Ledger:
         )
         from . import plans
         plans.initialize(self._db)
+        from . import handoff_notifications
+        handoff_notifications.initialize(self._db)
         self._db.commit()
         self._validate_storage()
 
@@ -789,6 +791,8 @@ class Ledger:
                 staged = self.get(change_id)
                 if staged is not None:
                     plans.finish(self, staged, receipt)
+                    from . import handoff_notifications
+                    handoff_notifications.finish(self, staged)
             self._db.execute(
                 """
                 UPDATE staged_changes SET state = ?, receipt_json = ?
@@ -1020,7 +1024,7 @@ def stage_followup(
                             expected_target=trusted_expected_plan_target,
                             historical=bool(followup.get("backfill")) or not patch)
         if trusted_principal is not None:
-            plans.verify_binding(plan, trusted_principal)
+            plans.verify_binding(plan, trusted_principal, config)
         change_id = "chg_" + secrets.token_urlsafe(18)
         created_at = _iso(moment)
         expires_at = _iso(moment + timedelta(seconds=ttl))
@@ -1170,7 +1174,7 @@ def begin_approval(
     bound = {**staged, "principal": principal, "actor": actor}
     try:
         from . import plans
-        plans.verify_binding(staged.get("plan"), principal)
+        plans.verify_binding(staged.get("plan"), principal, config)
     except (ValueError, TypeError) as exc:
         return _blocked("plan_route_mismatch", str(exc))
     preview_hash = _hash(_approval_material(bound))
@@ -1468,6 +1472,10 @@ def execute_claimed_approval(
         )
     from . import plans
     environment_changed = staged.get("plan") is not None and staged["plan"]["namespace"] != plans.namespace(config)
+    try:
+        plans.verify_binding(staged.get("plan"), principal, config)
+    except (ValueError, TypeError):
+        environment_changed = True
     if environment_changed or approval["preview_hash"] != _hash(_approval_material(staged)):
         result = _replan(
             approval["change_id"],
@@ -1550,7 +1558,7 @@ def _prepare_child_followup(staged, receipt, backend, ledger, config, moment):
             plan = plans.freeze(customer, body["customer_patch"], staged["followup"], ledger, config, moment,
                                 binding=staged.get("plan_reminder_binding"),
                                 historical=bool(staged["followup"].get("backfill")) or not body["customer_patch"])
-            plans.verify_binding(plan, staged["principal"])
+            plans.verify_binding(plan, staged["principal"], config)
             if plan is not None:
                 body["plan"] = plan
         approval = ledger.stage_child(staged["change_id"], body, _iso(moment))
@@ -2091,11 +2099,8 @@ def _same_principal(left: Mapping[str, Any], right: Mapping[str, Any]) -> bool:
 def _actor_for_principal(
     principal: Mapping[str, str], config: Mapping[str, Any]
 ) -> dict[str, str]:
-    allowed = config.get("allowed_actors")
-    user_id = principal["user_id"]
-    if not isinstance(allowed, Mapping) or user_id not in allowed:
-        raise ValueError("principal is not configured")
-    actor = _mapping(allowed[user_id], "allowed actor")
+    from .connections import resolve_actor
+    actor = _mapping(resolve_actor(config, principal), "allowed actor")
     display_name = _required_text(actor.get("display_name"), "actor display_name")
     feishu_user_id = _required_text(actor.get("feishu_user_id"), "actor feishu_user_id")
     return {
