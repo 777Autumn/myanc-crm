@@ -2,8 +2,9 @@
 
 Status: the two-account pilot is installed and its core journeys passed.
 The three supplementary abnormal-path tests below are complete within their
-stated layers. Full closeout remains pending the employee's lightweight read
-after the latest restart. This document does not declare that missing check passed.
+stated layers. The employee's lightweight read after the latest restart is now
+verified; independent Spec and Standards reviews permit two-account pilot closeout
+within these evidence boundaries.
 
 The personal-Bot route is a pilot. The original single/public-Bot route remains
 a product option; the present pilot routes common-group work to the public Bot
@@ -76,14 +77,21 @@ attempt directory and retained the failed attempt.
 
 The manager's post-restart real message queried the fictional banquet read-only.
 Its actual `banquet` tool returned exit code 0, `status=found`, and stage signed;
-the native turn completed in 23.0569 seconds. The employee check remains pending
-desktop account switching. Earlier pre-restart employee reads cannot replace it.
+the native turn completed in 23.0569 seconds. At 21:06 local time, the employee
+independently queried the same fictional banquet in their personal Bot. The
+`banquet` invocation returned an execution session; polling that same session
+returned exit code 0, `status=found`, and stage signed. The Gateway completed the
+turn in 20.9526 seconds and the observed Feishu reply matched. Only the protocol
+read and banquet read ran; earlier pre-restart reads were not substituted.
 
 Fresh Spec and Standards reviewers independently checked exact source versions
-and raw receipts. They found no new actionable runtime blocker. The remaining
-acceptance gap is the employee post-restart read; Standards also required this
-repository archive. Their reports are stored outside this documentation commit
-and are not GitHub human approvals.
+and raw receipts. They found no new actionable runtime blocker and independently
+verified the employee's final tool-result chain. Standards' archive requirement
+was delivered by documentation PR143, merge
+`9b76943e9a6015e2a251d2e65c3797536def54d3`, with exact merge CI38141170515 passing.
+Both reviewers allow closeout of the two-account pilot at the stated validation
+layers. Their reports are stored outside this documentation commit and are not
+GitHub human approvals. The archive commits do not change the installed CRM.
 
 ## Evidence index and limits
 
@@ -103,6 +111,8 @@ credentials, private URLs, recipient IDs or production ledgers.
   `notification-sender-alerts-1791722327383846100.json`,
   `notification-sender-inspect-1791722364633670100.json`: isolated fault/real send.
 - `trace-1791723031711313300.json`: actual manager post-restart tool result.
+- `trace-1791724073556955600.json`: employee post-restart call, same-session
+  poll, actual tool result and Gateway completion.
 - `final-spec-clean.md`, `final-standards-clean.md`: independent closeout review.
 
 The employee's earlier combined question obtained banquet facts but did not
