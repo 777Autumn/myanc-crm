@@ -79,6 +79,17 @@ or incomplete receipts are not automatically resent. A failed card update leaves
 the underlying publication intact. Inspect the host notification record and use
 the existing pending-handoff view to recover.
 
+For a delivery investigation, call the existing protected `host-handoff-events`
+operation with the exact configured project, source App, source tenant and
+publication event ID. It returns the recorded notification status, message ID and
+start binding. If a message ID is recorded, read that exact message using the
+same sending App and check its chat and card against the recorded destination.
+A missing receipt cannot be replaced by a similar-looking card or a guessed ID.
+Without conclusive evidence, retain `unknown`/`dispatching`, do not resend or
+rewrite the receipt, and record the investigation separately. The recipient can
+use My pending handoffs and the ordinary authorized handoff read/approval flow;
+that flow does not depend on the notification becoming `sent` or gaining a button.
+
 Clicking the button checks the actual callback principal, original message,
 current publication/version, current personal connection, pending approvals and
 published file snapshots. Busy recipients retry later. An idle recipient gets a

@@ -113,6 +113,24 @@ class HandoffNotificationTests(unittest.TestCase):
         self.assertEqual('unknown', outcome['notification_status'])
         self.assertIsNone(outcome['start'])
 
+    def test_unknown_notice_keeps_normal_handoff_recovery_without_resending(self):
+        event = self.publish()
+        claimed = notices.claim(dict(self.entry, event_id=event), self.f.backend, self.ledger, self.config, self.connections)
+        notices.acknowledge(dict(event_id=event, dispatch_id=claimed['dispatch_id'],
+                                status='unknown', message_id=''), self.ledger)
+        current = self.read()
+        self.assertEqual('found', current['status'])
+        self.assertEqual('unknown', current['notifications'][0]['notification_status'])
+        accepted = self.f.proposal('stage-handoff-accept', self.recipient, version=1)
+        self.assertEqual('verified', self.f.decide(accepted, self.recipient)['status'])
+        writes = len(self.f.store.writes)
+        self.assertEqual('blocked', self.f.proposal('stage-handoff-accept', self.recipient, version=1)['status'])
+        self.assertEqual(writes, len(self.f.store.writes))
+        outcome = notices.events(dict(self.entry, event_id=event), self.f.backend, self.ledger, self.config, self.connections)
+        self.assertEqual('unknown', outcome['notification_status'])
+        self.assertIsNone(outcome['start'])
+        self.assertEqual([], notices.events(self.entry, self.f.backend, self.ledger, self.config, self.connections)['events'])
+
     def test_failed_receipt_rolls_back_notification_event(self):
         staged = self.f.proposal()
         self.ledger._db.execute("CREATE TRIGGER notice_failure BEFORE INSERT ON handoff_events "
