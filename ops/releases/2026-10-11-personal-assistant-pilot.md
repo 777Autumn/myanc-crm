@@ -21,7 +21,7 @@ authorizations or copy private conversations between Bots.
 One Mac mini, one Gateway, three app channels and four business entries retain
 the shared Codex backend. Codex is 0.157.1 with gpt-6-luna. Credentials, individual
 connection versions, authorization checks and business ledgers remain protected.
-The Gateway binary SHA256 is
+The guidance candidate archive SHA256 is
 `17c371ebb04f4591a9ad7ad63baf0801e31c2176555b829b7176abe4ad15aa77`;
 the unchanged config SHA256 is
 `402193cf2f04398ad5c144b40c69f226e447a9b6aa043b77fc92320113b295a5`.
