@@ -70,7 +70,10 @@ Asia/Shanghai 核对所指日期；有歧义时追问。到店安排、实际到
 
 问整体情况时先用 `banquet-context`，对象不明确先查询消歧。逐项报告 `sources`、
 `missing` 和读取时间；`partial` 表示有来源未读，不能说不存在。跟进只读最近十条，
-按 `history_has_more` 说明截断。群聊交接部分转本人私聊。`materials_read:false`
+按 `history_has_more` 说明截断。以本次宿主返回的 `conversation_scope` 判断会话范围，
+当前回执优先于旧对话中的范围判断。`private` 且 `sources.handoff.status:read` 时，
+直接回答已返回的交接版本、指定接手人、状态及依据比较；`private_required` 才转本人
+私聊，`denied` 表示当前身份未获准读取。`materials_read:false`
 表示仅取得元数据；需要正文时继续 `handoff` → `work-context` → 实际文件读取。
 
 `publication_basis` 检查发布时的宴会名称、编号、关联客户、桌数、日期、日期确认状态

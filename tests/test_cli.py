@@ -274,6 +274,7 @@ class CliBoundaryTests(unittest.TestCase):
                 self.assertEqual(0, code, value)
                 self.assertIn('Personal fixture' if private else 'Shared fixture', value['customer']['name'])
                 self.assertEqual(private, selected[-1] is not None)
+                self.assertEqual('private' if private else 'shared', value['conversation_scope'])
                 self.assertEqual('empty' if private else 'private_required', value['sources']['handoff']['status'])
                 self.assertFalse(value['materials_read'])
             fixture.connections.command('disconnect', fixture.principal)
