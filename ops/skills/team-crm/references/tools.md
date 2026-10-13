@@ -9,6 +9,11 @@ including `session_id` and `exit_code`. If it returns a running session, use
 `write_stdin` with that exact session ID until completion and read its output.
 Empty output while running is not a CRM result. Poll the existing process rather
 than repeating the command; only then interpret the CRM status or approval ID.
+In a JavaScript tool wrapper, emit `text(result)` (the complete returned object),
+including after `write_stdin`; emitting only `result.output` loses the running
+session handle. For example, `{output:"", session_id:34329}` requires
+`write_stdin({session_id:34329, chars:""})`, not a second `exec_command`.
+An `exit_code` marks completion; a completed read needs no further polling.
 
 When personal connections are enabled, private CRM reads use the requester's
 verified Feishu connection. Group reads use only the host-approved shared CRM.
@@ -145,8 +150,14 @@ printf '%s' '{"customer_query":"<customer number or exact name>"}' | /usr/local/
    If no fresh accessible receipt exists, say the operation status is unverified;
    continue successful factual reads. A disclaimer such as "以卡片为准" does not
    justify a guessed status. Do not re-tell an old staged proposal as live state.
-   Query results rather than staging again, repeating a write, or inferring
-   success from conversation text.
+   A read-only result check ends with the receipt and requested fresh facts.
+   This also applies to failed, expired and `replan_required` operations: a
+   restored business state or a suggested remedy in the receipt is information,
+   not a new request. Keep every `stage*` command outside this turn, including
+   card creation that would not yet write CRM. Earlier write intent does not
+   survive a current read-only request. A later explicit request to prepare a
+   new proposal starts the usual fresh-read/stage workflow; quoted action text
+   alone does not. Query results rather than inferring success from conversation.
 
 For customer creation or an owner change, resolve `assignee` first. Compare the
 returned name with the user's explicitly supplied name; a matching name is

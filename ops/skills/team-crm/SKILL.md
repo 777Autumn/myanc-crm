@@ -15,8 +15,9 @@ description: 使用团队 CRM 查询客户和婚宴商机、婚期与到店安�
    before choosing fields or tools.
 3. For a write proposal, preserve the confirmed draft and use the existing host
    approval workflow and its exact post-stage reply from the protocol.
-4. On the next user turn, follow that turn's intent. Read the matching receipt
-   when asked about the operation; do not restage merely to learn its result.
+4. On each user turn, identify its intent anew. For a read-only operation check,
+   follow the protocol's result flow through to a factual answer, including a
+   failed receipt after a previously requested write.
 5. For a personal reminder request, load the installed `team-reminders` skill.
    For team methods or knowledge, load the existing `team-brain` skill. Continue
    in this same session; skill switching does not change identity or approval.
