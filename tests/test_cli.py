@@ -254,6 +254,7 @@ class CliBoundaryTests(unittest.TestCase):
         fixture.connect()
         self.config.update(fixture.config)
         self.config_path.write_text(json.dumps(self.config), encoding='utf-8')
+        self.ledger_path.parent.mkdir(mode=0o700)
         reader, shared, store = CustomerBackend(), CustomerBackend(), SalesStore()
         reader.customers['rec-1']['name'] = 'Personal fixture'
         shared.customers['rec-1']['name'] = 'Shared fixture'
