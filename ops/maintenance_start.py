@@ -283,6 +283,8 @@ def recover_once(record, read_record, verify_controls, verify_reconciled, *, exp
     fields = {'attempt_sha256', 'start_request_sha256', 'failure_sha256',
               'diagnosis_sha256', 'candidate_sha256', 'manifest_sha256',
               'installed_manifest_sha256', 'failure_receipt'}
+    if isinstance(expected, dict) and 'attempt_binding_sha256' in expected:
+        fields.add('attempt_binding_sha256')
     require(isinstance(expected, dict) and set(expected) == fields, 'invalid_recovery_binding')
     for key in fields - {'failure_receipt'}:
         require(isinstance(expected[key], str)
@@ -313,9 +315,28 @@ def recover_once(record, read_record, verify_controls, verify_reconciled, *, exp
     request = read_bound('start-requested.json', expected['start_request_sha256'])
     failure = read_bound(expected['failure_receipt'], expected['failure_sha256'])
     diagnosis = read_bound('recovery-diagnosis.json', expected['diagnosis_sha256'])
-    require(all(attempt.get(key) == expected[key] for key in
-                ('candidate_sha256', 'manifest_sha256', 'installed_manifest_sha256')),
-            'recovery_candidate_changed')
+    candidate_fields = ('candidate_sha256', 'manifest_sha256', 'installed_manifest_sha256')
+
+    def verify_attempt_binding():
+        candidate = attempt
+        if 'attempt_binding_sha256' in expected:
+            # Preserve an incomplete original; a reviewed append-only receipt cannot override it.
+            require(not any(key in attempt for key in candidate_fields), 'recovery_attempt_binding_invalid')
+            candidate = read_bound('recovery-attempt-binding.json', expected['attempt_binding_sha256'])
+            require(set(candidate) == {*candidate_fields, 'attempt_sha256', 'installation_attempt_sha256',
+                                       'maintainer_reference'}
+                    and candidate['attempt_sha256'] == expected['attempt_sha256']
+                    and isinstance(candidate['maintainer_reference'], str)
+                    and candidate['maintainer_reference'].strip()
+                    and isinstance(candidate['installation_attempt_sha256'], str)
+                    and re.fullmatch('[0-9a-f]{64}', candidate['installation_attempt_sha256']),
+                    'recovery_attempt_binding_invalid')
+            installation = read_bound('recovery-installation-attempt.json', candidate['installation_attempt_sha256'])
+            require(all(installation.get(key) == expected[key] for key in candidate_fields),
+                    'recovery_candidate_changed')
+        require(all(candidate.get(key) == expected[key] for key in candidate_fields), 'recovery_candidate_changed')
+
+    verify_attempt_binding()
     require(request.get('unit') == getattr(backend, 'unit', UNIT)
             and isinstance(request.get('identity_sha256'), str),
             'invalid_original_start_request')
@@ -340,6 +361,7 @@ def recover_once(record, read_record, verify_controls, verify_reconciled, *, exp
         read_bound('start-requested.json', expected['start_request_sha256'])
         read_bound(expected['failure_receipt'], expected['failure_sha256'])
         read_bound('recovery-diagnosis.json', expected['diagnosis_sha256'])
+        verify_attempt_binding()
         verify_controls()
         require(verify_reconciled() == snapshots, 'reconciliation_changed')
         state = backend.sample()
