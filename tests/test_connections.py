@@ -390,7 +390,7 @@ class ConnectionTests(unittest.TestCase):
     def test_banquet_reads_and_handoff_stages_bind_work_and_cannot_revive_old_generation(self):
         self.config['personal_connections']['resource_mode']='shared'
         self.connect()
-        commands=('banquet','banquets','handoff','stage-handoff-submit','stage-handoff-accept','stage-handoff-return',
+        commands=('banquet','banquets','banquet-context','handoff','stage-handoff-submit','stage-handoff-accept','stage-handoff-return',
                   'stage-banquet-create','stage-banquet-update','stage-banquet-followup')
         for command in commands:
             self.assertBlocked('personal_work_binding_required',

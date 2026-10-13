@@ -15,7 +15,7 @@ class SalesStore:
         self.writes = []
         self.schema = {"banquets": "fixed-schema"}
 
-    def read_schema(self):
+    def read_schema(self, kinds=None):
         return copy.deepcopy(self.schema)
 
     def get(self, kind, identifier):

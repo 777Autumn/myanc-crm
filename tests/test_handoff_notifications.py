@@ -181,6 +181,44 @@ class HandoffNotificationTests(unittest.TestCase):
         self.assertIsNone(row['start_json'])
         self.assertEqual('verified', self.ledger.get(event)['state'])
 
+    def test_stale_publication_blocks_notice_claim_start_and_restart_replay(self):
+        event = self.publish()
+        self.f.store.rows[('banquets', self.f.business)]['estimated_tables'] = 23
+        self.assertEqual([], notices.events(self.entry, self.f.backend, self.ledger, self.config, self.connections)['events'])
+        with self.assertRaises(ValueError):
+            self.sent(event)
+        self.f.store.rows[('banquets', self.f.business)]['estimated_tables'] = 20
+        request = self.sent(event)
+        self.f.store.rows[('banquets', self.f.business)]['estimated_tables'] = 23
+        with self.assertRaises(ValueError):
+            self.start(request)
+        self.f.store.rows[('banquets', self.f.business)]['estimated_tables'] = 20
+        self.start(dict(request, work_id='work', session_id='session', handoff_files_verified=True))
+        self.f.store.rows[('banquets', self.f.business)]['estimated_tables'] = 23
+        reopened = core.Ledger(self.path)
+        self.addCleanup(reopened.close)
+        with self.assertRaises(ValueError):
+            self.start(request, reopened)
+
+    def test_stale_business_does_not_suppress_verified_accept_or_return_result_notice(self):
+        self.publish()
+        accepted = self.f.proposal('stage-handoff-accept', self.recipient, version=1)
+        self.f.decide(accepted, self.recipient)
+        self.f.store.rows[('banquets', self.f.business)]['estimated_tables'] = 23
+        target = notices._view(notices._event(self.ledger, accepted['change_id']), self.config)['target']
+        entry = {key: target[key] for key in ('project', 'source_app_id', 'source_tenant_key')}
+        self.assertEqual([accepted['change_id']], [r['event_id'] for r in
+            notices.events(entry, self.f.backend, self.ledger, self.config, self.connections)['events']])
+        self.assertEqual('claimed', notices.claim(dict(entry, event_id=accepted['change_id']),
+            self.f.backend, self.ledger, self.config, self.connections)['status'])
+        self.f.files[0].update(sha256='b' * 64, version=2)
+        self.publish()
+        self.f.store.rows[('banquets', self.f.business)]['estimated_tables'] = 24
+        returned = self.f.proposal('stage-handoff-return', self.recipient, version=2, reason='请修订')
+        self.f.decide(returned, self.recipient)
+        self.assertEqual('claimed', notices.claim(dict(entry, event_id=returned['change_id']),
+            self.f.backend, self.ledger, self.config, self.connections)['status'])
+
     def test_pending_approval_blocks_preflight_and_claim(self):
         request = self.sent(self.publish())
         self.f.recipient = self.recipient

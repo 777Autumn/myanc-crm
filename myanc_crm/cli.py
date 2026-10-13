@@ -565,7 +565,7 @@ def main(
                 result = operation(request, backend, ledger, config, connections)
         elif command == "host-handoff-access":
             from .handoffs import authorize_file
-            core._only_keys(request, {"publication_id", "principal", "work_id"})
+            core._only_keys(request, {"publication_id", "principal", "work_id", "purpose"})
             p = core._principal(request.get("principal"))
             connections = Connections(config)
             if connections.route(p) != "private":
@@ -573,12 +573,17 @@ def main(
             internal_token = core._hash(["handoff-file-access", p, request["work_id"]])
             connections.guard("handoff", p, internal_token, request["work_id"])
             reader = _backend(config, personal_runner=PersonalReadRunner(connections, p, internal_token))
-            result = authorize_file(request["publication_id"], reader, ledger, config, p)
+            result = authorize_file(request["publication_id"], reader, ledger, config, p,
+                                    purpose=request.get("purpose", "current"))
         elif tool_command == "handoff":
             from .handoffs import read
             if personal_runner is None or personal.route(prepare_principal) != "private":
                 raise ValueError("Read handoff materials in the requester's private conversation.")
             result = read(prepare_request, backend, ledger, config, prepare_principal)
+        elif tool_command == "banquet-context":
+            from .banquet_context import read
+            result = read(prepare_request, backend, ledger, config, prepare_principal,
+                          private=personal_runner is not None and personal.route(prepare_principal) == "private")
         elif tool_command in {"banquet", "banquets"}:
             from .banquet import read
             result = read(tool_command, prepare_request, backend, config, prepare_principal)

@@ -14,7 +14,8 @@ TIMEOUT_SECONDS = 35
 MAX_INPUT_BYTES = 64 * 1024
 MAX_RESPONSE_BYTES = 1024 * 1024
 FIELDS = {
-    "handoff": {"banquet_id"},
+    "banquet-context": {"banquet_id"},
+    "handoff": {"banquet_id", "purpose"},
     "stage-handoff-submit": {"banquet_id", "recipient_ref", "delivery_ids", "missing"},
     "stage-handoff-accept": {"banquet_id", "version"},
     "stage-handoff-return": {"banquet_id", "version", "reason"},

@@ -2,7 +2,7 @@
 import json
 import secrets
 
-from . import banquet, core, customers, handoffs
+from . import banquet, core, customers, handoffs, publication_basis
 from .connections import ROUTE_FIELDS, resolve_member_id
 
 
@@ -90,13 +90,16 @@ def _current(event, backend, ledger):
         raise ValueError('Handoff has an unresolved business write.')
     store = banquet.Store(backend)
     store.read_schema()
-    if not store.get('banquets', event['banquet_id']):
+    business = store.get('banquets', event['banquet_id'])
+    if not business:
         raise ValueError('Handoff banquet is unavailable.')
     current = handoffs.latest(store, event['banquet_id'])
     if (not current or handoffs.publication(ledger, current)['change_id'] != event['publication_id'] or
             int(current['version']) != event['version'] or current.get('operation_id') != event['event_id'] or
             customers._owner_ids(current['recipient']) != [event['recipient_id']]):
         raise ValueError('Handoff publication or version changed.')
+    if event['kind'] == 'submit':
+        publication_basis.require_current(publication_basis.read(ledger.get(event['publication_id']), business, backend))
     return current
 
 

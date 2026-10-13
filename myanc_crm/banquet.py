@@ -37,6 +37,7 @@ HANDOFF_SCHEMA = {
 }
 EDIT_FIELDS = set(SCHEMA) - {'number', 'customer_record_id', 'owner', 'operation_id', 'updated_at'} | {'owner_ref'}
 FIELDS = {
+    'banquet-context': {'banquet_id'},
     'banquet': {'banquet_id'},
     'banquets': {'keyword', 'owner', 'stages', 'date_from', 'date_to', 'offset'},
     'stage-banquet-create': EDIT_FIELDS | {'customer_query'},
@@ -104,9 +105,11 @@ class Store:
             raise ValueError('Invalid handoff field IDs.')
         self.tables['handoffs'], self.fields['handoffs'], self.schemas['handoffs'] = handoff_table, dict(handoff_fields), HANDOFF_SCHEMA
 
-    def read_schema(self):
+    def read_schema(self, kinds=None):
         result = {}
         for kind, table in self.tables.items():
+            if kinds is not None and kind not in kinds:
+                continue
             actual = self.backend._read_table_schema(table, 'read banquet schema')
             schema, fields = self.schemas[kind], self.fields[kind]
             expected = {name: typ for name, typ in schema.values()}

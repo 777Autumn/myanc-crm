@@ -32,6 +32,9 @@ class HandoffJourneyTests(unittest.TestCase):
                 raise ValueError('old connection')
         self.backend.runner = SimpleNamespace(binding=self.binding, connections=SimpleNamespace(check_version=check))
         self.business = self.approve(self.create())['banquet']['record_id']
+        for field in sales.banquet.SCHEMA:
+            self.store.rows[('banquets', self.business)].setdefault(field, None)
+        self.store.rows[('banquets', self.business)]['number'] = 'YAN-0001'
         self.store.rows[('banquets', self.business)]['stage'] = '已签单'
         self.files = [{'delivery_id': 'delivery1', 'name': '虚构交接.docx', 'sha256': 'a' * 64,
                        'version': 1, 'message_receipt': 'file-receipt'}]
@@ -370,3 +373,115 @@ class HandoffJourneyTests(unittest.TestCase):
             handoffs.authorize_file(f"bh_{first['change_id']}_0", self.backend, self.ledger, self.config, self.recipient)
         result = self.decide(old_accept, self.recipient)
         self.assertEqual('replan_required', result['status'], result)
+
+    def test_changed_tables_before_new_acceptance_card_blocks_old_material(self):
+        self.decide(self.proposal())
+        self.store.rows[('banquets', self.business)]['estimated_tables'] = 23
+        staged = self.proposal('stage-handoff-accept', self.recipient, version=1)
+        self.assertEqual('blocked', staged['status'], staged)
+
+    def test_changed_tables_blocks_current_file_authorization(self):
+        submitted = self.proposal()
+        self.decide(submitted)
+        self.store.rows[('banquets', self.business)]['estimated_tables'] = 23
+        with self.assertRaises(ValueError):
+            handoffs.authorize_file('bh_' + submitted['change_id'] + '_0', self.backend,
+                                    self.ledger, self.config, self.recipient)
+
+    def test_prepared_acceptance_then_changed_tables_requires_replan(self):
+        self.decide(self.proposal())
+        staged = self.proposal('stage-handoff-accept', self.recipient, version=1)
+        self.store.rows[('banquets', self.business)]['estimated_tables'] = 23
+        writes = len(self.store.writes)
+        self.assertEqual('replan_required', self.decide(staged, self.recipient)['status'])
+        self.assertEqual(writes, len(self.store.writes))
+
+    def test_revision_only_original_submitter_latest_stale_and_unknown_is_denied(self):
+        submitted = self.proposal()
+        self.decide(submitted)
+        pub = 'bh_' + submitted['change_id'] + '_0'
+        def access(principal, purpose='revision'):
+            return handoffs.authorize_file(pub, self.backend, self.ledger, self.config, principal, purpose=purpose)
+        with self.assertRaises(ValueError):
+            access(PRINCIPAL)
+        self.store.rows[('banquets', self.business)]['estimated_tables'] = 23
+        for principal, purpose in ((self.recipient, 'revision'), (PRINCIPAL, 'current'), (PRINCIPAL, 'forged')):
+            with self.assertRaises(ValueError):
+                access(principal, purpose)
+        allowed = access(PRINCIPAL)
+        self.assertTrue(allowed['reference_only'])
+        self.assertEqual(submitted['change_id'], allowed['publication_basis_id'])
+        self.assertEqual('revision', allowed['source']['purpose'])
+        view = handoffs.read({'banquet_id': self.business, 'purpose': 'revision'},
+                             self.backend, self.ledger, self.config, PRINCIPAL)
+        self.assertEqual('found', view['status'])
+        self.assertTrue(view['handoff']['files'][0]['reference_only'])
+        original_get = self.ledger.get
+        def incomplete(identifier):
+            value = original_get(identifier)
+            if identifier == submitted['change_id']:
+                del value['banquet_before']['budget']
+            return value
+        with mock.patch.object(self.ledger, 'get', side_effect=incomplete):
+            with self.assertRaises(ValueError):
+                access(PRINCIPAL)
+            self.assertEqual('blocked', self.proposal('stage-handoff-accept', self.recipient, version=1)['status'])
+        self.files[0].update(sha256='b' * 64, version=2)
+        self.decide(self.proposal())
+        with self.assertRaises(ValueError):
+            access(PRINCIPAL)
+
+    def test_stale_bytes_cannot_be_republished_but_return_and_revised_material_can(self):
+        self.decide(self.proposal())
+        self.store.rows[('banquets', self.business)]['estimated_tables'] = 23
+        self.files[0].update(delivery_id='renamed-delivery', name='新名称.docx', version=2)
+        denied = self.proposal(delivery_ids=['renamed-delivery'])
+        self.assertEqual('blocked', denied['status'])
+        returned = self.proposal('stage-handoff-return', self.recipient, version=1, reason='请修订为23桌')
+        self.assertEqual('verified', self.decide(returned, self.recipient)['status'])
+        self.files[0]['sha256'] = 'b' * 64
+        revised = self.proposal(delivery_ids=['renamed-delivery'])
+        self.assertEqual('verified', self.decide(revised)['status'])
+        accepted = self.proposal('stage-handoff-accept', self.recipient, version=2)
+        self.assertEqual('verified', self.decide(accepted, self.recipient)['status'])
+        self.files[0].update(sha256='a' * 64, delivery_id='again')
+        self.assertEqual('blocked', self.proposal(delivery_ids=['again'])['status'])
+
+    def test_verified_acceptance_is_history_when_business_changes(self):
+        self.decide(self.proposal())
+        accepted = self.proposal('stage-handoff-accept', self.recipient, version=1)
+        self.decide(accepted, self.recipient)
+        receipt = self.ledger.get(accepted['change_id'])['receipt']
+        self.store.rows[('banquets', self.business)]['estimated_tables'] = 23
+        self.assertEqual(receipt, self.ledger.get(accepted['change_id'])['receipt'])
+        view = handoffs.read({'banquet_id': self.business}, self.backend, self.ledger, self.config, self.recipient)
+        self.assertEqual('blocked', view['status'])
+        self.assertEqual('stale', view['publication_basis']['status'])
+        self.assertIn('已接手', view['handoff']['status'])
+        self.assertNotIn('files', view['handoff'])
+        handoffs.publication(self.ledger, handoffs.latest(self.store, self.business))
+
+    def test_current_source_unavailable_never_authorizes_or_accepts(self):
+        submitted = self.proposal()
+        self.decide(submitted)
+        with mock.patch.object(self.backend, 'get_customer', side_effect=TimeoutError):
+            with self.assertRaises(ValueError):
+                handoffs.authorize_file('bh_' + submitted['change_id'] + '_0', self.backend,
+                                        self.ledger, self.config, PRINCIPAL, purpose='revision')
+            value = handoffs.read({'banquet_id': self.business}, self.backend, self.ledger, self.config, self.recipient)
+            self.assertEqual('unavailable', value['publication_basis']['status'])
+            self.assertEqual('blocked', self.proposal('stage-handoff-accept', self.recipient, version=1)['status'])
+
+    def test_legacy_missing_basis_cannot_republish_known_bytes(self):
+        submitted = self.proposal()
+        self.decide(submitted)
+        original_get = self.ledger.get
+        def incomplete(identifier):
+            value = original_get(identifier)
+            if identifier == submitted['change_id']:
+                value['banquet_before'] = {}
+            return value
+        with mock.patch.object(self.ledger, 'get', side_effect=incomplete):
+            denied = self.proposal()
+        self.assertEqual('blocked', denied['status'], denied)
+        self.assertIn('unknown', denied['message'])
