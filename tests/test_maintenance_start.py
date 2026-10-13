@@ -459,6 +459,90 @@ class RecoveryTests(unittest.TestCase):
         self.recover()
         self.assertEqual(self.backend.commands, ['start'])
 
+    def append_missing_attempt_binding(self, attempt=None):
+        installation = self.read('attempt.json')
+        (self.root / 'recovery-installation-attempt.json').write_bytes(installation)
+        self.expected['attempt_sha256'] = self.put('attempt.json', {} if attempt is None else attempt)
+        binding = {key: self.expected[key] for key in
+                   ('attempt_sha256', 'candidate_sha256', 'manifest_sha256', 'installed_manifest_sha256')}
+        binding.update(installation_attempt_sha256=hashlib.sha256(installation).hexdigest(),
+                       maintainer_reference='fixture-reviewed-original-installation')
+        self.expected['attempt_binding_sha256'] = self.put('recovery-attempt-binding.json', binding)
+        self.diagnosis.update({key: value for key, value in self.expected.items() if key != 'diagnosis_sha256'})
+        self.expected['diagnosis_sha256'] = self.put('recovery-diagnosis.json', self.diagnosis)
+
+    def test_missing_attempt_digests_use_append_only_same_root_evidence_once(self):
+        self.append_missing_attempt_binding()
+        original = {p.name: p.read_bytes() for p in self.root.iterdir()}
+        self.assertEqual(self.recover()['pid'], '42')
+        for name, raw in original.items():
+            self.assertEqual(self.read(name), raw)
+        with self.assertRaisesRegex(m.StartError, 'recovery_already_requested'):
+            self.recover()
+        self.assertEqual(self.backend.commands, ['start'])
+
+    def test_binding_cannot_override_present_or_partial_attempt_fields(self):
+        for attempt in ({'candidate_sha256': 'c' * 64}, {'candidate_sha256': 'f' * 64}, {'candidate_sha256': None},
+                        {key: self.expected[key] for key in ('candidate_sha256', 'manifest_sha256', 'installed_manifest_sha256')}):
+            with self.subTest(attempt=attempt):
+                # Keep the source installation attempt complete for each case.
+                self.put('attempt.json', {key: self.expected[key] for key in
+                         ('candidate_sha256', 'manifest_sha256', 'installed_manifest_sha256')})
+                self.append_missing_attempt_binding(attempt)
+                with self.assertRaisesRegex(m.StartError, 'recovery_attempt_binding_invalid'):
+                    self.recover()
+        self.assertEqual(self.backend.commands, [])
+
+    def test_append_only_binding_and_source_are_rechecked_after_consumption(self):
+        for name in ('recovery-attempt-binding.json', 'recovery-installation-attempt.json'):
+            with self.subTest(name=name):
+                # Each case gets an independent protected fixture directory.
+                self.setUp()
+                self.append_missing_attempt_binding()
+                def mutate_after_marker(receipt, value):
+                    self.record(receipt, value)
+                    if receipt == 'recovery-requested.json':
+                        (self.root / name).write_bytes(self.read(name) + b' ')
+                with self.assertRaisesRegex(m.StartError, 'recovery_receipt_changed'):
+                    self.recover(record=mutate_after_marker)
+                self.assertTrue((self.root / 'recovery-requested.json').exists())
+                self.assertEqual(self.backend.commands, [])
+
+    def test_missing_or_mismatched_installation_evidence_cannot_start(self):
+        self.append_missing_attempt_binding()
+        source = self.root / 'recovery-installation-attempt.json'
+        source.unlink()
+        with self.assertRaises(FileNotFoundError):
+            self.recover()
+        self.assertFalse((self.root / 'recovery-requested.json').exists())
+        self.assertEqual(self.backend.commands, [])
+
+    def test_reviewed_supplement_must_match_original_and_installation(self):
+        self.append_missing_attempt_binding()
+        original = json.loads(self.read('recovery-attempt-binding.json'))
+        for changes in ({'attempt_sha256': 'f' * 64}, {'maintainer_reference': ''},
+                        {'candidate_sha256': 'f' * 64}, {'installation_attempt_sha256': None}):
+            with self.subTest(changes=changes):
+                binding = dict(original, **changes)
+                self.expected['attempt_binding_sha256'] = self.put('recovery-attempt-binding.json', binding)
+                with self.assertRaises(m.StartError):
+                    self.recover()
+        installation = {key: self.expected[key] for key in
+                        ('candidate_sha256', 'manifest_sha256', 'installed_manifest_sha256')}
+        installation['candidate_sha256'] = 'f' * 64
+        original['installation_attempt_sha256'] = self.put('recovery-installation-attempt.json', installation)
+        self.expected['attempt_binding_sha256'] = self.put('recovery-attempt-binding.json', original)
+        with self.assertRaisesRegex(m.StartError, 'recovery_candidate_changed'):
+            self.recover()
+        self.assertEqual(self.backend.commands, [])
+        self.assertFalse((self.root / 'recovery-requested.json').exists())
+
+    def test_incomplete_attempt_without_reviewed_supplement_still_rejects(self):
+        self.expected['attempt_sha256'] = self.put('attempt.json', {})
+        with self.assertRaisesRegex(m.StartError, 'recovery_candidate_changed'):
+            self.recover()
+        self.assertEqual(self.backend.commands, [])
+
     def test_outer_startup_failure_is_bound_without_rewriting_original(self):
         self.expected['failure_receipt'] = 'startup-failed.json'
         self.expected['failure_sha256'] = self.put('startup-failed.json', {

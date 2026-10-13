@@ -223,6 +223,29 @@ identify a `maintainer_reference`, and freeze `controls_sha256` and
 `business_state_sha256`. Unexplained historical warnings remain unexplained; an
 unknown message cannot be relabelled as a known benign event to permit recovery.
 
+If a continuation attempt omitted all three candidate/manifest/inventory digests,
+keep that original attempt unchanged. An independently reviewed recovery may add
+`attempt_binding_sha256` to `expected` and the diagnosis. It binds a new,
+exclusive `recovery-attempt-binding.json` in the same original receipt directory,
+with exactly `attempt_sha256`, `candidate_sha256`, `manifest_sha256`,
+`installed_manifest_sha256`, `installation_attempt_sha256` and a nonempty
+`maintainer_reference`. The installation digest binds
+`recovery-installation-attempt.json`, an exact byte copy of the already existing,
+complete installation attempt. Verify that original source, full frozen plan,
+candidate and installed state during independent maintenance review before
+appending either file. Never synthesize the installation attempt, patch the
+incomplete attempt, or substitute bytes in `read_record`. Missing source evidence
+still blocks recovery. Any candidate field already present in the incomplete
+attempt, even a matching or null value, rejects this supplemental path. The helper
+rechecks both additional receipts before and after consuming the same one-time
+recovery marker; all normal controls, business, identity and health checks remain.
+
+When using a later released helper to recover an already installed candidate,
+freeze the helper's separately delivered source/CI and bytes in the maintenance
+review. Keep `expected` bound to the actual installed candidate and inventory;
+the helper update does not relabel or reinstall that candidate. Load only the
+reviewed helper from its immutable staging directory, preserving the failed root.
+
 `verify_reconciled()` must freshly verify the actual installed list is all-new,
 frozen configuration/permissions/version, explained business changes, no unfinished
 business and no unknown delivery outcome. It returns exactly `controls_sha256`,
