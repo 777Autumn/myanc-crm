@@ -70,6 +70,14 @@ class CrmToolClientTests(unittest.TestCase):
         self.assertLessEqual(factory.call_args.args[1], 35)
         self.assertTrue(peer.closed)
 
+    def test_handoff_read_allows_bounded_multi_file_authorization(self):
+        expected = {"status": "found", "materials_imported": True}
+        peer = ProxyPeer(expected)
+        code, result, factory = self.invoke(["handoff"], b'{"banquet_id":"YAN-0001"}', peer)
+        self.assertEqual((0, expected), (code, result))
+        self.assertEqual(185, factory.call_args.args[1])
+        self.assertTrue(peer.closed)
+
     def test_only_business_commands_and_fields_reach_the_host(self):
         cases = [
             (["open"], b'{"url":"https://other.invalid"}', "invalid_input"),
