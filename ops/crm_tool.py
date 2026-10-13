@@ -11,6 +11,7 @@ import urllib.request
 
 ENDPOINT = "http://127.0.0.1:18743/tool"
 TIMEOUT_SECONDS = 35
+HANDOFF_TIMEOUT_SECONDS = 185  # Connection guard plus bounded per-file authorization and import.
 MAX_INPUT_BYTES = 64 * 1024
 MAX_RESPONSE_BYTES = 1024 * 1024
 FIELDS = {
@@ -118,7 +119,8 @@ def main(argv=None, *, stdin=None, stdout=None):
             "Content-Type": "application/json",
         })
         try:
-            response = opener.open(request, timeout=TIMEOUT_SECONDS)
+            timeout = HANDOFF_TIMEOUT_SECONDS if argv[0] == "handoff" else TIMEOUT_SECONDS
+            response = opener.open(request, timeout=timeout)
         except urllib.error.HTTPError as error:
             response = error  # Preserve structured host refusal, never follow a redirect.
         raw_result = response.read(MAX_RESPONSE_BYTES + 1)
