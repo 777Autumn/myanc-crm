@@ -26,6 +26,7 @@ jobs:
           echo "6cda538d19c2f4d9dce965369aa22011afa9dce8c7a73c234b66eb3611ea4aab  $RUNNER_TEMP/anc-codex/package.tar.gz" | shasum -a 256 -c -
           tar -xzf "$RUNNER_TEMP/anc-codex/package.tar.gz" -C "$RUNNER_TEMP/anc-codex"
           ANC_CODEX_BIN="$RUNNER_TEMP/anc-codex/bin/codex" python -m unittest discover -s tests -p test_codex_workspace.py -v
+          ANC_CODEX_BIN="$RUNNER_TEMP/anc-codex/bin/codex" python -m unittest discover -s tests -p test_codex_tool_results.py -v
   test:
     runs-on: ubuntu-latest
     steps:

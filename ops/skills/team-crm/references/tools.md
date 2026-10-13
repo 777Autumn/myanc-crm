@@ -9,7 +9,11 @@ including `session_id` and `exit_code`. If it returns a running session, use
 `write_stdin` with that exact session ID until completion and read its output.
 Empty output while running is not a CRM result. Poll the existing process rather
 than repeating the command; only then interpret the CRM status or approval ID.
-In a JavaScript tool wrapper, emit `text(result)` (the complete returned object),
+The pinned Mac runtime exposes `exec_command` and `write_stdin` directly; call
+them directly. They are unavailable inside JavaScript `functions.exec` wrappers,
+so an old wrapper fails before starting a query. Use the direct tool when that
+happens. In other runtimes with a JavaScript tool wrapper, emit `text(result)`
+(the complete returned object),
 including after `write_stdin`; emitting only `result.output` loses the running
 session handle. For example, `{output:"", session_id:34329}` requires
 `write_stdin({session_id:34329, chars:""})`, not a second `exec_command`.
