@@ -81,6 +81,8 @@ class CrmToolClientTests(unittest.TestCase):
             (["result", "--token", "other"], b'{}', "invalid_command"),
             (["customer", "http://remote/tool"], b'{}', "invalid_command"),
             (["customer"], b'{"customer_query":"A","actor":"other"}', "invalid_input"),
+            (["banquet-context"], b'{"banquet_id":"recTest","profile":"other"}', "invalid_input"),
+            (["handoff"], b'{"banquet_id":"recTest","reference_only":false}', "invalid_input"),
             (["stage"], b'{"content":"A","profile":"other"}', "invalid_input"),
             (["stage"], b'{"content":"A","approved":true}', "invalid_input"),
             (["result"], b'{"change_id":"chg_test","principal":{}}', "invalid_input"),
@@ -115,6 +117,15 @@ class CrmToolClientTests(unittest.TestCase):
         self.assertEqual(1, factory.call_count)
         self.assertEqual({'command': 'case-publish', 'input': request},
                          json.loads(bytes(peer.sent).split(b'\r\n\r\n', 1)[1]))
+
+    def test_context_and_revision_forward_only_business_fields(self):
+        for command, request in (('banquet-context', {'banquet_id': 'YAN-0001'}),
+                                 ('handoff', {'banquet_id': 'YAN-0001', 'purpose': 'revision'})):
+            peer = ProxyPeer({'status': 'partial', 'materials_read': False})
+            code, result, _ = self.invoke([command], json.dumps(request).encode(), peer)
+            self.assertEqual(0, code)
+            self.assertEqual({'command': command, 'input': request},
+                             json.loads(bytes(peer.sent).split(b'\r\n\r\n', 1)[1]))
 
     def test_missing_or_invalid_session_token_never_opens_a_socket(self):
         for token in (None, "", "bad\r\nInjected: yes", "token space", "非ASCII", "A" * 1025):

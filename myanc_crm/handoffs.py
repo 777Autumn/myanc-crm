@@ -4,10 +4,10 @@ import re
 import secrets
 from datetime import timedelta
 
-from . import banquet, core, customers
+from . import banquet, core, customers, publication_basis
 
 FIELDS = {
-    'handoff': {'banquet_id'},
+    'handoff': {'banquet_id', 'purpose'},
     'stage-handoff-submit': {'banquet_id', 'recipient_ref', 'delivery_ids', 'missing'},
     'stage-handoff-accept': {'banquet_id', 'version'},
     'stage-handoff-return': {'banquet_id', 'version', 'reason'},
@@ -99,24 +99,72 @@ def _view(row, store, origin=None):
     return result
 
 
-def read(request, backend, ledger, config, principal):
+def _purpose(value):
+    if value not in {'current', 'revision'}:
+        raise ValueError('purpose must be current or revision.')
+    return value
+
+
+def _access(purpose, basis, row, actor):
+    if purpose == 'revision':
+        if (basis['status'] != 'stale' or
+                customers._owner_ids(row['submitted_by']) != [actor['feishu_user_id']]):
+            raise ValueError('Revision reference requires the original submitter and a stale latest publication.')
+    else:
+        publication_basis.require_current(basis)
+    return {'purpose': purpose, 'reference_only': purpose == 'revision',
+            'publication_basis_id': basis['publication_basis_id']}
+
+
+def _reject_old_bytes(source, business, customer, ledger):
+    """Renaming a delivery cannot turn known stale bytes into a new publication."""
+    hashes = {file['sha256'] for file in source['files']}
+    for row in ledger._db.execute("SELECT change_id FROM staged_changes WHERE state='verified'"):
+        origin = ledger.get(row['change_id'])
+        if (origin.get('operation_type') != 'banquet_handoff_submit' or
+                origin.get('handoff_patch', {}).get('banquet_id') != business['record_id']):
+            continue
+        if hashes.intersection(file['sha256'] for file in origin['handoff_source']['files']):
+            basis = publication_basis.compare(origin, business, customer)
+            if basis['status'] != 'current':
+                raise ValueError('Known ' + basis['status'] + ' publication bytes cannot be republished; revise the saved files.')
+
+
+def read(request, backend, ledger, config, principal, *, metadata_only=False, store=None, business=None):
     core._only_keys(request, FIELDS['handoff'])
+    purpose = _purpose(request.get('purpose', 'current'))
     actor = core._actor_for_principal(principal, config)
-    store = banquet.Store(backend)
-    store.read_schema()
-    business = store.get('banquets', request.get('banquet_id'))
+    if store is None:
+        store = banquet.Store(backend)
+        store.read_schema()
+        business = store.get('banquets', request.get('banquet_id'))
     if not business:
         return {'status': 'not_found'}
     row = latest(store, business['record_id'])
     if not row:
         return {'status': 'not_found'}
-    origin = publication(ledger, row)
     if actor['feishu_user_id'] not in customers._owner_ids(row['recipient']) + customers._owner_ids(row['submitted_by']):
         return core._blocked('handoff_actor_denied', '此交接由指定提交人与接手人处理。')
+    origin = publication(ledger, row)
+    basis = publication_basis.read(origin, business, backend)
     from . import handoff_notifications
-    return {'status': 'found', 'handoff': _view(row, store, origin),
-            'is_recipient': actor['feishu_user_id'] in customers._owner_ids(row['recipient']),
-            'notifications': handoff_notifications.summary(ledger, row)}
+    result = {'status': 'found', 'handoff': _view(row, store),
+            'publication_basis': basis, 'materials_read': False,
+            'is_recipient': actor['feishu_user_id'] in customers._owner_ids(row['recipient'])}
+    try:
+        result['notifications'] = handoff_notifications.summary(ledger, row)
+        result['notifications_status'] = 'read'
+    except Exception:
+        result['notifications_status'] = 'unavailable'
+    if not metadata_only:
+        try:
+            access = _access(purpose, basis, row, actor)
+        except ValueError as exc:
+            return {**result, **core._blocked('handoff_basis_denied', str(exc))}
+        result.update(access)
+        result['handoff'] = _view(row, store, origin)
+        result['handoff']['files'] = [{**file, **access} for file in result['handoff']['files']]
+    return result
 
 
 def stage(command, request, backend, ledger, config, token, principal, *, context=None, personal_backend=None, now=None):
@@ -140,6 +188,7 @@ def stage(command, request, backend, ledger, config, token, principal, *, contex
         source = None
         if command == 'stage-handoff-submit':
             source = _source(context, principal)
+            _reject_old_bytes(source, business, customer, ledger)
             if [f['delivery_id'] for f in source['files']] != request.get('delivery_ids'):
                 raise ValueError('Material selection differs from host snapshots.')
             person = ledger.get_assignee(request.get('recipient_ref'), principal)
@@ -162,6 +211,8 @@ def stage(command, request, backend, ledger, config, token, principal, *, contex
             origin = publication(ledger, before)
             if customers._owner_ids(before['recipient']) != [actor['feishu_user_id']] or before['status'] != '待接手':
                 raise ValueError('Only the named recipient may handle the pending version.')
+            if command == 'stage-handoff-accept':
+                publication_basis.require_current(publication_basis.compare(origin, business, customer))
             source = origin['handoff_source']
             patch = {'status': '已接手' if command == 'stage-handoff-accept' else '已退回',
                      'acknowledged_at': None}
@@ -211,11 +262,17 @@ def apply(staged, backend, ledger, moment, *, personal_backend=None, files_verif
             if not customer or {'record_id': core._record_id(customer), **core._snapshot(customer)} != staged['customer_snapshot']:
                 return finish('replan_required', 'customer_changed')
             submit = staged['operation_type'] == 'banquet_handoff_submit'
+            if submit:
+                _reject_old_bytes(staged['handoff_source'], business, customer, ledger)
             person = (staged['handoff_patch'] if submit else before)['recipient'][0]
             if customers._person(backend.get_assignee(person['id'])) != customers._person(person):
                 return finish('replan_required', 'assignee_changed')
             if not submit:
-                publication(ledger, before)
+                origin = publication(ledger, before)
+                if staged['operation_type'] == 'banquet_handoff_accept':
+                    basis = publication_basis.compare(origin, business, customer)
+                    if basis['status'] != 'current':
+                        return finish('replan_required', 'handoff_basis_' + basis['status'])
                 if customers._owner_ids(before['recipient']) != [staged['actor']['feishu_user_id']]:
                     return finish('failed', 'handoff_actor_denied')
             # Both identities must agree on the exact target and schema before
@@ -261,7 +318,8 @@ def apply(staged, backend, ledger, moment, *, personal_backend=None, files_verif
     return core._run_customer_write(staged, ledger, moment, perform, started if started is not None else time.monotonic())
 
 
-def authorize_file(publication_id, backend, ledger, config, principal):
+def authorize_file(publication_id, backend, ledger, config, principal, *, purpose='current'):
+    purpose = _purpose(purpose)
     match = re.fullmatch(r'bh_(chg_[A-Za-z0-9_-]+)_([0-3])', publication_id)
     if not match:
         raise ValueError('Invalid handoff publication.')
@@ -279,8 +337,9 @@ def authorize_file(publication_id, backend, ledger, config, principal):
     actor = core._actor_for_principal(principal, config)
     if actor['feishu_user_id'] not in customers._owner_ids(row['recipient']) + customers._owner_ids(row['submitted_by']):
         raise ValueError('Not a party to this handoff.')
+    access = _access(purpose, publication_basis.read(origin, business, backend), row, actor)
     source = origin['handoff_source']
     file = source['files'][int(match[2])]
-    return {'status': 'authorized', 'publication_id': publication_id,
+    return {'status': 'authorized', 'publication_id': publication_id, **access,
             'source': {**{k: v for k, v in source['principal'].items() if k != 'message_id'},
-                       'work_id': source['work_id'], **file}}
+                       'work_id': source['work_id'], **file, **access}}

@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
 
-from myanc_crm import cli, core
+from myanc_crm import banquet, cli, core
 from test_host_tools import CONFIG, HistoryBackend
 from test_customer_journey import CustomerBackend
 from test_core import customer
@@ -130,7 +130,7 @@ class PersistentSalesStore:
     def __init__(self, backend):
         self.backend = backend
 
-    def read_schema(self):
+    def read_schema(self, kinds=None):
         return {'banquets': 'synthetic-fixed-schema'}
 
     def get(self, kind, identifier):
@@ -142,7 +142,10 @@ class PersistentSalesStore:
     def write(self, kind, identifier, fields):
         rows = self.backend.banquet_rows.setdefault(kind, {})
         identifier = identifier or 'recSales' + str(len(rows) + 1)
-        rows.setdefault(identifier, {'record_id': identifier}).update(copy.deepcopy(fields))
+        initial = {key: None for key in (banquet.SCHEMA if kind == 'banquets' else {})}
+        if kind == 'banquets':
+            initial['number'] = 'YAN-' + str(len(rows) + 1).zfill(4)
+        rows.setdefault(identifier, {'record_id': identifier, **initial}).update(copy.deepcopy(fields))
         self.backend.save()
         return identifier
 

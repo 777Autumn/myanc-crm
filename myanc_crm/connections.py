@@ -21,7 +21,7 @@ from urllib.parse import urlsplit
 from . import core, write_locks
 
 
-READ_COMMANDS = frozenset({"customer", "customers", "banquet", "banquets", "handoff"})
+READ_COMMANDS = frozenset({"customer", "customers", "banquet", "banquets", "banquet-context", "handoff"})
 HANDOFF_STAGES = frozenset({"stage-handoff-submit", "stage-handoff-accept", "stage-handoff-return"})
 BANQUET_STAGES = frozenset({"stage-banquet-create", "stage-banquet-update", "stage-banquet-followup"})
 CLI_READ_COMMANDS = frozenset({"+field-list", "+record-list", "+record-get", "+record-search"})

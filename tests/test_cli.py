@@ -242,6 +242,47 @@ class CliBoundaryTests(unittest.TestCase):
                 self.assertEqual((0,"blocked"), (code,result["status"]))
             runtime.assert_not_called()
 
+    def test_context_uses_personal_connection_and_group_shared_reader(self):
+        from test_connections import ConnectionTests
+        from test_customers import CustomerBackend
+        from test_banquet import SalesStore
+        from myanc_crm import banquet
+        fixture = ConnectionTests()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        fixture.config['personal_connections']['resource_mode'] = 'shared'
+        fixture.connect()
+        self.config.update(fixture.config)
+        self.config_path.write_text(json.dumps(self.config), encoding='utf-8')
+        self.ledger_path.parent.mkdir(mode=0o700)
+        reader, shared, store = CustomerBackend(), CustomerBackend(), SalesStore()
+        reader.customers['rec-1']['name'] = 'Personal fixture'
+        shared.customers['rec-1']['name'] = 'Shared fixture'
+        store.rows[('banquets', 'recBanquet')] = dict(record_id='recBanquet', name='Fixture', customer_record_id='rec-1')
+        selected = []
+        def backend(config, *, personal_runner=None):
+            selected.append(personal_runner)
+            return reader if personal_runner else shared
+        with mock.patch('myanc_crm.connections.Connections', return_value=fixture.connections), \
+             mock.patch.object(cli, 'Connections', return_value=fixture.connections), \
+             mock.patch.object(cli, '_backend', side_effect=backend), \
+             mock.patch.object(banquet, 'Store', return_value=store):
+            for private in (True, False):
+                principal = fixture.principal if private else dict(fixture.principal, chat_id='shared-group', project='manager-group')
+                payload = dict(command='banquet-context', principal=principal, request=dict(banquet_id='recBanquet'))
+                code, value = self.run_cli(['host-tool'], json.dumps(payload), host=True)
+                self.assertEqual(0, code, value)
+                self.assertIn('Personal fixture' if private else 'Shared fixture', value['customer']['name'])
+                self.assertEqual(private, selected[-1] is not None)
+                self.assertEqual('empty' if private else 'private_required', value['sources']['handoff']['status'])
+                self.assertFalse(value['materials_read'])
+            fixture.connections.command('disconnect', fixture.principal)
+            payload['principal'] = fixture.principal
+            with mock.patch.object(cli, '_runtime') as runtime:
+                _, denied = self.run_cli(['host-tool'], json.dumps(payload), host=True)
+                self.assertEqual('blocked', denied['status'])
+                runtime.assert_not_called()
+
     def test_case_tools_require_host_and_never_open_formal_crm(self):
         principal = dict(platform="feishu", user_id="sender-test", chat_id="chat-test",
                          session_key="session-test", project="project-test", message_id="message-test")

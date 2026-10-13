@@ -59,7 +59,11 @@ description: 读取员工选定的文档、表格、PDF和图片，制作或修�
 6. For a revision, refresh the current work context and revise the matching source
    and artifact into a new output. First verify the prior artifact's returned path
    and byte hash. A missing or changed file is not that prior version; request the
-   matching file or clarify its location. On an ambiguous customer/work, missing input or
+   matching file or clarify its location. For a formal banquet publication marked
+   `reference_only`, follow `team-crm/references/banquet.md`: retain its original
+   basis, revise into a new delivery, and independently read the saved contents
+   before submitting approval. The host owns the reference marker.
+   On an ambiguous customer/work, missing input or
    new conversation without a valid association, clarify the intended work in
    ordinary language. In a private conversation, the host's current work also
    applies to unquoted follow-ups; quoting an earlier task or response is optional.

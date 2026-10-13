@@ -21,6 +21,7 @@
 |---|---|
 | `banquets` | `owner: me/all`（默认 me），可选 `keyword`、`stages`、`date_from/date_to`（YYYY-MM-DD）、`offset`。all 仍受当前身份权限约束，每页 20 条，继续按 `next_offset` 翻页 |
 | `banquet` | `banquet_id`，读取最新业务和最近 10 条真实沟通，`history_has_more` 为 true 时不得称已读全部历史 |
+| `banquet-context` | `banquet_id`，回答“这场婚宴现在什么情况”：当前婚宴、真实关联客户、最近 10 条跟进、本人获准交接元数据及通知状态；返回逐项来源和读取时间，不导入文件 |
 | `stage-banquet-create` | 必填 `customer_query/name/owner_ref/stage`，可选下列业务字段，先用 `assignee` 核验负责人 |
 | `stage-banquet-update` | `banquet_id` 和仅包含实际变更的 `changes` |
 | `stage-banquet-followup` | `banquet_id/occurred_at/content`，可选 `channel`，记录实际发生的沟通；content 最多 2000 字符，超过时拆分并分别审批 |
@@ -58,7 +59,7 @@ Asia/Shanghai 核对所指日期；有歧义时追问。到店安排、实际到
 
 | 命令 | 参数与用途 |
 |---|---|
-| `handoff` | `banquet_id`，读取当前交接；获准材料导入当前工作后，用 `work-context` 获取文件路径并实际阅读 |
+| `handoff` | `banquet_id`，可选 `purpose: current/revision`，默认 current；获准材料导入当前工作后，用 `work-context` 获取文件路径并实际阅读。revision 只供原提交人读取最新过时材料作修订参考 |
 | `stage-handoff-submit` | `banquet_id/recipient_ref/delivery_ids/missing`；先用 `assignee` 核验指定同事，材料为当前工作中已送达的 1–4 个版本，至少一个 Word。无缺项也明确填写“无” |
 | `stage-handoff-accept` | `banquet_id/version`，指定同事在自己的会话预览并确认当前版本 |
 | `stage-handoff-return` | `banquet_id/version/reason`，指定同事说明缺项，预览并退回 |
@@ -66,6 +67,25 @@ Asia/Shanghai 核对所指日期；有歧义时追问。到店安排、实际到
 读取结果顶层 `is_recipient` 是宿主对当前用户的接手人核验。
 为 true 时说明“指定你接手”，为 false 时说明当前记录中的指定人。
 消息来源与 CRM 应用的用户 ID 可不同，以此核验结果判断，不按姓名或跨应用 ID 猜测。
+
+问整体情况时先用 `banquet-context`，对象不明确先查询消歧。逐项报告 `sources`、
+`missing` 和读取时间；`partial` 表示有来源未读，不能说不存在。跟进只读最近十条，
+按 `history_has_more` 说明截断。群聊交接部分转本人私聊。`materials_read:false`
+表示仅取得元数据；需要正文时继续 `handoff` → `work-context` → 实际文件读取。
+
+`publication_basis` 检查发布时的宴会名称、编号、关联客户、桌数、日期、日期确认状态
+及说明、时段、场地、预算，以及客户编号、名称、联系人、电话和邮箱。`current`
+表示这些字段一致，`stale` 列出具体变化，`unknown` 表示原依据缺失，`unavailable`
+表示当前必要来源未读。跟进时间、下一步及更新时间不单独使材料过时。缺失、空值
+和零分别处理；以上检查不证明正文、价格或客户确认正确，继续文件回读和人工验收。
+
+后三种状态均不能新接手，也不能用新审批卡绕过。旧“已接手”保留为历史事实，
+同时说明当前材料已过时；指定人仍可按原审批规则退回待接手的旧材料。
+原提交人可在本人私聊用 `purpose:revision` 读取仍为最新且依据已过时的可信发布，
+以宿主的 `reference_only` 和 `publication_basis_id` 为准。参考文件只用于修订，
+不能作为当前材料重发；改名称、delivery ID 或版本号不清除旧字节限制。修订后
+创建新交付、独立读取保存后的正文，再走现有审批；哈希变化本身不证明正文已修正。
+本人批准只确认系统操作，不代表管理者代批或客户确认。
 
 提交、接手和退回均须宿主审批卡确认。材料、接手人或待补项改变后，重新提交
 产生新版；旧版本及旧卡不能代确认新版。不要把直接改表的“已接手”当作已核验
