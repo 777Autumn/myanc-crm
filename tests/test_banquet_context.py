@@ -25,6 +25,7 @@ class BanquetContextTests(unittest.TestCase):
         for principal in (fixture.PRINCIPAL, self.f.recipient):
             value = self.read(principal)
             self.assertEqual('found', value['status'], value)
+            self.assertEqual('private', value['conversation_scope'])
             self.assertEqual(10, len(value['history']))
             self.assertTrue(value['history_has_more'])
             self.assertFalse(value['materials_read'])
@@ -36,14 +37,22 @@ class BanquetContextTests(unittest.TestCase):
 
     def test_group_and_nonparty_do_not_disclose_handoff_metadata(self):
         value = self.read(private=False)
+        self.assertEqual('shared', value['conversation_scope'])
         self.assertEqual('private_required', value['sources']['handoff']['status'])
         for key in ('handoff', 'notifications', 'publication_basis', 'is_recipient'):
             self.assertNotIn(key, value)
         other = {**fixture.PRINCIPAL, 'user_id': 'other'}
         self.f.config['allowed_actors']['other'] = {'feishu_user_id': 'ou_other', 'display_name': '虚构其他人'}
         value = self.read(other)
+        self.assertEqual('private', value['conversation_scope'])
         self.assertEqual('denied', value['sources']['handoff']['status'])
         self.assertNotIn('handoff', value)
+
+    def test_request_cannot_claim_a_private_conversation(self):
+        with self.assertRaises(ValueError):
+            banquet_context.read({'banquet_id': self.f.business, 'conversation_scope': 'private'},
+                                 self.f.backend, self.f.ledger, self.f.config, fixture.PRINCIPAL,
+                                 private=False)
 
     def test_optional_source_failure_is_partial_not_empty(self):
         original = self.f.store.list

@@ -14,6 +14,7 @@ def read(request, backend, ledger, config, principal, *, private):
     except Exception:
         return core._blocked('banquet_unavailable', '无法读取指定婚宴；请先用宴会查询核对明确编号。')
     result = {'status': 'found', 'banquet': banquet._display(business, store), 'materials_read': False,
+              'conversation_scope': 'private' if private else 'shared',
               'sources': {}, 'missing': [], 'history_limit': 10, 'history_has_more': None}
 
     def source(name, status, **details):
