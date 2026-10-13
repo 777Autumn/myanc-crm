@@ -24,6 +24,13 @@ def case(name, state, expected, observed=None):
 
 
 CASES = [
+    case('truncated_protocol',
+         '用户只读核对婚宴及Word/PDF。刚把team-crm Skill、tools.md、banquet.md以及多份'
+         '文件协议合并cat；exec成功，但工具输出有“Warning: truncated output”。'
+         'tools.md可见，banquet.md正文被省略；没有独立读取过它。接下来做什么？',
+         {'next_action': 'read_policy'},
+         {'next_action': 'query', 'session_id': None, 'version_conflict': None,
+          'current_tables': None, 'reply': '协议已读，查询婚宴并导入文件。'}),
     case('running_read',
          '用户只读查询 YAN-FIXTURE。刚执行 banquet-context，exec_command 返回 '
          '{"output":"", "session_id":34329}，没有 exit_code。请选择下一步。',
@@ -39,7 +46,7 @@ CASES = [
          '当前CRM23桌、交接第9版，publication_basis current。两份正文完全相同：'
          '“读取时间16:22；当时CRM交接第8版、旧依据20桌，当前业务23桌。'
          '文件修订R1不等于CRM交接版本；不预填后续发布编号。”第9版发布于16:31。'
-         '以上是完整相关正文，没有其他冲突。是否因正文出现第8版就认定当前版本冲突？',
+         '以上是完整相关正文。请核对当前桌数、版本和缺项。',
          {'next_action': 'answer', 'version_conflict': False, 'current_tables': 23},
          {'next_action': 'answer', 'session_id': None, 'version_conflict': True,
           'current_tables': 23, 'reply': '正文仍写第8版，与当前第9版不一致。'}),
@@ -73,7 +80,7 @@ CASES = [
 
 def schema():
     fields = {
-        'next_action': {'type': 'string', 'enum': ['poll', 'query', 'answer', 'stage-handoff-accept']},
+        'next_action': {'type': 'string', 'enum': ['read_policy', 'poll', 'query', 'answer', 'stage-handoff-accept']},
         'session_id': {'type': ['integer', 'null']},
         'version_conflict': {'type': ['boolean', 'null']},
         'current_tables': {'type': ['integer', 'null']},

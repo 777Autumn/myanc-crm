@@ -5,6 +5,12 @@ description: 使用团队 CRM 查询客户和婚宴商机、婚期与到店安�
 
 # Team CRM
 
+Load each required reference in its own tool result. If any output is truncated,
+read the omitted sections in bounded ranges before using the protocol. A combined
+`cat` that exits successfully does not establish that every reference was visible.
+For banquet requests, obtain a separate complete `references/banquet.md` result;
+it contains the current-vs-historical material rules needed even for read-only work.
+
 1. Read [the controlled CRM protocol](references/tools.md) completely before using
    CRM tools. It is the authority for arguments, current-turn reads, pagination,
    approval, shared plans and receipt interpretation.
