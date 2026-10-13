@@ -10,6 +10,8 @@ default_permissions = "anc-work"
 
 [features]
 network_proxy = true
+# Native command results must keep running handles and exit status outside JS.
+code_mode = { direct_only_tool_namespaces = ["functions"] }
 
 [permissions.anc-work]
 extends = ":workspace"

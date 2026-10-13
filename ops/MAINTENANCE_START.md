@@ -82,6 +82,14 @@ groups and the existing host capabilities remain required. The loopback network
 rule is hostname-wide, not a port ACL, and does not authorize an administration
 socket. Do not add unrestricted network/HOME access to make a failed tool work.
 
+Keep `features.code_mode.direct_only_tool_namespaces = ["functions"]` in the
+root-owned native configuration. The pinned CLI exposes native command tools
+directly and removes them from nested JavaScript, so a body-only wrapper cannot
+discard a running session handle or exit status. Install this setting for the
+actual authentication owner before restarting the shared app-server; a template
+edit alone does not update that process. Retain the existing model, authentication
+and permission profiles.
+
 For the paired gateway's optional `shared_app_server=true`, select `anc-shared`
 instead. Its base allows only system/tool reads; the gateway adds each fixed
 entrance's workspace and current file work to that thread. All four approved
@@ -108,6 +116,13 @@ and makes no model turn. It checks rule/Skill readability, saved revisions,
 protected writes/renames and credential read denial. It does not prove model
 compliance, installed ownership or cross-account isolation; verify those against
 the frozen installation before enabling the Bot.
+
+Also run `test_codex_tool_results.py` with the same pinned CLI. Its local scripted
+Responses endpoint drives native tools without a login or live model. A real
+32-second HTTP read must expose a running handle, finish through that handle,
+and execute once. It also checks partial output, a nonzero exit and rejection of
+lossy JavaScript execution/polling wrappers. This controlled delay is separate
+from the required real Feishu acceptance.
 
 ## Integration
 
