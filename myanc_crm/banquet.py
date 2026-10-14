@@ -238,7 +238,7 @@ def read(command, request, backend, config, principal):
     core._actor_for_principal(core._principal(principal), config)
     core._only_keys(core._mapping(request, 'request'), FIELDS[command])
     store = Store(backend)
-    store.read_schema()
+    store.read_schema(('banquets', 'followups') if command == 'banquet' else ('banquets',))
     if command == 'banquet':
         row = store.get('banquets', request.get('banquet_id'))
         if row is None:

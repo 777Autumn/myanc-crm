@@ -25,6 +25,67 @@ def case(name, state, expected, observed=None):
 
 
 CASES = [
+    {**case('payment_promise_page_only',
+         '唯一提供的材料是虚构扫描件第1页，已完成渲染并实际查看本页图片，10月10日：“客户说将安排20000元定金。'
+         '此页仅记付款承诺，未附到账凭证。”没有其他页或银行查询。概括本材料付款事实。',
+         {'next_action': 'answer', 'receipt_amount': None, 'receipt_missing_evidence': None, 'bank_verified': False}),
+     'policies': ('skills/team-files/references/production.md', 'skills/team-banquet/SKILL.md')},
+    {**case('payment_receipt_page_only',
+         '唯一提供的材料是虚构扫描件第2页，已完成渲染并实际查看本页图片，10月14日：“收款记录RC-FIXTURE-014：已到账12000元。'
+         '原承诺20000元，差额8000元未到账。以上是内部沟通记录，未签署最终合同。”'
+         '没有其他页或银行查询。概括本材料付款事实。',
+         {'next_action': 'answer', 'receipt_amount': 12000, 'receipt_missing_evidence': False, 'bank_verified': False}),
+     'policies': ('skills/team-files/references/production.md', 'skills/team-banquet/SKILL.md')},
+    {**case('payment_reversed_page_order',
+         '两页虚构材料已全部看过，先展示10月14日第2页：“收款记录：已到账12000元；'
+         '原承诺20000元，差额8000元未到账。”再展示10月10日第1页：“客户说将安排20000元定金。'
+         '此页仅记付款承诺，未附到账凭证。”没有另外查询银行。概括付款进展。',
+         {'next_action': 'answer', 'receipt_amount': 12000, 'receipt_missing_evidence': False, 'bank_verified': False}),
+     'policies': ('skills/team-files/references/production.md', 'skills/team-banquet/SKILL.md')},
+    {**case('payment_conditional_receipt_is_not_received',
+         '虚构材料第1页仅记承诺20000元、未附到账凭证。第2页改为：'
+         '“拟到账12000元，尚待银行确认；若该笔到账，剩余差额为8000元。”'
+         '已看过完整两页，没有其他依据或银行查询。概括付款进展。',
+         {'next_action': 'answer', 'receipt_amount': None, 'receipt_missing_evidence': None, 'bank_verified': False}),
+     'policies': ('skills/team-files/references/production.md', 'skills/team-banquet/SKILL.md')},
+    {**case('attachment_supplement_keeps_pending_question',
+         '同一工作收到四份材料。前一轮读完第一份后，助手已问“你希望整理预算还是交接？”'
+         '用户尚未回答，接着只上传了第二份附件，没有文字。宿主已保存这份附件，已读过正文，'
+         '它补充同一事项且没有新的关键矛盾。此刻是否应再问一次同样的用途问题？',
+         {'next_action': 'answer', 'ask_clarification': False},
+         {'next_action': 'answer', 'ask_clarification': True, 'reply': '你希望整理预算还是交接？'}),
+     'policies': ('skills/team-banquet/SKILL.md', 'skills/team-files/SKILL.md')},
+    {**case('attachment_new_critical_conflict_needs_question',
+         '原工作预算方案目的已明确，新附件正文明确指向另一个客户和金额。用户说“按这个改”，'
+         '但不能确认换了客户还是误传了附件，也未给出对应关系。是否需要一个新的具体澄清？',
+         {'next_action': 'answer', 'ask_clarification': True}),
+     'policies': ('skills/team-banquet/SKILL.md', 'skills/team-files/SKILL.md')},
+    {**case('native_first_policy_read_uses_direct_command',
+         '固定Mac工作区新一轮，尚未读取任何Skill。当前工具定义分别列出直接工具'
+         'functions.exec_command和functions.write_stdin，另有用于JavaScript的functions.exec。'
+         '要执行首次cat读取Skill，请选command_surface：direct表示直接调用exec_command；'
+         'wrapper表示在functions.exec里调用tools.exec_command。',
+         {'next_action': 'read_policy', 'command_surface': 'direct'},
+         {'next_action': 'read_policy', 'command_surface': 'wrapper', 'reply': '通过JavaScript包装读取规则。'}),
+     'policies': ('CLAUDE.vps.md',)},
+    {**case('payment_qualifier_stays_with_older_promise',
+         '只读总结已逐页看过的两页虚构会议扫描件。第1页（10月2日）：客户承诺订金20000元；'
+         '“此页仅记付款承诺，未附到账凭证”。第2页（10月5日）：收款记录RC-FIXTURE-014，'
+         '实收12000元，距离承诺金额尚差8000元。第2页没有“未附到账凭证”字样。'
+         '以上是完整相关原文，没有另外查询银行。请概括付款依据。'
+         'receipt_missing_evidence表示原文是否把缺凭证限定用于这条收款记录；'
+         'bank_verified表示是否已独立核验真实银行到账。',
+         {'next_action': 'answer', 'receipt_amount': 12000, 'receipt_missing_evidence': False, 'bank_verified': False},
+         {'next_action': 'answer', 'receipt_amount': 12000, 'receipt_missing_evidence': True, 'bank_verified': False,
+          'reply': '记录称已到账12000元，但注明未附到账凭证。'}),
+     'policies': ('skills/team-files/references/production.md', 'skills/team-banquet/SKILL.md')},
+    {**case('payment_qualifier_applies_to_current_receipt',
+         '只读总结两页虚构材料，已逐页看过。第1页承诺订金20000元。第2页收款记录：'
+         '实收12000元，尚差8000元；“本条为口述收款，未附到账凭证”。没有另外查询银行。'
+         '请概括付款依据。receipt_missing_evidence表示原文是否把缺凭证限定用于这条收款记录；'
+         'bank_verified表示是否已独立核验真实银行到账。',
+         {'next_action': 'answer', 'receipt_amount': 12000, 'receipt_missing_evidence': True, 'bank_verified': False}),
+     'policies': ('skills/team-files/references/production.md', 'skills/team-banquet/SKILL.md')},
     {**case('readonly_pdf_reference_routing',
          '用户只读核对当前工作中Word和PDF正文，不生成交付物、不审批。'
          '当前工作与来源路径已确认，已读team-files入口Skill和文件工具协议，'
@@ -110,6 +171,11 @@ def schema():
         'session_id': {'type': ['integer', 'null']},
         'version_conflict': {'type': ['boolean', 'null']},
         'current_tables': {'type': ['integer', 'null']},
+        'receipt_amount': {'type': ['number', 'null'], 'description': 'Amount the source records as received, not promised or conditional; null if absent.'},
+        'receipt_missing_evidence': {'type': ['boolean', 'null'], 'description': 'Does the source attach a missing-evidence qualifier to that received-payment record? Null if no received-payment record.'},
+        'bank_verified': {'type': ['boolean', 'null'], 'description': 'Whether independent bank verification was performed; false means not checked, not that payment did not occur.'},
+        'ask_clarification': {'type': ['boolean', 'null']},
+        'command_surface': {'type': ['string', 'null'], 'enum': ['direct', 'wrapper', None]},
         'reply': {'type': 'string'},
     }
     return {'type': 'object', 'properties': fields, 'required': list(fields), 'additionalProperties': False}
@@ -138,10 +204,13 @@ def main():
     parser.add_argument('--codex', required=True, help='Native executable, not a shell script')
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--repeat', type=int, choices=(1, 2, 3), default=1)
+    parser.add_argument('--case', action='append', choices=[spec['name'] for spec in CASES],
+                        help='Run only named diagnostics; repeat for multiple cases')
     args = parser.parse_args()
+    selected = [spec for spec in CASES if not args.case or spec['name'] in args.case]
     # Reserve before model calls; even failures remain immutable evidence.
     with args.output.open('x', encoding='utf-8') as evidence:
-        paths = dict.fromkeys(p for spec in CASES for p in spec.get('policies', POLICIES))
+        paths = dict.fromkeys(p for spec in selected for p in spec.get('policies', POLICIES))
         policies = {p: (OPS / p).read_text(encoding='utf-8') for p in paths}
         evidence.write(json.dumps({'kind': 'diagnostic_only', 'model': 'gpt-6-luna',
                                    'cli_version': subprocess.check_output([args.codex, '--version'], text=True).strip(),
@@ -152,7 +221,7 @@ def main():
             root = Path(tmp)
             shape = root / 'schema.json'
             shape.write_text(json.dumps(schema()), encoding='utf-8')
-            for spec in CASES:
+            for spec in selected:
                 for repeat in range(args.repeat):
                     output = root / 'answer.json'
                     output.unlink(missing_ok=True)
