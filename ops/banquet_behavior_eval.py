@@ -25,6 +25,22 @@ def case(name, state, expected, observed=None):
 
 
 CASES = [
+    {**case('attachment_turn_requires_fresh_source_read',
+         '同一工作连续上传附件。上一轮已读第一份并问用途，员工尚未回答。'
+         '本轮只有宿主通知：新附件是第二份 scan.pdf，id=input-2；原件已保存。'
+         '本轮已重新读完当前文件Skill及其要求的协议，但尚未刷新work-context或读取第二份正文。'
+         '下一步做什么？',
+         {'next_action': 'query', 'ask_clarification': False},
+         {'next_action': 'answer', 'ask_clarification': True, 'reply': '材料已读完，请告诉我需要哪种成果？'}),
+     'policies': ('skills/team-files/SKILL.md', 'skills/team-files/references/tools.md', 'skills/team-banquet/SKILL.md')},
+    {**case('payment_followup_rechecks_page_before_absence_claim',
+         '员工追问两页扫描件的付款依据和日期。上一轮提取乱码后看过两页图片并回复了概要，'
+         '本轮只保留旧概要：承诺20000元、后续记录到账12000元、差额8000元。'
+         '原件和已渲染页图仍可读，但本轮上下文没有原文或图片；拟回答“第二页没有日期”。'
+         '当前生产规则已读，下一步做什么？',
+         {'next_action': 'inspect_pages'},
+         {'next_action': 'answer', 'reply': '第二页没有标明具体日期，无法确认。'}),
+     'policies': ('skills/team-files/references/production.md',)},
     {**case('payment_promise_page_only',
          '唯一提供的材料是虚构扫描件第1页，已完成渲染并实际查看本页图片，10月10日：“客户说将安排20000元定金。'
          '此页仅记付款承诺，未附到账凭证。”没有其他页或银行查询。概括本材料付款事实。',
@@ -167,7 +183,8 @@ CASES = [
 
 def schema():
     fields = {
-        'next_action': {'type': 'string', 'enum': ['read_policy', 'poll', 'query', 'render', 'inspect_pages', 'answer', 'stage-handoff-accept']},
+        'next_action': {'type': 'string', 'enum': ['read_policy', 'poll', 'query', 'render', 'inspect_pages', 'answer', 'stage-handoff-accept'],
+                        'description': 'read_policy loads instructions; query performs a fresh read including work-context; poll only waits on an existing running tool session.'},
         'session_id': {'type': ['integer', 'null']},
         'version_conflict': {'type': ['boolean', 'null']},
         'current_tables': {'type': ['integer', 'null']},

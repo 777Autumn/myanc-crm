@@ -9,6 +9,13 @@ description: 读取员工选定的文档、表格、PDF和图片，制作或修�
    command, including read-only `work-context` and status queries.
    Obtain the current host work context. Continue only with the inputs and output
    directory it actually returns; the host selects identity and destination.
+   Each upload notification introduces the listed inputs, even without user text.
+   Refresh work-context, match this turn's input IDs and hashes, and read every
+   newly selected byte version before claiming it was read or checked. Earlier
+   summaries cover only their own sources. After reading a supplement, continue
+   the stated purpose. If an earlier purpose question is still unanswered, simply
+   acknowledge the new material and wait for that answer. Ask a new question only
+   for a new ambiguity that could change the customer, critical amount or commitment.
 2. For banquet sales, budgets or execution/handoff files, invoke the installed
    `team-banquet` Skill before interpreting or revising business content, even
    when only reorganizing a colleague's file. Apply its business readback as well
