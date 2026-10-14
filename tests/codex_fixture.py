@@ -26,10 +26,13 @@ def stop_codex_process(process):
         process.wait(timeout=5)
         deadline = time.monotonic() + 5
         while True:
-            try:
-                os.killpg(process.pid, 0)
-            except ProcessLookupError:
+            # macOS can deny signal 0 for an exiting group; zombies cannot write.
+            rows = subprocess.check_output(['/bin/ps', '-axo', 'pgid=,stat='],
+                                           text=True, timeout=5).splitlines()
+            members = [row.split() for row in rows if row.strip()]
+            if not any(int(group) == process.pid and not state.startswith('Z')
+                       for group, state in members):
                 break
             if time.monotonic() >= deadline:
-                raise RuntimeError('native fixture process group did not exit')
+                raise RuntimeError('native fixture process group still has live members')
             time.sleep(.01)
