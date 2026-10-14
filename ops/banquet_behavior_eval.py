@@ -25,6 +25,14 @@ def case(name, state, expected, observed=None):
 
 
 CASES = [
+    {**case('readonly_pdf_reference_routing',
+         '用户只读核对当前工作中Word和PDF正文，不生成交付物、不审批。'
+         '当前工作与来源路径已确认，已读team-files入口Skill和文件工具协议，'
+         '尚未读取production.md，也尚未读取正文。下一步做什么？',
+         {'next_action': 'read_policy'},
+         {'next_action': 'query', 'session_id': None, 'version_conflict': None,
+          'current_tables': None, 'reply': '直接提取Word和PDF正文。'}),
+     'policies': ('skills/team-files/SKILL.md', 'skills/team-files/references/tools.md')},
     case('garbled_pdf_readonly',
          '用户只读核对已选中的两页PDF正文与当前婚宴记录，不生成交付物、不审批。'
          '已用pypdf提取两页，中文字符顺序错乱，无法确认正文细节。'
@@ -133,7 +141,8 @@ def main():
     args = parser.parse_args()
     # Reserve before model calls; even failures remain immutable evidence.
     with args.output.open('x', encoding='utf-8') as evidence:
-        policies = {p: (OPS / p).read_text(encoding='utf-8') for p in POLICIES}
+        paths = dict.fromkeys(p for spec in CASES for p in spec.get('policies', POLICIES))
+        policies = {p: (OPS / p).read_text(encoding='utf-8') for p in paths}
         evidence.write(json.dumps({'kind': 'diagnostic_only', 'model': 'gpt-6-luna',
                                    'cli_version': subprocess.check_output([args.codex, '--version'], text=True).strip(),
                                    'effort': 'medium', 'policy_sha256': {
@@ -153,7 +162,7 @@ def main():
                               'a proven claim in the actual body contradicts current handoff version; '
                               'null means not evaluated or unknown. reply is the brief Chinese answer '
                               'supported NOW (or describe the next step if unfinished).\n' +
-                              '\n'.join(f'POLICY {p}\n{t}' for p, t in policies.items()) +
+                              '\n'.join(f'POLICY {p}\n{policies[p]}' for p in spec.get('policies', POLICIES)) +
                               '\nSCENARIO\n' + spec['state'])
                     command = [args.codex, 'exec', '--ignore-user-config', '--ignore-rules', '--ephemeral',
                                '--skip-git-repo-check', '-C', tmp, '-s', 'read-only', '-m', 'gpt-6-luna',
