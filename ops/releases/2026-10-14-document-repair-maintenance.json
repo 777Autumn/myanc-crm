@@ -1,0 +1,85 @@
+{
+  "ci": [
+    {
+      "run_id": 38555074109,
+      "event": "pull_request",
+      "conclusion": "success",
+      "head": "4852bb0b3f2cfa5f4e7a842e46f89083e9eb222d",
+      "url": "https://github.com/777Autumn/myanc-crm/actions/runs/38555074109",
+      "first_job_started": "2026-10-14T11:13:39+00:00",
+      "last_job_completed": "2026-10-14T11:15:19+00:00",
+      "job_span_seconds": 100.0,
+      "sum_job_seconds": 160.0
+    },
+    {
+      "run_id": 38556022933,
+      "event": "push",
+      "conclusion": "success",
+      "head": "0c67d92ad59ceb5cb97c398da97affa2c8ac2406",
+      "url": "https://github.com/777Autumn/myanc-crm/actions/runs/38556022933",
+      "first_job_started": "2026-10-14T11:21:46+00:00",
+      "last_job_completed": "2026-10-14T11:23:47+00:00",
+      "job_span_seconds": 121.0,
+      "sum_job_seconds": 175.0
+    },
+    {
+      "run_id": 38556002290,
+      "event": "pull_request",
+      "conclusion": "success",
+      "head": "2752f1d870bf8878ec3ef63e3ab6983780220ae2",
+      "url": "https://github.com/777Autumn/cc-connect-anc/actions/runs/38556002290",
+      "first_job_started": "2026-10-14T11:21:35+00:00",
+      "last_job_completed": "2026-10-14T11:36:15+00:00",
+      "job_span_seconds": 880.0,
+      "sum_job_seconds": 1235.0
+    },
+    {
+      "run_id": 38557813617,
+      "event": "push",
+      "conclusion": "success",
+      "head": "31afe5c3c0a7c30a7e0e8e6018a8f30b2893c591",
+      "url": "https://github.com/777Autumn/cc-connect-anc/actions/runs/38557813617",
+      "first_job_started": "2026-10-14T11:36:59+00:00",
+      "last_job_completed": "2026-10-14T11:51:36+00:00",
+      "job_span_seconds": 877.0,
+      "sum_job_seconds": 1248.0
+    },
+    {
+      "run_id": 38555082124,
+      "event": "pull_request",
+      "conclusion": "failure",
+      "head": "3a38c063aa5513e7e7f8895d02cfad39cc091d83",
+      "url": "https://github.com/777Autumn/cc-connect-anc/actions/runs/38555082124",
+      "first_job_started": "2026-10-14T11:13:43+00:00",
+      "last_job_completed": "2026-10-14T11:17:35+00:00",
+      "job_span_seconds": 232.0,
+      "sum_job_seconds": 519.0
+    }
+  ],
+  "source_ci_runs": 5,
+  "source_ci_failed_runs": 1,
+  "source_review_rounds": {
+    "crm": 1,
+    "gateway": 2
+  },
+  "maintenance": {
+    "normal_starts": 1,
+    "recovery_starts": 0,
+    "changed_files": 6,
+    "shutdown_marker": "2026-10-14T07:53:36.161000-07:00",
+    "running_marker": "2026-10-14T07:54:34.833000-07:00",
+    "shutdown_to_running_seconds": 58.672,
+    "stable_observation_seconds": 129.51388837501872,
+    "human_active_seconds": null,
+    "agent_active_seconds": null,
+    "model_network_wait_seconds": null
+  },
+  "notes": [
+    "Job span excludes run queue time; summed job durations are parallel compute time, not operator effort or sequential waiting.",
+    "Lifecycle-marker interval is observed maintenance interruption proxy, not exact user-visible downtime.",
+    "Stable observation is not downtime.",
+    "Focused human/agent effort and separately attributed model/network wait are unknown.",
+    "Counts cover source delivery before the later report-only PR.",
+    "No normal business throughput is inferred from synthetic acceptance cases."
+  ]
+}
