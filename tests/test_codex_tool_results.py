@@ -12,6 +12,8 @@ import tomllib
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from codex_fixture import stop_codex_process
+
 
 TEMPLATE = Path(__file__).resolve().parents[1] / 'ops/runtime/codex.config.example.toml'
 
@@ -122,13 +124,20 @@ class CodexToolResultsTests(unittest.TestCase):
             worker = threading.Thread(target=server.serve_forever, daemon=True)
             worker.start()
             try:
-                result = subprocess.run([cli, 'exec', '--skip-git-repo-check', '--json', 'Run the fictional query fixture.'],
+                process = subprocess.Popen([cli, 'exec', '--skip-git-repo-check', '--json', 'Run the fictional query fixture.'],
                                         cwd=work, env=dict(HOME=str(root), CODEX_HOME=str(home), PATH='/usr/bin:/bin'),
-                                        stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120)
+                                        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                        text=True, start_new_session=True)
+                try:
+                    stdout, stderr = process.communicate(timeout=120)
+                finally:
+                    stop_codex_process(process)
+                    process.stdout.close()
+                    process.stderr.close()
                 if reads:
                     self.assertTrue(query_complete.wait(40), 'HTTP query did not finish')
                 print(json.dumps(dict(native_tool_results=outputs, reads=reads, errors=errors)), flush=True)
-                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(process.returncode, 0, stderr)
                 self.assertEqual(errors, [])
                 self.assertIn('tools.exec_command is not a function', outputs['bad-exec'])
                 self.assertIn('tools.write_stdin is not a function', outputs['bad-poll'])

@@ -15,6 +15,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'ops/runtime'))
 from team_file_render import mac_office_socket
+from codex_fixture import stop_codex_process
 
 
 OPS = Path(__file__).resolve().parents[1] / "ops"
@@ -89,7 +90,7 @@ class CodexWorkspaceTests(unittest.TestCase):
             with tempfile.TemporaryFile(mode="w+") as errors:
                 process = subprocess.Popen([cli, '-c', override, "app-server", "--listen", "stdio://"],
                                            cwd=workspace, env=env, stdin=subprocess.PIPE,
-                                           stdout=subprocess.PIPE, stderr=errors, text=True)
+                                           stdout=subprocess.PIPE, stderr=errors, text=True, start_new_session=True)
                 messages = queue.Queue()
 
                 def receive():
@@ -215,12 +216,7 @@ print('exact Office socket only')
                         finally:
                             os.unlink(management)
                 finally:
-                    process.stdin.close()
-                    try:
-                        process.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
-                        process.kill()
-                        process.wait(timeout=5)
+                    stop_codex_process(process)
                     reader.join(timeout=5)
                     process.stdout.close()
 

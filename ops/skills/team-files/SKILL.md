@@ -5,7 +5,8 @@ description: 读取员工选定的文档、表格、PDF和图片，制作或修�
 
 # Team files
 
-1. Read [the file tool protocol](references/tools.md) before using delivery tools.
+1. Read [the file tool protocol](references/tools.md) before any `cc-connect-file`
+   command, including read-only `work-context` and status queries.
    Obtain the current host work context. Continue only with the inputs and output
    directory it actually returns; the host selects identity and destination.
 2. For banquet sales, budgets or execution/handoff files, invoke the installed
