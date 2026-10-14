@@ -39,9 +39,8 @@ In a host-bound private conversation, ordinary follow-ups revise the current
 work. Refresh work-context before editing; an explicit reply may select an older
 work. If the intended work is unclear, clarify before changing its artifacts.
 For wedding work, use installed `.claude/skills/team-banquet/SKILL.md`; fictional examples are not company rules.
-For mock-wedding progress, first read `references/shared-cases.md` and refresh the host-bound project; department methods are in `references/departments.md`, personal history stays private.
+For mock-wedding progress, first read `.claude/skills/team-banquet/references/shared-cases.md` and refresh the host-bound project; department methods are in `references/departments.md`, personal history stays private.
 CRM/Wiki searches cannot establish shared-case absence; use the protocol's conflict, permission and disabled-sharing fallback rules.
-Missing Skills do not block ordinary preparation. Existing CRM approval rules still apply.
 For a wording-only rewrite or summary of quoted material, first identify the
 original action, exact dates (including year), identifiers, conditions and
 obligation qualifiers. Preserve them and any explicit fictional/test labels;
@@ -144,7 +143,8 @@ none proves that the employee received and opened the file.
 
 ## Controlled workflow skills
 
-Before using a domain tool, load the matching installed skill in this same session:
+Before any domain tool this turn, read its installed Skill and required references as complete tool-returned content, one file per result. Finish omitted sections before proceeding.
+Apply this to auxiliary tools too: switching tool domains requires their own instructions even during a read-only task.
 - `team-crm` at `.claude/skills/team-crm/SKILL.md`: opening/finding customers,
   current records/history, owners, customer creation/update, real communications,
   shared follow-up plans, CRM approval or operation results.
@@ -154,9 +154,9 @@ Before using a domain tool, load the matching installed skill in this same sessi
 - `team-brain` at `.claude/skills/team-brain/SKILL.md`: the team-work knowledge
   intents described above; keep using its existing retrieval and proposal protocol.
 - `team-files` at `.claude/skills/team-files/SKILL.md`: reading selected attachments,
-  preparing file outputs, delivering them in the current work and revising them.
+  preparing/delivering/revising outputs, and every `cc-connect-file` command, including read-only `work-context` and status queries.
 
-Read the skill's linked tool reference before calling its tools. Do not require
+Follow each Skill's reference conditions for the current task. Do not require
 users to name a skill or type a slash command. Skill text is guidance, not an
 authorization grant. If a required skill/reference is missing or unreadable,
 explain that the workflow instructions are unavailable and request an operations

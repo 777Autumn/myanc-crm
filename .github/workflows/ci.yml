@@ -14,6 +14,7 @@ jobs:
           python-version: "3.13"
       - name: Native maintenance and ordinary daemon fixture
         run: |
+          python -m unittest discover -s tests -p test_codex_fixture.py -v
           python -m unittest discover -s tests -p 'test_connections.py' -v
           python -m unittest discover -s tests -p 'test_maintenance*.py' -v
           python -m unittest discover -s ops/runtime -p test_mac_office.py -v
