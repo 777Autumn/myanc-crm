@@ -6,7 +6,7 @@ from ops.banquet_behavior_eval import CASES, grade, schema, tool_calls
 class BanquetBehaviorEvalTests(unittest.TestCase):
     def test_observed_failures_are_rejected(self):
         observed = [case for case in CASES if case['observed']]
-        self.assertEqual(5, len(observed))
+        self.assertEqual(6, len(observed))
         for case in observed:
             with self.subTest(case=case['name']):
                 self.assertTrue(grade(case, case['observed']))
@@ -30,6 +30,12 @@ class BanquetBehaviorEvalTests(unittest.TestCase):
         self.assertEqual(set(shape['properties']), set(shape['required']))
         self.assertFalse(shape['additionalProperties'])
         self.assertNotIn('const', str(shape))
+
+    def test_readonly_routing_does_not_preload_the_missing_reference(self):
+        case = next(c for c in CASES if c['name'] == 'readonly_pdf_reference_routing')
+        self.assertIn('skills/team-files/SKILL.md', case['policies'])
+        self.assertNotIn('skills/team-files/references/production.md', case['policies'])
+        self.assertTrue(grade(case, case['observed']))
 
     def test_unknown_body_does_not_authorize_a_stage(self):
         case = next(case for case in CASES if case['name'] == 'unknown_basis')
