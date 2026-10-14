@@ -602,6 +602,21 @@
       "observed_end": {
         "at": "2026-10-13T05:24:55.195200+00:00",
         "kind": "initial new process start, not end of all phase-one work"
+      },
+      "review_ci_attribution": {
+        "source_batches": [
+          "banquet-phase1-evidence-20261013"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H02",
+          "H03",
+          "H04"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
       }
     },
     {
@@ -632,6 +647,21 @@
       "observed_end": {
         "at": "2026-10-13T07:24:00+00:00",
         "kind": "retest begins at China15:24, completion exact time unavailable"
+      },
+      "review_ci_attribution": {
+        "source_batches": [
+          "banquet-phase1-evidence-20261013"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H01",
+          "H03",
+          "H04"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
       }
     },
     {
@@ -659,7 +689,22 @@
         "at": "2026-10-13T05:54:00+00:00",
         "kind": "China13:54 failed handoff test"
       },
-      "observed_end": null
+      "observed_end": null,
+      "review_ci_attribution": {
+        "source_batches": [
+          "banquet-phase1-evidence-20261013"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H01",
+          "H02",
+          "H04"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
+      }
     },
     {
       "id": "H04",
@@ -687,6 +732,21 @@
       "observed_end": {
         "at": "2026-10-13T09:41:17.904107+00:00",
         "kind": "new process start milestone"
+      },
+      "review_ci_attribution": {
+        "source_batches": [
+          "banquet-phase1-evidence-20261013"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H01",
+          "H02",
+          "H03"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
       }
     },
     {
@@ -714,6 +774,19 @@
       "observed_end": {
         "at": "2026-10-13T14:03:27.252590+00:00",
         "kind": "first behavior candidate process start"
+      },
+      "review_ci_attribution": {
+        "source_batches": [
+          "banquet-behavior-evidence-20261013"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H06"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
       }
     },
     {
@@ -744,6 +817,19 @@
       "observed_end": {
         "at": "2026-10-13T16:57:00.716874+00:00",
         "kind": "batch final delivery, includes archival CI"
+      },
+      "review_ci_attribution": {
+        "source_batches": [
+          "banquet-behavior-evidence-20261013"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H05"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
       }
     },
     {
@@ -773,6 +859,21 @@
       "observed_end": {
         "at": "2026-10-13T19:30:32.356322+00:00",
         "kind": "batch final delivery including recovery and archive"
+      },
+      "review_ci_attribution": {
+        "source_batches": [
+          "banquet-slow-query-evidence-20261014"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H08",
+          "H09",
+          "H10"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
       }
     },
     {
@@ -795,7 +896,22 @@
       "downtime_seconds": null,
       "uncertainty": "Transient ordinary-UID child process was later observed; exact rejected executable was not proved. No service stop established by the first preflight failure.",
       "observed_start": null,
-      "observed_end": null
+      "observed_end": null,
+      "review_ci_attribution": {
+        "source_batches": [
+          "banquet-slow-query-evidence-20261014"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H07",
+          "H09",
+          "H10"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
+      }
     },
     {
       "id": "H09",
@@ -823,6 +939,21 @@
       "observed_end": {
         "at": "2026-10-13T18:47:54.614149+00:00",
         "kind": "final recovered process start; full service availability time unknown"
+      },
+      "review_ci_attribution": {
+        "source_batches": [
+          "banquet-slow-query-evidence-20261014"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H07",
+          "H08",
+          "H10"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
       }
     },
     {
@@ -850,7 +981,22 @@
         "at": "2026-10-13T19:21:16Z",
         "kind": "failed CI job completion"
       },
-      "observed_end": null
+      "observed_end": null,
+      "review_ci_attribution": {
+        "source_batches": [
+          "banquet-slow-query-evidence-20261014"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H07",
+          "H08",
+          "H09"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
+      }
     },
     {
       "id": "H11",
@@ -878,6 +1024,20 @@
       "observed_end": {
         "at": "2026-10-14T05:47:51.810874+00:00",
         "kind": "batch final delivery"
+      },
+      "review_ci_attribution": {
+        "source_batches": [
+          "aux-skills-cleanup-evidence-20261014"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H12",
+          "H14"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
       }
     },
     {
@@ -906,7 +1066,21 @@
         "at": "2026-10-14T05:03:51Z",
         "kind": "retained failed Mac job completion; cleanup development began earlier"
       },
-      "observed_end": null
+      "observed_end": null,
+      "review_ci_attribution": {
+        "source_batches": [
+          "aux-skills-cleanup-evidence-20261014"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H11",
+          "H14"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
+      }
     },
     {
       "id": "H13",
@@ -936,6 +1110,19 @@
       "observed_end": {
         "at": "2026-10-14T06:28:54.468553+00:00",
         "kind": "final delivery"
+      },
+      "review_ci_attribution": {
+        "source_batches": [
+          "pdf-visual-fallback-evidence-20261014"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H15"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
       }
     },
     {
@@ -956,7 +1143,21 @@
       "downtime_seconds": null,
       "uncertainty": "Post-acceptance normal SDK DEBUG frames exceeded a startup-only classifier contract. No second startup pass or production outage inferred; preparation time unknown.",
       "observed_start": null,
-      "observed_end": null
+      "observed_end": null,
+      "review_ci_attribution": {
+        "source_batches": [
+          "aux-skills-cleanup-evidence-20261014"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H11",
+          "H12"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
+      }
     },
     {
       "id": "H15",
@@ -978,7 +1179,20 @@
       "downtime_seconds": null,
       "uncertainty": "No reliable focused labor or causal wait split exists in the retained evidence.",
       "observed_start": null,
-      "observed_end": null
+      "observed_end": null,
+      "review_ci_attribution": {
+        "source_batches": [
+          "pdf-visual-fallback-evidence-20261014"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H13"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
+      }
     }
   ],
   "labor_boundary": "All active human/agent/model-network/CI-operator time unknown; recorded endpoints are not focused work or downtime.",
