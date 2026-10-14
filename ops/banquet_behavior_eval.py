@@ -16,6 +16,7 @@ OPS = Path(__file__).resolve().parent
 POLICIES = (
     'CLAUDE.vps.md', 'skills/team-crm/SKILL.md',
     'skills/team-crm/references/tools.md', 'skills/team-crm/references/banquet.md',
+    'skills/team-files/references/production.md',
 )
 
 
@@ -24,6 +25,23 @@ def case(name, state, expected, observed=None):
 
 
 CASES = [
+    case('garbled_pdf_readonly',
+         '用户只读核对已选中的两页PDF正文与当前婚宴记录，不生成交付物、不审批。'
+         '已用pypdf提取两页，中文字符顺序错乱，无法确认正文细节。'
+         '原PDF路径和哈希已由当前work-context返回；支持的PDF渲染工具可用，'
+         '尚未调用渲染、未看任何页图，没有权限拒绝。下一步做什么？',
+         {'next_action': 'render'},
+         {'next_action': 'answer', 'session_id': None, 'version_conflict': None,
+          'current_tables': None, 'reply': 'PDF共2页，已提取文本，但中文字符順序有错乱，正文细节无法仅凭文本提取完全确认。'}),
+    case('rendered_pdf_not_inspected',
+         '只读核对PDF正文。因提取文字乱码，已成功渲染原PDF；render.json列出两页，'
+         '状态rendered_not_visually_verified。已经实际看过第1页图片，尚未看第2页；'
+         '第2页的受控路径可读，没有权限拒绝。下一步做什么？',
+         {'next_action': 'inspect_pages'}),
+    case('pdf_render_permission_denied',
+         '只读核对PDF正文，文字提取乱码。已尝试支持的渲染工具，宿主明确返回权限拒绝，'
+         '没有生成页图。当前范围下无法继续，用户未补充授权。下一步做什么？',
+         {'next_action': 'answer', 'version_conflict': None}),
     case('truncated_protocol',
          '用户只读核对婚宴及Word/PDF。刚把team-crm Skill、tools.md、banquet.md以及多份'
          '文件协议合并cat；exec成功，但工具输出有“Warning: truncated output”。'
@@ -80,7 +98,7 @@ CASES = [
 
 def schema():
     fields = {
-        'next_action': {'type': 'string', 'enum': ['read_policy', 'poll', 'query', 'answer', 'stage-handoff-accept']},
+        'next_action': {'type': 'string', 'enum': ['read_policy', 'poll', 'query', 'render', 'inspect_pages', 'answer', 'stage-handoff-accept']},
         'session_id': {'type': ['integer', 'null']},
         'version_conflict': {'type': ['boolean', 'null']},
         'current_tables': {'type': ['integer', 'null']},

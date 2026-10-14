@@ -6,7 +6,7 @@ from ops.banquet_behavior_eval import CASES, grade, schema, tool_calls
 class BanquetBehaviorEvalTests(unittest.TestCase):
     def test_observed_failures_are_rejected(self):
         observed = [case for case in CASES if case['observed']]
-        self.assertEqual(4, len(observed))
+        self.assertEqual(5, len(observed))
         for case in observed:
             with self.subTest(case=case['name']):
                 self.assertTrue(grade(case, case['observed']))
