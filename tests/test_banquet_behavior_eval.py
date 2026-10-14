@@ -6,7 +6,7 @@ from ops.banquet_behavior_eval import CASES, grade, schema, tool_calls
 class BanquetBehaviorEvalTests(unittest.TestCase):
     def test_observed_failures_are_rejected(self):
         observed = [case for case in CASES if case['observed']]
-        self.assertEqual(6, len(observed))
+        self.assertEqual(9, len(observed))
         for case in observed:
             with self.subTest(case=case['name']):
                 self.assertTrue(grade(case, case['observed']))
@@ -30,6 +30,22 @@ class BanquetBehaviorEvalTests(unittest.TestCase):
         self.assertEqual(set(shape['properties']), set(shape['required']))
         self.assertFalse(shape['additionalProperties'])
         self.assertNotIn('const', str(shape))
+
+    def test_receipt_amount_accepts_json_numbers_but_not_booleans(self):
+        case = {'expected': {'receipt_amount': 12000}}
+        for amount in (12000, 12000.0):
+            self.assertEqual([], grade(case, {'receipt_amount': amount, 'reply': '材料记载到账。'}))
+        for amount in (True, '12000', 12001, None):
+            self.assertIn('receipt_amount', grade(case, {'receipt_amount': amount, 'reply': '金额。'}))
+        self.assertIn('receipt_amount', grade({'expected': {'receipt_amount': 1}},
+                                            {'receipt_amount': True, 'reply': '金额。'}))
+
+    def test_payment_scope_distinguishes_a_later_record_and_its_own_qualifier(self):
+        older = next(c for c in CASES if c['name'] == 'payment_qualifier_stays_with_older_promise')
+        current = next(c for c in CASES if c['name'] == 'payment_qualifier_applies_to_current_receipt')
+        self.assertEqual(['receipt_missing_evidence'], grade(older, older['observed']))
+        self.assertEqual([], grade(current, older['observed']))
+        self.assertIn('bank_verified', grade(current, {**older['observed'], 'bank_verified': True}))
 
     def test_readonly_routing_does_not_preload_the_missing_reference(self):
         case = next(c for c in CASES if c['name'] == 'readonly_pdf_reference_routing')

@@ -1,5 +1,8 @@
 """Fixed schema/CLI boundary: no user-selected table, strict links, no silent truncation."""
 import copy
+import json
+from pathlib import Path
+import subprocess
 import unittest
 from unittest import mock
 
@@ -24,6 +27,40 @@ class BanquetAdapterTests(unittest.TestCase):
                 values[name]={'field_id':self.store.fields[kind][key],'type':typ,'name':name}
                 if typ=='link':values[name]['property']={'table_id':'tblCustomers' if key=='customer_record_id' else 'tblBanquets'}
             self.schema[self.store.tables[kind]]=values
+
+    def test_simple_reads_do_not_depend_on_unrelated_handoff_service(self):
+        for command, request in [('banquet', {'banquet_id': 'YAN-0006'}),
+                                 ('banquets', {'owner': 'all'})]:
+            calls = []
+            def run(argv, **kwargs):
+                operation = argv[2]
+                table = argv[argv.index('--table-id') + 1]
+                calls.append((operation, table))
+                if table == 'tblHandoffs':
+                    return subprocess.CompletedProcess(argv, 1, stdout='', stderr='unrelated service unavailable')
+                if operation == '+field-list':
+                    data = {'ok': True, 'identity': 'bot', 'data': {'items': list(self.schema[table].values())}}
+                else:
+                    self.assertIn(operation, ('+record-get', '+record-list'))
+                    rows = [{'record_id': 'recBanquet', 'fields': {'业务编号': 'YAN-0006', '预计桌数': 23}}] if table == 'tblBanquets' else []
+                    Path(kwargs['cwd'], 'records.ndjson').write_text(''.join(json.dumps(row) + '\n' for row in rows), encoding='utf-8')
+                    data = {'format': 'ndjson', 'record_file': 'records.ndjson', 'records_count': len(rows), 'has_more': False}
+                return subprocess.CompletedProcess(argv, 0, stdout=json.dumps(data), stderr='')
+            with self.subTest(command=command):
+                self.backend.runner = run
+                result = banquet.read(command, request, self.backend, CONFIG, PRINCIPAL)
+                self.assertEqual('found', result['status'])
+                row = result['banquet'] if command == 'banquet' else result['items'][0]
+                self.assertEqual(23, row['estimated_tables'])
+                self.assertNotIn('tblHandoffs', [table for _, table in calls])
+                self.assertEqual(5 if command == 'banquet' else 2, len(calls))
+                # Required schema validation still precedes any record reads.
+                self.schema['tblBanquets']['预计桌数']['field_id'] = 'fldWrong'
+                calls.clear()
+                with self.assertRaises(lark.LarkBackendError):
+                    banquet.read(command, request, self.backend, CONFIG, PRINCIPAL)
+                self.assertTrue(all(op == '+field-list' for op, _ in calls))
+                self.schema['tblBanquets']['预计桌数']['field_id'] = self.store.fields['banquets']['estimated_tables']
 
     def test_schema_checks_fixed_field_ids_and_both_relationships(self):
         with mock.patch.object(self.backend,'_read_table_schema',side_effect=lambda table,_:copy.deepcopy(self.schema[table])):

@@ -20,6 +20,16 @@ figures remain illegible after inspection and need verification. Preserve the or
 extracted text does not preserve its layout and is not an editable replacement.
 Native Feishu images appear in `work-context.inputs`, with saved paths and hashes.
 
+Before summarizing across pages, pair each amount or status with its source page,
+date and supporting record. Keep a qualifier such as "this page records only a
+promise; no receipt attached" with that page's promise. A later dated receipt is
+a separate fact with its own qualifications. Report what each record establishes,
+then compare the dates and amounts; verify that every caveat in the answer still
+describes the same fact as in the source. A document's recorded receipt and balance
+can be known while independent bank confirmation remains unknown. State that
+verification limit separately; it does not erase the document's recorded amount
+or extend an older page's missing-evidence claim to the later record.
+
 ## Make the editable originals
 
 - Create PPTX with `python-pptx`: real text boxes, shapes, tables and pictures.
@@ -79,8 +89,7 @@ choose a new name; this input error does not require broader permissions.
 
 On macOS, convert files within the same work one at a time. Wait for each
 converter to finish before starting the next; the work has one protected Office
-profile. On the pinned Mac runtime, call `exec_command` and `write_stdin` directly;
-they are unavailable inside JavaScript `functions.exec` wrappers. In Codex,
+profile. Follow the workspace's native command-tool instructions. In Codex,
 retain the full `exec_command` result, including `session_id`
 and `exit_code`, instead of returning only `output`. A returned `session_id`
 means the command is still running: wait on that same session with `write_stdin`
