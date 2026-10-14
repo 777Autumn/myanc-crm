@@ -1,0 +1,1522 @@
+{
+  "scope": "Fictional validation only. First results remain separate from supplemental diagnostics.",
+  "accounts": {
+    "A": "owner dedicated private assistant",
+    "B": "recipient dedicated private assistant"
+  },
+  "reading": [
+    {
+      "account": "A",
+      "group": "G1",
+      "holdout": false,
+      "gateway_question_to_final_seconds": 20.739266,
+      "critical_fact_failure_observed": false,
+      "items": [
+        {
+          "key": "estimated_tables",
+          "status": "正确"
+        },
+        {
+          "key": "estimated_people",
+          "status": "正确"
+        },
+        {
+          "key": "budget_cny",
+          "status": "正确"
+        },
+        {
+          "key": "meal_estimate_cny",
+          "status": "正确"
+        },
+        {
+          "key": "unit_price_cny_table",
+          "status": "正确"
+        },
+        {
+          "key": "revision_not_handoff",
+          "status": "正确"
+        },
+        {
+          "key": "final_tables",
+          "status": "准确说明无法确认"
+        },
+        {
+          "key": "date_venue",
+          "status": "准确说明无法确认"
+        },
+        {
+          "key": "deposit_received",
+          "status": "准确说明无法确认"
+        },
+        {
+          "key": "full_contract_total",
+          "status": "准确说明无法确认"
+        }
+      ]
+    },
+    {
+      "account": "B",
+      "group": "G1",
+      "holdout": false,
+      "gateway_question_to_final_seconds": 29.519901,
+      "critical_fact_failure_observed": false,
+      "items": [
+        {
+          "key": "estimated_tables",
+          "status": "正确"
+        },
+        {
+          "key": "estimated_people",
+          "status": "正确"
+        },
+        {
+          "key": "budget_cny",
+          "status": "正确"
+        },
+        {
+          "key": "meal_estimate_cny",
+          "status": "正确"
+        },
+        {
+          "key": "unit_price_cny_table",
+          "status": "正确"
+        },
+        {
+          "key": "revision_not_handoff",
+          "status": "执行失败"
+        },
+        {
+          "key": "final_tables",
+          "status": "准确说明无法确认"
+        },
+        {
+          "key": "date_venue",
+          "status": "准确说明无法确认"
+        },
+        {
+          "key": "deposit_received",
+          "status": "准确说明无法确认"
+        },
+        {
+          "key": "full_contract_total",
+          "status": "准确说明无法确认"
+        }
+      ]
+    },
+    {
+      "account": "A",
+      "group": "G2",
+      "holdout": true,
+      "gateway_question_to_final_seconds": 40.689514,
+      "critical_fact_failure_observed": false,
+      "items": [
+        {
+          "key": "estimated_tables",
+          "status": "正确"
+        },
+        {
+          "key": "historical_tables",
+          "status": "正确"
+        },
+        {
+          "key": "meal_estimate_cny",
+          "status": "正确"
+        },
+        {
+          "key": "received_cny",
+          "status": "正确"
+        },
+        {
+          "key": "promised_cny",
+          "status": "正确"
+        },
+        {
+          "key": "unpaid_promise_cny",
+          "status": "正确"
+        },
+        {
+          "key": "final_tables",
+          "status": "准确说明无法确认"
+        },
+        {
+          "key": "date_rain_backup",
+          "status": "准确说明无法确认"
+        }
+      ]
+    },
+    {
+      "account": "B",
+      "group": "G2",
+      "holdout": true,
+      "gateway_question_to_final_seconds": 6.270699,
+      "critical_fact_failure_observed": false,
+      "items": [
+        {
+          "key": "estimated_tables",
+          "status": "正确"
+        },
+        {
+          "key": "historical_tables",
+          "status": "正确"
+        },
+        {
+          "key": "meal_estimate_cny",
+          "status": "正确"
+        },
+        {
+          "key": "received_cny",
+          "status": "正确"
+        },
+        {
+          "key": "promised_cny",
+          "status": "正确"
+        },
+        {
+          "key": "unpaid_promise_cny",
+          "status": "正确"
+        },
+        {
+          "key": "final_tables",
+          "status": "准确说明无法确认"
+        },
+        {
+          "key": "date_rain_backup",
+          "status": "准确说明无法确认"
+        }
+      ]
+    },
+    {
+      "account": "A",
+      "group": "G3",
+      "holdout": false,
+      "gateway_question_to_final_seconds": 57.886683,
+      "critical_fact_failure_observed": false,
+      "items": [
+        {
+          "key": "subtotal_cny",
+          "status": "正确"
+        },
+        {
+          "key": "discount_cny",
+          "status": "正确"
+        },
+        {
+          "key": "shipping_cny",
+          "status": "正确"
+        },
+        {
+          "key": "total_cny",
+          "status": "正确"
+        },
+        {
+          "key": "C01",
+          "status": "正确"
+        },
+        {
+          "key": "C18",
+          "status": "正确"
+        },
+        {
+          "key": "C36",
+          "status": "正确"
+        },
+        {
+          "key": "accepted",
+          "status": "正确"
+        },
+        {
+          "key": "deposit",
+          "status": "准确说明无法确认"
+        }
+      ]
+    },
+    {
+      "account": "B",
+      "group": "G3",
+      "holdout": false,
+      "gateway_question_to_final_seconds": 27.359398,
+      "critical_fact_failure_observed": false,
+      "items": [
+        {
+          "key": "subtotal_cny",
+          "status": "正确"
+        },
+        {
+          "key": "discount_cny",
+          "status": "正确"
+        },
+        {
+          "key": "shipping_cny",
+          "status": "正确"
+        },
+        {
+          "key": "total_cny",
+          "status": "正确"
+        },
+        {
+          "key": "C01",
+          "status": "正确"
+        },
+        {
+          "key": "C18",
+          "status": "正确"
+        },
+        {
+          "key": "C36",
+          "status": "正确"
+        },
+        {
+          "key": "accepted",
+          "status": "正确"
+        },
+        {
+          "key": "deposit",
+          "status": "准确说明无法确认"
+        }
+      ]
+    },
+    {
+      "account": "A",
+      "group": "G4",
+      "holdout": true,
+      "gateway_question_to_final_seconds": 39.603501,
+      "critical_fact_failure_observed": false,
+      "items": [
+        {
+          "key": "date_conflict",
+          "status": "正确"
+        },
+        {
+          "key": "venue_conflict",
+          "status": "正确"
+        },
+        {
+          "key": "table_conflict",
+          "status": "正确"
+        },
+        {
+          "key": "rate_status",
+          "status": "正确"
+        },
+        {
+          "key": "revision",
+          "status": "执行失败"
+        },
+        {
+          "key": "final_booking",
+          "status": "准确说明无法确认"
+        },
+        {
+          "key": "deposit",
+          "status": "准确说明无法确认"
+        },
+        {
+          "key": "handoff_state",
+          "status": "准确说明无法确认"
+        }
+      ]
+    },
+    {
+      "account": "B",
+      "group": "G4",
+      "holdout": true,
+      "gateway_question_to_final_seconds": 28.518583,
+      "critical_fact_failure_observed": false,
+      "items": [
+        {
+          "key": "date_conflict",
+          "status": "正确"
+        },
+        {
+          "key": "venue_conflict",
+          "status": "正确"
+        },
+        {
+          "key": "table_conflict",
+          "status": "正确"
+        },
+        {
+          "key": "rate_status",
+          "status": "正确"
+        },
+        {
+          "key": "revision",
+          "status": "执行失败"
+        },
+        {
+          "key": "final_booking",
+          "status": "准确说明无法确认"
+        },
+        {
+          "key": "deposit",
+          "status": "准确说明无法确认"
+        },
+        {
+          "key": "handoff_state",
+          "status": "准确说明无法确认"
+        }
+      ]
+    },
+    {
+      "account": "A",
+      "group": "G5",
+      "holdout": false,
+      "gateway_question_to_final_seconds": 70.976702,
+      "critical_fact_failure_observed": false,
+      "items": [
+        {
+          "key": "material_is_simulated",
+          "status": "正确"
+        },
+        {
+          "key": "estimated_tables",
+          "status": "正确"
+        },
+        {
+          "key": "budget",
+          "status": "正确"
+        },
+        {
+          "key": "stage",
+          "status": "正确"
+        },
+        {
+          "key": "month",
+          "status": "正确"
+        },
+        {
+          "key": "material_revision",
+          "status": "执行失败"
+        },
+        {
+          "key": "specific_date_venue",
+          "status": "准确说明无法确认"
+        },
+        {
+          "key": "final_tables",
+          "status": "准确说明无法确认"
+        },
+        {
+          "key": "budget_scope_currency",
+          "status": "准确说明无法确认"
+        },
+        {
+          "key": "deposit",
+          "status": "准确说明无法确认"
+        }
+      ]
+    },
+    {
+      "account": "B",
+      "group": "G5",
+      "holdout": false,
+      "gateway_question_to_final_seconds": 69.894224,
+      "critical_fact_failure_observed": false,
+      "items": [
+        {
+          "key": "material_is_simulated",
+          "status": "执行失败"
+        },
+        {
+          "key": "estimated_tables",
+          "status": "正确"
+        },
+        {
+          "key": "budget",
+          "status": "正确"
+        },
+        {
+          "key": "stage",
+          "status": "正确"
+        },
+        {
+          "key": "month",
+          "status": "正确"
+        },
+        {
+          "key": "material_revision",
+          "status": "执行失败"
+        },
+        {
+          "key": "specific_date_venue",
+          "status": "准确说明无法确认"
+        },
+        {
+          "key": "final_tables",
+          "status": "准确说明无法确认"
+        },
+        {
+          "key": "budget_scope_currency",
+          "status": "准确说明无法确认"
+        },
+        {
+          "key": "deposit",
+          "status": "准确说明无法确认"
+        }
+      ]
+    },
+    {
+      "account": "A",
+      "group": "G6",
+      "holdout": false,
+      "gateway_question_to_final_seconds": 148.813866,
+      "critical_fact_failure_observed": false,
+      "items": [
+        {
+          "key": "customer_stage",
+          "status": "正确"
+        },
+        {
+          "key": "banquet_stage",
+          "status": "正确"
+        },
+        {
+          "key": "handoff_version",
+          "status": "正确"
+        },
+        {
+          "key": "handoff_status",
+          "status": "正确"
+        },
+        {
+          "key": "handoff_recipient",
+          "status": "执行失败"
+        },
+        {
+          "key": "handoff_ack_at",
+          "status": "执行失败"
+        },
+        {
+          "key": "file_revision",
+          "status": "正确"
+        },
+        {
+          "key": "estimated_tables",
+          "status": "正确"
+        },
+        {
+          "key": "budget",
+          "status": "正确"
+        },
+        {
+          "key": "final_tables",
+          "status": "准确说明无法确认"
+        },
+        {
+          "key": "budget_currency_scope",
+          "status": "准确说明无法确认"
+        },
+        {
+          "key": "contract_payment",
+          "status": "准确说明无法确认"
+        },
+        {
+          "key": "date_venue",
+          "status": "执行失败"
+        }
+      ]
+    },
+    {
+      "account": "B",
+      "group": "G6",
+      "holdout": false,
+      "gateway_question_to_final_seconds": 222.097903,
+      "critical_fact_failure_observed": false,
+      "items": [
+        {
+          "key": "customer_stage",
+          "status": "正确"
+        },
+        {
+          "key": "banquet_stage",
+          "status": "正确"
+        },
+        {
+          "key": "handoff_version",
+          "status": "正确"
+        },
+        {
+          "key": "handoff_status",
+          "status": "正确"
+        },
+        {
+          "key": "handoff_recipient",
+          "status": "正确"
+        },
+        {
+          "key": "handoff_ack_at",
+          "status": "执行失败"
+        },
+        {
+          "key": "file_revision",
+          "status": "正确"
+        },
+        {
+          "key": "estimated_tables",
+          "status": "正确"
+        },
+        {
+          "key": "budget",
+          "status": "正确"
+        },
+        {
+          "key": "final_tables",
+          "status": "准确说明无法确认"
+        },
+        {
+          "key": "budget_currency_scope",
+          "status": "准确说明无法确认"
+        },
+        {
+          "key": "contract_payment",
+          "status": "准确说明无法确认"
+        },
+        {
+          "key": "date_venue",
+          "status": "准确说明无法确认"
+        }
+      ]
+    }
+  ],
+  "historical_maintenance_events": [
+    {
+      "id": "H01",
+      "primary_category": "计划发布",
+      "cause": "一期上下文与当前材料保护能力交付",
+      "necessary_operations": [
+        "开发与配对验证、双轴审查、候选冻结、一次初始安装与启动、虚构账户验收"
+      ],
+      "retry_evidence": [
+        "初始冻结回执含1次失败及多次再冻结；这些为准备阶段，不等于多次部署。"
+      ],
+      "related_events": [],
+      "cost_seconds": {
+        "human_focused": null,
+        "agent_active": null,
+        "model_network_wait": null,
+        "ci_operator_wait": null
+      },
+      "downtime_seconds": null,
+      "uncertainty": "No reliable focused labor or causal wait split exists in the retained evidence.",
+      "observed_start": null,
+      "observed_end": {
+        "at": "2026-10-13T05:24:55.195200+00:00",
+        "kind": "initial new process start, not end of all phase-one work"
+      },
+      "review_ci_attribution": {
+        "source_batches": [
+          "banquet-phase1-evidence-20261013"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H02",
+          "H03",
+          "H04"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
+      }
+    },
+    {
+      "id": "H02",
+      "primary_category": "开发修复",
+      "cause": "既有私聊被误判为群聊范围",
+      "necessary_operations": [
+        "原会话复现、新工作对照、增加可信conversation_scope、独立审查、PR146、与超时修复共享一次发布"
+      ],
+      "retry_evidence": [
+        "同一旧会话再次复现；换新工作曾恢复，未把对照当原会话修复通过。"
+      ],
+      "related_events": [
+        "H03"
+      ],
+      "cost_seconds": {
+        "human_focused": null,
+        "agent_active": null,
+        "model_network_wait": null,
+        "ci_operator_wait": null
+      },
+      "downtime_seconds": null,
+      "uncertainty": "No reliable focused labor or causal wait split exists in the retained evidence.",
+      "observed_start": {
+        "at": "2026-10-13T05:30:00+00:00",
+        "kind": "first natural-query test window in China 13:30 journal"
+      },
+      "observed_end": {
+        "at": "2026-10-13T07:24:00+00:00",
+        "kind": "retest begins at China15:24, completion exact time unavailable"
+      },
+      "review_ci_attribution": {
+        "source_batches": [
+          "banquet-phase1-evidence-20261013"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H01",
+          "H03",
+          "H04"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
+      }
+    },
+    {
+      "id": "H03",
+      "primary_category": "开发修复",
+      "cause": "两文件交接导入在旧读取预算下部分失败",
+      "necessary_operations": [
+        "保留Word成功/PDF缺失、真实TCP红绿用例、客户端与网关成对预算修复、PR147/PR65、共享后续发布"
+      ],
+      "retry_evidence": [
+        "首轮32.132秒失败；修复后的配对真实TCP测试41秒通过；自然两文件导入复验。"
+      ],
+      "related_events": [
+        "H02"
+      ],
+      "cost_seconds": {
+        "human_focused": null,
+        "agent_active": null,
+        "model_network_wait": null,
+        "ci_operator_wait": null
+      },
+      "downtime_seconds": null,
+      "uncertainty": "32.132/41 seconds are test operation durations, not human work; the release is shared with H02 and must not be counted twice.",
+      "observed_start": {
+        "at": "2026-10-13T05:54:00+00:00",
+        "kind": "China13:54 failed handoff test"
+      },
+      "observed_end": null,
+      "review_ci_attribution": {
+        "source_batches": [
+          "banquet-phase1-evidence-20261013"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H01",
+          "H02",
+          "H04"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
+      }
+    },
+    {
+      "id": "H04",
+      "primary_category": "开发修复",
+      "cause": "共享文件账本竞争后另一Store不可继续使用",
+      "necessary_operations": [
+        "消息入口和账本关联只读诊断、双Store红绿用例、仅BEGIN前typed BUSY重试、PR66、第三候选安装、自然并发复验"
+      ],
+      "retry_evidence": [
+        "原生产群入口有两次拒绝；离线前两次环境启动失败保留；第三维护首次冻结被已有拒绝记录阻止，补充独立对账后成功。"
+      ],
+      "related_events": [],
+      "cost_seconds": {
+        "human_focused": null,
+        "agent_active": null,
+        "model_network_wait": null,
+        "ci_operator_wait": null
+      },
+      "downtime_seconds": null,
+      "uncertainty": "Historical logs lacked original SQLite codes. Production contention root cause is supported by matching evidence and reproduction, not directly recovered SQL error codes.",
+      "observed_start": {
+        "at": "2026-10-13T07:26:00+00:00",
+        "kind": "first failed group intake in journal"
+      },
+      "observed_end": {
+        "at": "2026-10-13T09:41:17.904107+00:00",
+        "kind": "new process start milestone"
+      },
+      "review_ci_attribution": {
+        "source_batches": [
+          "banquet-phase1-evidence-20261013"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H01",
+          "H02",
+          "H03"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
+      }
+    },
+    {
+      "id": "H05",
+      "primary_category": "开发修复",
+      "cause": "重复只读查询、历史版本误读、只读请求额外审批卡",
+      "necessary_operations": [
+        "固化三个行为红用例、协议规则修复与独立审查、CRM PR149、首候选安装与首轮失败留存"
+      ],
+      "retry_evidence": [
+        "首候选历史版本误读仍失败；没有用后续复验覆盖首轮。"
+      ],
+      "related_events": [
+        "H06"
+      ],
+      "cost_seconds": {
+        "human_focused": null,
+        "agent_active": null,
+        "model_network_wait": null,
+        "ci_operator_wait": null
+      },
+      "downtime_seconds": null,
+      "uncertainty": "No reliable focused labor or causal wait split exists in the retained evidence.",
+      "observed_start": null,
+      "observed_end": {
+        "at": "2026-10-13T14:03:27.252590+00:00",
+        "kind": "first behavior candidate process start"
+      },
+      "review_ci_attribution": {
+        "source_batches": [
+          "banquet-behavior-evidence-20261013"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H06"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
+      }
+    },
+    {
+      "id": "H06",
+      "primary_category": "开发修复",
+      "cause": "宴会协议未完整加载及截断恢复不足",
+      "necessary_operations": [
+        "补充加载规则形成第二候选、15:08仍见截断恢复缺失、宿主加载修复形成第三候选、CRM PR150和Gateway PR67、五轮只读复验"
+      ],
+      "retry_evidence": [
+        "第二候选和第三候选为两次独立发布；旧归档head Mac CI被取消，Windows55基线失败保留。"
+      ],
+      "related_events": [
+        "H05"
+      ],
+      "cost_seconds": {
+        "human_focused": null,
+        "agent_active": null,
+        "model_network_wait": null,
+        "ci_operator_wait": null
+      },
+      "downtime_seconds": null,
+      "uncertainty": "No reliable focused labor or causal wait split exists in the retained evidence.",
+      "observed_start": {
+        "at": "2026-10-13T15:08:17.781Z",
+        "kind": "host-loading observed red; earlier loading work not timed"
+      },
+      "observed_end": {
+        "at": "2026-10-13T16:57:00.716874+00:00",
+        "kind": "batch final delivery, includes archival CI"
+      },
+      "review_ci_attribution": {
+        "source_batches": [
+          "banquet-behavior-evidence-20261013"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H05"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
+      }
+    },
+    {
+      "id": "H07",
+      "primary_category": "开发修复",
+      "cause": "查询只返回正文导致慢调用会话元数据丢失",
+      "necessary_operations": [
+        "原生慢HTTP与非零退出红绿回归、PR152、五轮真实飞书只读复验和受控慢查询"
+      ],
+      "retry_evidence": [
+        "受控35秒延迟后真实查询执行1次、同会话轮询2次；非自然网络慢查询比例。"
+      ],
+      "related_events": [
+        "H08",
+        "H09",
+        "H10"
+      ],
+      "cost_seconds": {
+        "human_focused": null,
+        "agent_active": null,
+        "model_network_wait": null,
+        "ci_operator_wait": null
+      },
+      "downtime_seconds": null,
+      "uncertainty": "No reliable focused labor or causal wait split exists in the retained evidence.",
+      "observed_start": null,
+      "observed_end": {
+        "at": "2026-10-13T19:30:32.356322+00:00",
+        "kind": "batch final delivery including recovery and archive"
+      },
+      "review_ci_attribution": {
+        "source_batches": [
+          "banquet-slow-query-evidence-20261014"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H08",
+          "H09",
+          "H10"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
+      }
+    },
+    {
+      "id": "H08",
+      "primary_category": "计划发布",
+      "cause": "发布预检发现未知物理进程导致候选准备过期",
+      "necessary_operations": [
+        "保留预检拒绝、只读进程观察、旧根保留、改用未消费新根重新冻结并对账"
+      ],
+      "retry_evidence": [
+        "1次install预检失败发生在attempt/pause/backup/install之前；300秒准备期限过期后另起维护根。"
+      ],
+      "related_events": [],
+      "cost_seconds": {
+        "human_focused": null,
+        "agent_active": null,
+        "model_network_wait": null,
+        "ci_operator_wait": null
+      },
+      "downtime_seconds": null,
+      "uncertainty": "Transient ordinary-UID child process was later observed; exact rejected executable was not proved. No service stop established by the first preflight failure.",
+      "observed_start": null,
+      "observed_end": null,
+      "review_ci_attribution": {
+        "source_batches": [
+          "banquet-slow-query-evidence-20261014"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H07",
+          "H09",
+          "H10"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
+      }
+    },
+    {
+      "id": "H09",
+      "primary_category": "故障恢复",
+      "cause": "停机日志门禁拒绝后的受审恢复，随后首启网络失败与恢复绑定缺失",
+      "necessary_operations": [
+        "只读停机审计、保护旧文件与账本、修复恢复脚本信号处理、归一化审查绑定、首启失败保护停机、否决跨根restart方案、PR153补齐同根恢复绑定后成功"
+      ],
+      "retry_evidence": [
+        "两次freeze比较失败；首轮恢复审查因TERM/HUP缺失被阻止；一次严格稳定窗口首启失败；跨根重启方案被审查否决且未启动；最终同根recover_once成功。"
+      ],
+      "related_events": [],
+      "cost_seconds": {
+        "human_focused": null,
+        "agent_active": null,
+        "model_network_wait": null,
+        "ci_operator_wait": null
+      },
+      "downtime_seconds": null,
+      "uncertainty": "This is one continuous stopped-service recovery episode with linked technical causes, not one proven root cause. Shutdown warning and network timeout root causes remain unknown. Interval to process start is not measured total downtime.",
+      "observed_start": {
+        "at": "2026-10-13T17:59:47.934+00:00",
+        "kind": "verified shutdown log, UTC normalized from -07:00"
+      },
+      "observed_end": {
+        "at": "2026-10-13T18:47:54.614149+00:00",
+        "kind": "final recovered process start; full service availability time unknown"
+      },
+      "review_ci_attribution": {
+        "source_batches": [
+          "banquet-slow-query-evidence-20261014"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H07",
+          "H08",
+          "H10"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
+      }
+    },
+    {
+      "id": "H10",
+      "primary_category": "故障恢复",
+      "cause": "CI临时目录清理竞态的首次恢复处置",
+      "necessary_operations": [
+        "保留失败日志、仅重跑失败Mac job一次、精确合并CI通过"
+      ],
+      "retry_evidence": [
+        "run38453298636 attempt1失败、attempt2通过；没有部署生产修复。"
+      ],
+      "related_events": [
+        "H12"
+      ],
+      "cost_seconds": {
+        "human_focused": null,
+        "agent_active": null,
+        "model_network_wait": null,
+        "ci_operator_wait": null
+      },
+      "downtime_seconds": null,
+      "uncertainty": "No reliable focused labor or causal wait split exists in the retained evidence.",
+      "observed_start": {
+        "at": "2026-10-13T19:21:16Z",
+        "kind": "failed CI job completion"
+      },
+      "observed_end": null,
+      "review_ci_attribution": {
+        "source_batches": [
+          "banquet-slow-query-evidence-20261014"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H07",
+          "H08",
+          "H09"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
+      }
+    },
+    {
+      "id": "H11",
+      "primary_category": "开发修复",
+      "cause": "辅助技能按本轮操作加载存在偏差",
+      "necessary_operations": [
+        "重放缺陷用例、规则修复与两轴审查、PR155、10文件候选更新、四轮只读验收"
+      ],
+      "retry_evidence": [
+        "首轮freeze只保留stderr摘要、原因未知，另次完整冻结成功；候选首次构建被尚未完成的merge CI门禁拒绝；辅助PDF一轮未视觉复核另记H13。"
+      ],
+      "related_events": [
+        "H12",
+        "H13"
+      ],
+      "cost_seconds": {
+        "human_focused": null,
+        "agent_active": null,
+        "model_network_wait": null,
+        "ci_operator_wait": null
+      },
+      "downtime_seconds": null,
+      "uncertainty": "No reliable focused labor or causal wait split exists in the retained evidence.",
+      "observed_start": null,
+      "observed_end": {
+        "at": "2026-10-14T05:47:51.810874+00:00",
+        "kind": "batch final delivery"
+      },
+      "review_ci_attribution": {
+        "source_batches": [
+          "aux-skills-cleanup-evidence-20261014"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H12",
+          "H14"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
+      }
+    },
+    {
+      "id": "H12",
+      "primary_category": "开发修复",
+      "cause": "CI清理竞态再次出现后的持久修复",
+      "necessary_operations": [
+        "固化清理红回归、进程组清理、原生fixture复验、失败push CI留存、第二源码修订及独立复审"
+      ],
+      "retry_evidence": [
+        "首源码head9802c81与修订headd8cd83a均有Spec/Standards报告；不把两个head的push/PR事件称同一次job重跑。"
+      ],
+      "related_events": [
+        "H10",
+        "H11"
+      ],
+      "cost_seconds": {
+        "human_focused": null,
+        "agent_active": null,
+        "model_network_wait": null,
+        "ci_operator_wait": null
+      },
+      "downtime_seconds": null,
+      "uncertainty": "Same cause family as H10, but a later explicit permanent-fix episode; intervening time is not counted as continuous work. Release and CI shared with H11.",
+      "observed_start": {
+        "at": "2026-10-14T05:03:51Z",
+        "kind": "retained failed Mac job completion; cleanup development began earlier"
+      },
+      "observed_end": null,
+      "review_ci_attribution": {
+        "source_batches": [
+          "aux-skills-cleanup-evidence-20261014"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H11",
+          "H14"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
+      }
+    },
+    {
+      "id": "H13",
+      "primary_category": "开发修复",
+      "cause": "PDF提取乱码后未完成视觉复核",
+      "necessary_operations": [
+        "固定原始两页失败证据、最小生产规则修复、PR157、5文件安装、两账号各一次原PDF复验、PR158归档"
+      ],
+      "retry_evidence": [
+        "保留一次被用户并发输入打断的UI操作并重新观察；首次接手方trace不完整保留，完整采集另存。"
+      ],
+      "related_events": [
+        "H11"
+      ],
+      "cost_seconds": {
+        "human_focused": null,
+        "agent_active": null,
+        "model_network_wait": null,
+        "ci_operator_wait": null
+      },
+      "downtime_seconds": null,
+      "uncertainty": "No reliable focused labor or causal wait split exists in the retained evidence.",
+      "observed_start": {
+        "at": "2026-10-14T05:34:44.623Z",
+        "kind": "source failing test turn start, predates this fix batch"
+      },
+      "observed_end": {
+        "at": "2026-10-14T06:28:54.468553+00:00",
+        "kind": "final delivery"
+      },
+      "review_ci_attribution": {
+        "source_batches": [
+          "pdf-visual-fallback-evidence-20261014"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H15"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
+      }
+    },
+    {
+      "id": "H14",
+      "primary_category": "验收准备",
+      "cause": "验收后复用启动期分类器造成假告警",
+      "necessary_operations": [
+        "保留sdk_connection_shape_changed结果、核对独立进程和连接观察、限制分类器结论范围"
+      ],
+      "retry_evidence": [],
+      "related_events": [],
+      "cost_seconds": {
+        "human_focused": null,
+        "agent_active": null,
+        "model_network_wait": null,
+        "ci_operator_wait": null
+      },
+      "downtime_seconds": null,
+      "uncertainty": "Post-acceptance normal SDK DEBUG frames exceeded a startup-only classifier contract. No second startup pass or production outage inferred; preparation time unknown.",
+      "observed_start": null,
+      "observed_end": null,
+      "review_ci_attribution": {
+        "source_batches": [
+          "aux-skills-cleanup-evidence-20261014"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H11",
+          "H12"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
+      }
+    },
+    {
+      "id": "H15",
+      "primary_category": "验收准备",
+      "cause": "采证探针默认编码阻止时间窗口更新",
+      "necessary_operations": [
+        "保留本地自检失败、改用明确UTF-8和窗口内fixture时间、通过自检后再采证"
+      ],
+      "retry_evidence": [
+        "首次本地自检因默认GBK和旧fixture时间返回None；未发生远端操作。"
+      ],
+      "related_events": [],
+      "cost_seconds": {
+        "human_focused": null,
+        "agent_active": null,
+        "model_network_wait": null,
+        "ci_operator_wait": null
+      },
+      "downtime_seconds": null,
+      "uncertainty": "No reliable focused labor or causal wait split exists in the retained evidence.",
+      "observed_start": null,
+      "observed_end": null,
+      "review_ci_attribution": {
+        "source_batches": [
+          "pdf-visual-fallback-evidence-20261014"
+        ],
+        "attribution": "shared_batch",
+        "unique_ci_runs": null,
+        "unique_ci_attempts": null,
+        "unique_review_rounds": null,
+        "shared_with_event_ids": [
+          "H13"
+        ],
+        "reason": "来源目录可证明批次关联，现有汇总没有逐事件排他归属；同批源码、归档、维护审查和CI可能服务多个事件。批次数量仅作索引，不能写为本事件轮数或跨事件相加。"
+      }
+    }
+  ],
+  "labor_boundary": "All active human/agent/model-network/CI-operator time unknown; recorded endpoints are not focused work or downtime.",
+  "current_maintenance_events": [
+    {
+      "id": "PREP-01",
+      "category": "preparation",
+      "cause": "隔离Mac临时目录的POSIX权限/用户组条件不满足真实Host工作根检查",
+      "continuous_disposition": "首轮实验及专门fixture探针失败；在同一问题链中调整隔离目录后探针通过，后续run02通过。",
+      "result": "resolved_in_disposable_fixture",
+      "observed_start": null,
+      "observed_end": null,
+      "measured_cost_seconds": {
+        "human_focused_seconds": null,
+        "agent_active_seconds": null,
+        "model_network_wait_seconds": null,
+        "operator_ci_wait_seconds": null,
+        "downtime_seconds": null
+      },
+      "counts": {
+        "failed_full_experiment_logs": 1,
+        "diagnostic_attempts": 2
+      },
+      "limits": [
+        "54/其他子项反复报同一file_host_unavailable不等于54次维护；目录权限归因由诊断和后续通过支持，具体变更时长未记录。"
+      ]
+    },
+    {
+      "id": "PREP-02",
+      "category": "preparation",
+      "cause": "隔离Mac文件包测试缺少仓库testdata工作簿",
+      "continuous_disposition": "mac-file-tests-02中TestOOXMLArtifactToolWorkbook因文件缺失失败；补齐原仓库测试数据后03通过，后续04/06独立保留。",
+      "result": "resolved_in_test_environment",
+      "observed_start": null,
+      "observed_end": null,
+      "measured_cost_seconds": {
+        "human_focused_seconds": null,
+        "agent_active_seconds": null,
+        "model_network_wait_seconds": null,
+        "operator_ci_wait_seconds": null,
+        "downtime_seconds": null
+      },
+      "counts": {
+        "initial_failed_test_name_count": 1,
+        "native_full_package_logs": 4
+      },
+      "limits": [
+        "未记录专注工作的开始/暂停/结束，不推算人工工时；日志时间不自动等于处置时间。"
+      ]
+    },
+    {
+      "id": "PREP-03",
+      "category": "preparation",
+      "cause": "G3上传准备时输入焦点错误，文件路径留在未发送聊天草稿",
+      "continuous_disposition": "操作记录明确business_effect=false；随后上传完成。",
+      "result": "recorded_recovery",
+      "observed_start": "2026-10-14T07:55:38.824Z",
+      "observed_end": "2026-10-14T07:56:37.021Z",
+      "measured_cost_seconds": {
+        "human_focused_seconds": null,
+        "agent_active_seconds": null,
+        "model_network_wait_seconds": null,
+        "operator_ci_wait_seconds": null,
+        "downtime_seconds": null
+      },
+      "counts": {
+        "operator_records": 2
+      },
+      "limits": [
+        "两条记录之间58.197秒是观察包络，不是人工专注或停机；未发送草稿不计业务泄露事件。"
+      ]
+    },
+    {
+      "id": "PREP-04",
+      "category": "preparation",
+      "cause": "G4上传后的截图/状态采集失败",
+      "continuous_disposition": "后续记录确认文件已上传；原记录send_time_exact=false。",
+      "result": "upload_confirmed_send_time_unknown",
+      "observed_start": null,
+      "observed_end": "2026-10-14T08:11:11.759Z",
+      "measured_cost_seconds": {
+        "human_focused_seconds": null,
+        "agent_active_seconds": null,
+        "model_network_wait_seconds": null,
+        "operator_ci_wait_seconds": null,
+        "downtime_seconds": null
+      },
+      "counts": {
+        "explicit_preparation_issue_records": 1
+      },
+      "limits": [
+        "精确发送时刻及采集失败起点未知；不能将确认时间当发送时间或计算恢复耗时。"
+      ]
+    },
+    {
+      "id": "PREP-05",
+      "category": "preparation",
+      "cause": "N3同一批上传准备遇到路径输入长度限制及monitor状态错误",
+      "continuous_disposition": "过长绝对路径在打开前替换，四文件另行观察确认；两种工具症状属于同一准备链。",
+      "result": "recorded_recovery",
+      "observed_start": null,
+      "observed_end": "2026-10-14T10:05:58.476Z",
+      "measured_cost_seconds": {
+        "human_focused_seconds": null,
+        "agent_active_seconds": null,
+        "model_network_wait_seconds": null,
+        "operator_ci_wait_seconds": null,
+        "downtime_seconds": null
+      },
+      "counts": {
+        "preparation_chains": 1,
+        "recorded_symptoms": 2
+      },
+      "limits": [
+        "依据操作记录归并，不将两症状算成两次生产故障；没有可核实的处置专注时长。"
+      ]
+    },
+    {
+      "id": "DEV-01",
+      "category": "development_repair",
+      "cause": "实验WIP审查指出取消覆盖不完整及缺少不确定COMMIT回执测试",
+      "continuous_disposition": "同一实验补证链补充读取取消分类、授权中取消及真实SQLite提交后丢回执测试；run03、run05和最终原生包分别验证。",
+      "result": "resolved_for_scoped_cases",
+      "observed_start": null,
+      "observed_end": null,
+      "measured_cost_seconds": {
+        "human_focused_seconds": null,
+        "agent_active_seconds": null,
+        "model_network_wait_seconds": null,
+        "operator_ci_wait_seconds": null,
+        "downtime_seconds": null
+      },
+      "counts": {
+        "wip_findings": 2,
+        "dedicated_followup_logs": 2
+      },
+      "limits": [
+        "两项覆盖缺口合并为一次测试补证处置链；原run02与其不足保留；没有改生产事务规则。"
+      ]
+    },
+    {
+      "id": "DEV-02",
+      "category": "development_repair",
+      "cause": "首轮Standards审查指出实验协调函数职责过多",
+      "continuous_disposition": "e4c124bb审查失败；67f12b59仅抽取并发读计时helper，再次Spec/Standards通过；完整run05重测保留。",
+      "result": "resolved",
+      "observed_start": null,
+      "observed_end": "2026-10-14T08:09:14Z",
+      "measured_cost_seconds": {
+        "human_focused_seconds": null,
+        "agent_active_seconds": null,
+        "model_network_wait_seconds": null,
+        "operator_ci_wait_seconds": null,
+        "downtime_seconds": null
+      },
+      "counts": {
+        "standards_findings": 1,
+        "correction_commits": 1
+      },
+      "limits": [
+        "未记录专注工作的开始/暂停/结束，不推算人工工时；日志时间不自动等于处置时间。"
+      ]
+    },
+    {
+      "id": "DEV-03",
+      "category": "development_repair",
+      "cause": "首轮PR CI lint报告unused及未检查Close两项诊断",
+      "continuous_disposition": "同一次lint修正c7465249增加计时自检、明确检查Close；重新双轴审查及第二次PR CI通过。",
+      "result": "resolved",
+      "observed_start": "2026-10-14T08:13:28.114937Z",
+      "observed_end": "2026-10-14T08:38:31Z",
+      "measured_cost_seconds": {
+        "human_focused_seconds": null,
+        "agent_active_seconds": null,
+        "model_network_wait_seconds": null,
+        "operator_ci_wait_seconds": null,
+        "downtime_seconds": null
+      },
+      "counts": {
+        "failed_ci_runs": 1,
+        "lint_diagnostics": 2,
+        "correction_commits": 1,
+        "successful_followup_pr_ci_runs": 1
+      },
+      "limits": [
+        "起点是诊断记录，终点是CI完成；该包络不能算人工工作或生产恢复；两个诊断不重复计作两次维护。"
+      ]
+    },
+    {
+      "id": "VERIFY-01",
+      "category": "verification_limit",
+      "cause": "Windows全仓检查遇既有平台假设及缺失Web资源",
+      "continuous_disposition": "保留gateway-local-tests-01失败；原生Mac范围检查及GitHub平台CI另行通过，不把Windows失败改写为通过。",
+      "result": "retained_platform_limit",
+      "observed_start": null,
+      "observed_end": null,
+      "measured_cost_seconds": {
+        "human_focused_seconds": null,
+        "agent_active_seconds": null,
+        "model_network_wait_seconds": null,
+        "operator_ci_wait_seconds": null,
+        "downtime_seconds": null
+      },
+      "counts": {
+        "failed_windows_full_suite_logs": 1
+      },
+      "limits": [
+        "未将当前候选当作平台问题的根因；未执行范围外平台修复。"
+      ]
+    },
+    {
+      "id": "EVIDENCE-01",
+      "category": "evidence_reconciliation",
+      "cause": "首轮边界审查使用不兼容摘要编码且假定所有输入均为新样例",
+      "continuous_disposition": "只读session摘要桥接验证两种编码；区分18次冻结新材料输入与4次既有正式附件输入；保留初版及修正说明。",
+      "result": "resolved_with_explicit_boundary",
+      "observed_start": null,
+      "observed_end": null,
+      "measured_cost_seconds": {
+        "human_focused_seconds": null,
+        "agent_active_seconds": null,
+        "model_network_wait_seconds": null,
+        "operator_ci_wait_seconds": null,
+        "downtime_seconds": null
+      },
+      "counts": {
+        "reviewer_corrections": 2
+      },
+      "limits": [
+        "修正审查解释，不修改底层会话、材料或业务；中期after快照不能覆盖之后N3/N4。"
+      ]
+    },
+    {
+      "id": "SOURCE-01",
+      "category": "source_delivery",
+      "cause": "交付隔离测试和合成测量结果的Gateway源代码",
+      "continuous_disposition": "3个本地候选head，6份正式独立审查；PR68按最终head合并，exact merge push CI七项全通过。",
+      "result": "github_delivery_complete",
+      "observed_start": "2026-10-14T08:02:41Z",
+      "observed_end": "2026-10-14T09:56:26Z",
+      "measured_cost_seconds": {
+        "human_focused_seconds": null,
+        "agent_active_seconds": null,
+        "model_network_wait_seconds": null,
+        "operator_ci_wait_seconds": null,
+        "downtime_seconds": null
+      },
+      "counts": {
+        "local_candidate_heads": 3,
+        "formal_review_reports": 6,
+        "review_results": {
+          "pass": 5,
+          "fail": 1
+        },
+        "pr_ci_runs": 2,
+        "merge_push_ci_runs": 1,
+        "merged_prs": 1
+      },
+      "limits": [
+        "交付链与其开发修正子事件有包含关系，不相加为独立工时或干预总数。",
+        "github-merge-68.log记录的是放行CI元数据，实际合并事实由GitHub PR API及merge-SHA CI独立核对。",
+        "源交付不代表部署，运行时未因本测试提交升级。"
+      ]
+    },
+    {
+      "id": "BUSINESS-01",
+      "category": "acceptance_business",
+      "cause": "执行冻结新材料的读取/产出和自然并发验证",
+      "continuous_disposition": "12个首轮读取已完成；评分保留覆盖缺口；2个产出请求、N1–N4探测记录另列，不计普通业务量或维护干预。",
+      "result": "finite_acceptance_with_gaps",
+      "observed_start": "2026-10-14T07:33:39.403Z",
+      "observed_end": "2026-10-14T10:14:20.843Z",
+      "measured_cost_seconds": {
+        "human_focused_seconds": null,
+        "agent_active_seconds": null,
+        "model_network_wait_seconds": null,
+        "operator_ci_wait_seconds": null,
+        "downtime_seconds": null
+      },
+      "counts": {
+        "first_reading_turns": 12,
+        "grading_counts": {
+          "正确": 71,
+          "准确说明无法确认": 35,
+          "执行失败": 10
+        },
+        "observed_intermediate_failures": 6,
+        "generation_requests": 2,
+        "natural_concurrency_labels_recorded": 4
+      },
+      "limits": [
+        "自然并发尝试标签数不等于4次成功并发重叠；观察有效性须由各自时间窗确认。",
+        "验收业务时长和评分不足不自动构成维护事件；此表不重新判内容分数。"
+      ]
+    },
+    {
+      "id": "BUSINESS-02",
+      "category": "model_self_rework",
+      "cause": "GEN2在同一个产出轮次内修订版式并自行恢复工具语法错误",
+      "continuous_disposition": "4版、4次渲染、初版后3次版式修订、2次工具错误自行恢复、2个最终交付调用。",
+      "result": "final_artifact_pass_process_cost_retained",
+      "observed_start": "2026-10-14T08:05:08.038Z",
+      "observed_end": "2026-10-14T08:10:41.973Z",
+      "measured_cost_seconds": {
+        "human_focused_seconds": null,
+        "agent_active_seconds": null,
+        "model_network_wait_seconds": null,
+        "operator_ci_wait_seconds": null,
+        "downtime_seconds": null,
+        "turn_wall_clock": 333.935,
+        "render_reported_tool_wall_total": 72.5155
+      },
+      "counts": {
+        "versions": 4,
+        "revisions_after_initial": 3,
+        "renders": 4,
+        "self_recovered_tool_errors": 2,
+        "delivery_calls": 2
+      },
+      "limits": [
+        "此事件包含在验收业务内，不能再重复计数为人工维护或生产恢复。",
+        "333.935秒是轮次墙钟；72.5155秒是4次渲染工具报告耗时；余量不能拆分为纯模型、网络等待或人工工时。"
+      ]
+    }
+  ],
+  "current_maintenance_boundary": "Snapshot before CRM report source delivery. Parent delivery/business chains overlap their subevents; never sum all rows as maintenance incidents. N3 four upload events do not prove four registered work inputs; final reconciliation found only three."
+}
