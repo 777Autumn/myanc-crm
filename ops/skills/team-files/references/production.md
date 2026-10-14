@@ -20,8 +20,13 @@ figures remain illegible after inspection and need verification. Preserve the or
 extracted text does not preserve its layout and is not an editable replacement.
 Native Feishu images appear in `work-context.inputs`, with saved paths and hashes.
 
-Before summarizing across pages, pair each amount or status with its source page,
-date and supporting record. Keep a qualifier such as "this page records only a
+Before summarizing across pages, write a short source ledger in the working
+notes file: page, printed date, amount/status, supporting record and exact qualifier.
+Read each row back against the actual source page before composing the answer.
+For a follow-up asking for evidence or missing details, reopen the relevant
+original/page images; an earlier chat summary is not a source for an absence claim.
+Check headers and footers too before saying a date or condition is missing.
+Keep a qualifier such as "this page records only a
 promise; no receipt attached" with that page's promise. A later dated receipt is
 a separate fact with its own qualifications. Report what each record establishes,
 then compare the dates and amounts; verify that every caveat in the answer still
