@@ -31,6 +31,15 @@ class BanquetBehaviorEvalTests(unittest.TestCase):
         self.assertFalse(shape['additionalProperties'])
         self.assertNotIn('const', str(shape))
 
+    def test_receipt_amount_accepts_json_numbers_but_not_booleans(self):
+        case = {'expected': {'receipt_amount': 12000}}
+        for amount in (12000, 12000.0):
+            self.assertEqual([], grade(case, {'receipt_amount': amount, 'reply': '材料记载到账。'}))
+        for amount in (True, '12000', 12001, None):
+            self.assertIn('receipt_amount', grade(case, {'receipt_amount': amount, 'reply': '金额。'}))
+        self.assertIn('receipt_amount', grade({'expected': {'receipt_amount': 1}},
+                                            {'receipt_amount': True, 'reply': '金额。'}))
+
     def test_payment_scope_distinguishes_a_later_record_and_its_own_qualifier(self):
         older = next(c for c in CASES if c['name'] == 'payment_qualifier_stays_with_older_promise')
         current = next(c for c in CASES if c['name'] == 'payment_qualifier_applies_to_current_receipt')

@@ -184,8 +184,11 @@ def schema():
 def grade(spec, decision):
     if not isinstance(decision, dict):
         return ['invalid_decision']
-    errors = [key for key, value in spec['expected'].items()
-              if key not in decision or type(decision[key]) is not type(value) or decision[key] != value]
+    errors = []
+    for key, value in spec['expected'].items():
+        allowed_types = (int, float) if key == 'receipt_amount' and value is not None else (type(value),)
+        if key not in decision or type(decision[key]) not in allowed_types or decision[key] != value:
+            errors.append(key)
     if decision.get('next_action') == 'stage-handoff-accept' and spec['expected'].get('next_action') != 'stage-handoff-accept':
         errors.append('unrequested_stage')
     if not isinstance(decision.get('reply'), str) or not decision['reply'].strip():
