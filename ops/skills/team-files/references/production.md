@@ -7,9 +7,16 @@ versus proposed states belong to `team-banquet`; apply its saved-file readback.
 ## Read materials
 
 Use `python-docx` for Word, `openpyxl` for Excel, `python-pptx` for slides and
-`pypdf` for PDF structure/text. For scanned pages, render the original PDF with
-the installed tool below, then read the resulting page images. State which
-figures remain illegible and need verification. Preserve the original PDF;
+`pypdf` for PDF structure/text. For scanned pages or extraction with garbled,
+misordered, missing or otherwise unreadable text, render the selected original
+PDF with the installed tool below and visually read the affected page images
+before answering, including read-only requests. If affected pages cannot be
+identified, inspect every page. Use `render.json` to reconcile page coverage;
+rendering alone does not complete reading. Inspection previews stay inside this
+work and need no new business delivery or approval. If the supported render/read
+actually fails or permission is denied, preserve the evidence and stop under the
+existing rules; report the affected pages and remaining uncertainty. State which
+figures remain illegible after inspection and need verification. Preserve the original PDF;
 extracted text does not preserve its layout and is not an editable replacement.
 Native Feishu images appear in `work-context.inputs`, with saved paths and hashes.
 
