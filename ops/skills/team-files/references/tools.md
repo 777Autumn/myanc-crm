@@ -27,8 +27,11 @@ receiver stays bound to this work's original private chat, group or thread even
 when another colleague speaks. An inaccessible old work requires clarification,
 not a guessed path or a different recipient.
 
-Read each selected input from its returned path. A missing original is a real
-input gap: request that file again rather than reconstructing it from memory.
+Read each selected input from its returned path; Excel uses the registered-ID
+reader in [document production](production.md). Resolve a mistyped path against
+the current host context and actually retry reading before declaring an input gap.
+A genuinely missing original is an input gap: request that file again rather than
+reconstructing it from memory.
 Retain original documents and images; extracted Markdown/text is a working aid. Material
 selected for this work is not authorization to publish a knowledge proposal.
 

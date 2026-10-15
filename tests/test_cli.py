@@ -1,4 +1,5 @@
 import hashlib
+from contextlib import redirect_stderr
 import io
 import json
 import os
@@ -41,6 +42,22 @@ FIELD_IDS = {
 
 
 class CliBoundaryTests(unittest.TestCase):
+    def test_host_timing_is_separate_from_json_and_does_not_repeat_command(self):
+        stderr, stdout = io.StringIO(), io.StringIO()
+        with mock.patch.dict(os.environ, {'MYANC_CRM_TIMING': '1'}, clear=True), redirect_stderr(stderr):
+            code = cli.main(['unknown-sensitive-command'], stdin=io.StringIO('{}'), stdout=stdout)
+        self.assertEqual(2, code)
+        self.assertEqual('usage', json.loads(stdout.getvalue())['code'])
+        lines = stderr.getvalue().splitlines()
+        self.assertEqual(1, len(lines))
+        self.assertTrue(lines[0].startswith('MYANC_TIMING '))
+        report = json.loads(lines[0].removeprefix('MYANC_TIMING '))
+        self.assertEqual({'version', 'total_ns', 'phases'}, set(report))
+        self.assertEqual(1, report['version'])
+        self.assertGreaterEqual(report['total_ns'], 0)
+        self.assertEqual({}, report['phases'])
+        self.assertNotIn('sensitive', stderr.getvalue())
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

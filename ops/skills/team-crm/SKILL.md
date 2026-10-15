@@ -10,6 +10,9 @@ read the omitted sections in bounded ranges before using the protocol. A combine
 `cat` that exits successfully does not establish that every reference was visible.
 For banquet requests, obtain a separate complete `references/banquet.md` result;
 it contains the current-vs-historical material rules needed even for read-only work.
+Within this turn, reuse a complete reference already visible in context; reread
+only missing/truncated sections or a changed version. This does not reuse business
+records from an earlier user turn: current facts still require a fresh host read.
 
 1. Read [the controlled CRM protocol](references/tools.md) completely before using
    CRM tools. It is the authority for arguments, current-turn reads, pagination,

@@ -23,7 +23,7 @@ from .core import (
     stage_followup,
 )
 from .lark import LarkBackendError, LarkCliBackend, _base_url
-from . import core
+from . import core, timing
 from .connections import Connections, ConnectionBlocked, PersonalReadRunner, access as connection_access
 
 
@@ -388,7 +388,7 @@ def _write(target: TextIO, result: Mapping[str, Any]) -> None:
     target.write(json.dumps(result, ensure_ascii=False, separators=(",", ":")) + "\n")
 
 
-def main(
+def _main(
     argv: list[str] | None = None,
     *,
     stdin: TextIO | None = None,
@@ -710,6 +710,13 @@ def main(
 
     _write(target, result)
     return exit_code
+
+
+def main(argv=None, *, stdin=None, stdout=None):
+    if os.environ.get('MYANC_CRM_TIMING') == '1':
+        with timing.capture():
+            return _main(argv, stdin=stdin, stdout=stdout)
+    return _main(argv, stdin=stdin, stdout=stdout)
 
 
 if __name__ == "__main__":  # pragma: no cover

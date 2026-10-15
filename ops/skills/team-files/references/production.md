@@ -6,7 +6,7 @@ versus proposed states belong to `team-banquet`; apply its saved-file readback.
 
 ## Read materials
 
-Use `python-docx` for Word, `openpyxl` for Excel, `python-pptx` for slides and
+Use `python-docx` for Word, the registered-workbook reader below for Excel, `python-pptx` for slides and
 `pypdf` for PDF structure/text. For scanned pages or extraction with garbled,
 misordered, missing or otherwise unreadable text, render the selected original
 PDF with the installed tool below and visually read the affected page images
@@ -20,9 +20,21 @@ figures remain illegible after inspection and need verification. Preserve the or
 extracted text does not preserve its layout and is not an editable replacement.
 Native Feishu images appear in `work-context.inputs`, with saved paths and hashes.
 
-Before summarizing across pages, write a short source ledger in the working
-notes file: page, printed date, amount/status, supporting record and exact qualifier.
-Read each row back against the actual source page before composing the answer.
+Before summarizing across pages, save a short source ledger in the working notes
+file. First transcribe the relevant words from each actual page image, then derive
+the business fields from those quotes. For each row keep the selected input ID/hash,
+page number, date quote and its location (including header/footer), amount/status
+quote, supporting record and the exact qualifier attached to that fact. Keep the
+quoted words separate from the interpretation; a blank field is not evidence of
+absence. Do not fill dates from the filename, an earlier summary or another page.
+
+In a separate tool call, reopen the saved ledger and compare its rows with the
+actual source page images before answering. Check the date and each qualifier
+against their quoted words, including the page header/footer. Correct a mismatch
+in the saved file and reopen it again; a correct draft in memory is insufficient.
+If a date or condition is hard to read, inspect a closer view of that original
+page. Distinguish "illegible after inspection" from "not printed on this page";
+claim the latter only after viewing the entire readable page, including its edges.
 For a follow-up asking for evidence or missing details, reopen the relevant
 original/page images; an earlier chat summary is not a source for an absence claim.
 Check headers and footers too before saying a date or condition is missing.
@@ -34,6 +46,32 @@ describes the same fact as in the source. A document's recorded receipt and bala
 can be known while independent bank confirmation remains unknown. State that
 verification limit separately; it does not erase the document's recorded amount
 or extend an older page's missing-evidence claim to the later record.
+
+### Read a selected Excel workbook
+
+Use the installed `read_xlsx.py` beside this Skill's `SKILL.md`. Pass the exact
+input ID returned by `work-context`, rather than transcribing its long saved path:
+
+```sh
+/opt/team-files/bin/python '<team-files Skill directory>/read_xlsx.py' \
+  --input-id '<selected input ID>' --max-rows 50
+```
+
+The reader refreshes the host context, validates that selected file and its hash,
+and returns actual cell coordinates, formulas and saved formula caches. Follow
+`next_row` with `--start-row`; use `--sheet` for each relevant sheet in `worksheets`.
+`last_row: null` means the total is not yet known; continue until `next_row: null`.
+Only the returned rows have been read. A missing formula cache is unknown, not
+zero or a recalculated value. For layout or printed-page claims, also render and
+inspect the original through the supported renderer below.
+
+After a manually copied path causes `FileNotFoundError`, refresh `work-context`
+and match the same selected input ID/hash. Run this reader and inspect the cells
+before marking that retry complete; obtaining the corrected path alone does not
+complete reading. A changed/missing input remains unresolved. A permission denial
+still invokes the existing stop rule; do not try alternative paths or identities.
+Keep the failed attempt and originals. Use `openpyxl` for editing or output
+readback after the selected original has been read.
 
 ## Make the editable originals
 

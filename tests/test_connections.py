@@ -1,5 +1,7 @@
 """Fictional identities exercise native-user selection and every bot bypass."""
 import copy
+from contextlib import redirect_stderr
+import io
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -9,6 +11,7 @@ import unittest
 from unittest import mock
 
 from myanc_crm.connections import Connections, ConnectionBlocked, PersonalReadRunner, access
+from myanc_crm import timing
 
 
 def stamp(seconds):
@@ -114,6 +117,33 @@ class ConnectionTests(unittest.TestCase):
         self.connect()
         self.assertBlocked("connection_session_expired", lambda: self.connections.require(self.principal, self.token))
         self.connections.require(self.principal, self.token + "new")
+
+    def test_read_timing_keeps_each_identity_check_and_separates_resource_call(self):
+        self.connect()
+        for fail in (False, True):
+            output = io.StringIO()
+            original = self.fake
+            def run(argv, **kwargs):
+                if fail and argv[1] == 'base':
+                    raise subprocess.TimeoutExpired('private-command-must-not-be-logged', 10)
+                return original(argv, **kwargs)
+            self.connections.run = run
+            with self.subTest(fail=fail), redirect_stderr(output), timing.capture():
+                runner = PersonalReadRunner(self.connections, self.principal, self.token)
+                if fail:
+                    with self.assertRaises(subprocess.TimeoutExpired):
+                        runner(['wrapper', 'base', '+record-get'])
+                else:
+                    self.assertEqual(0, runner(['wrapper', 'base', '+record-get']).returncode)
+            report = json.loads(output.getvalue().removeprefix('MYANC_TIMING '))
+            phases = report['phases']
+            self.assertEqual(2 if fail else 3, phases['connection_cli']['count'])
+            self.assertEqual(1, phases['resource_cli']['count'])
+            self.assertGreater(phases['connection_db_setup']['count'], 0)
+            self.assertEqual(2 if fail else 3, phases['connection_lock_wait']['count'])
+            self.assertTrue(all(0 <= value['elapsed_ns'] <= report['total_ns'] for value in phases.values()))
+            for private in (self.token, self.principal['user_id'], 'private-command', self.temp.name):
+                self.assertNotIn(private, output.getvalue())
 
     def test_missing_user_does_not_accept_verified_bot(self):
         self.connect()
