@@ -261,18 +261,36 @@ class NativeRecoveryTests(unittest.TestCase):
             book.active['A1'] = '=2*3'
             book.active['B1'] = '=2*3'
             book.save(output / 'r1.xlsx')
-            def invoke(name):
+            def invoke(name, failure=None):
                 stdout = io.StringIO()
                 with patch('sys.argv', ['render', '--output-file', name, '--text-cell', 'Source!A1',
                                        '--gateway', os.environ['TEAM_FILES_TEST_GATEWAY']]), \
                         patch('team_file_render.subprocess.run', return_value=subprocess.CompletedProcess(
                             [], 0, json.dumps(context).encode(), b'')), redirect_stdout(stdout):
-                    renderer.main()
+                    if failure is None:
+                        renderer.main()
+                    else:
+                        with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                            renderer.main()
+                        failure.update(json.loads(stdout.getvalue()))
+                        return
                 return json.loads(stdout.getvalue())
             with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
                 invoke('r1.xlsx')
             self.assertEqual(list(output.glob('render-*')), [])
             book.active['A1'].data_type = 's'
+            book.active['B1'] = '=1/0'
+            book.save(output / 'bad-calculation.xlsx')
+            failed = {}
+            invoke('bad-calculation.xlsx', failed)
+            self.assertEqual(failed['code'], 'xlsx_result_invalid')
+            retained = Path(failed['retained_workbook'])
+            self.assertTrue(retained.is_relative_to(output))
+            self.assertEqual(failed['retained_sha256'], hashlib.sha256(retained.read_bytes()).hexdigest())
+            self.assertFalse((retained.parent / 'render.json').exists())
+            self.assertFalse(failed['delivery_attempted'])
+            self.assertEqual(renderer.xlsx_cells(retained.read_bytes())['Source!B1']['type'], 'e')
+            book.active['B1'] = '=2*3'
             book.save(output / 'r2.xlsx')
             receipt = invoke('r2.xlsx')
             target = Path(receipt['manifest']).parent

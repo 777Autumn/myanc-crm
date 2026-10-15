@@ -171,7 +171,8 @@ or saved revision from current context, then actually rerun the context-bound
 render command; merely finding the corrected path does not finish recovery.
 For `xlsx_text_cell_type`, use the returned cell coordinates to correct the
 declared explanations. For `xlsx_result_invalid`, inspect the retained converted
-copy's reported error/cache cells and correct their source formulas or intended
+copy at the returned `retained_workbook` (bound by `retained_sha256`) and its
+reported error/cache cells, then correct their source formulas or intended
 text types. Keep genuine formulas and the validation checks. Save a new revision
 and perform one corrected render attempt for the identified local defect; a
 second failure remains unresolved and must be reported with its evidence.

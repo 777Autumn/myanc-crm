@@ -700,13 +700,18 @@ def render(work_root, source, destination, gateway, *, binding=None, text_cells=
                 updated = target / (source.stem + '.xlsx')
                 updated_data = updated.read_bytes()
                 office_check(gateway, updated.name, updated_data)
-                xlsx_result = check_xlsx_result(before, updated_data)
-                if text_cells:
-                    after = xlsx_cells(updated_data)
-                    check_text_cells(after, text_cells)
-                    changed = [key for key in text_cells if after[key]['value'] != before[key]['value']]
-                    if changed:
-                        raise WorkbookCheckError('declared explanation cells changed', changed)
+                try:
+                    xlsx_result = check_xlsx_result(before, updated_data)
+                    if text_cells:
+                        after = xlsx_cells(updated_data)
+                        check_text_cells(after, text_cells)
+                        changed = [key for key in text_cells if after[key]['value'] != before[key]['value']]
+                        if changed:
+                            raise WorkbookCheckError('declared explanation cells changed', changed)
+                except WorkbookCheckError as error:
+                    error.retained_workbook = str(updated)
+                    error.retained_sha256 = hashlib.sha256(updated_data).hexdigest()
+                    raise
         else:
             pdf.write_bytes(data)
         pdf_check(pdf.read_bytes())
@@ -967,8 +972,11 @@ def main():
         if isinstance(error, WorkbookCheckError):
             reason = {'declared explanation cells must be text': 'xlsx_text_cell_type',
                       'declared explanation cells changed': 'xlsx_text_cell_changed'}.get(str(error), 'xlsx_result_invalid')
-            print(json.dumps({'status': 'not_prepared', 'code': reason, 'cells': error.cells[:50],
-                              'cell_count': len(error.cells), 'delivery_attempted': False}, ensure_ascii=False))
+            failure = {'status': 'not_prepared', 'code': reason, 'cells': error.cells[:50],
+                       'cell_count': len(error.cells), 'delivery_attempted': False}
+            if hasattr(error, 'retained_workbook'):
+                failure.update(retained_workbook=error.retained_workbook, retained_sha256=error.retained_sha256)
+            print(json.dumps(failure, ensure_ascii=False))
         if isinstance(error, SourceMissingError):
             reason = 'input_missing_refresh_work_context'
         if isinstance(error, subprocess.TimeoutExpired):
