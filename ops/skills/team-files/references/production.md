@@ -60,6 +60,7 @@ input ID returned by `work-context`, rather than transcribing its long saved pat
 The reader refreshes the host context, validates that selected file and its hash,
 and returns actual cell coordinates, formulas and saved formula caches. Follow
 `next_row` with `--start-row`; use `--sheet` for each relevant sheet in `worksheets`.
+`last_row: null` means the total is not yet known; continue until `next_row: null`.
 Only the returned rows have been read. A missing formula cache is unknown, not
 zero or a recalculated value. For layout or printed-page claims, also render and
 inspect the original through the supported renderer below.

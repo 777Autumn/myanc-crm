@@ -9,6 +9,8 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+import zipfile
+import xml.etree.ElementTree as ET
 from unittest.mock import patch
 
 from openpyxl import Workbook, load_workbook
@@ -145,6 +147,30 @@ class RegisteredWorkbookTests(unittest.TestCase):
         code, result = self.run_reader()
         self.assertEqual((code, result['error']), (1, 'readback_too_large_reduce_rows'))
         self.assertNotIn('rows', result)
+
+    def test_workbook_without_dimension_reads_rows_and_formulas(self):
+        # LibreOffice originals can omit this optional worksheet metadata.
+        rebuilt = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(self.raw)) as source, zipfile.ZipFile(rebuilt, 'w') as target:
+            for name in source.namelist():
+                raw = source.read(name)
+                if name.startswith('xl/worksheets/sheet'):
+                    root = ET.fromstring(raw)
+                    dimension = root.find('{http://schemas.openxmlformats.org/spreadsheetml/2006/main}dimension')
+                    root.remove(dimension)
+                    raw = ET.tostring(root, encoding='utf-8')
+                target.writestr(name, raw)
+        self.raw = rebuilt.getvalue()
+        self.path.write_bytes(self.raw)
+        self.context['inputs'][0]['sha256'] = hashlib.sha256(self.raw).hexdigest()
+        code, first = self.run_reader('--max-rows', '1')
+        self.assertEqual(code, 0, first)
+        self.assertEqual((first['last_row'], first['next_row']), (None, 2))
+        code, second = self.run_reader('--start-row', '2', '--max-rows', '1')
+        self.assertEqual(code, 0, second)
+        self.assertEqual(second['rows'][0]['cells']['C2'], {'formula': '=A2*B2', 'cached': None})
+        self.assertIsNone(second['next_row'])
+        self.assertEqual(second['last_row'], 2)
 
 
 if __name__ == '__main__':

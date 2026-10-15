@@ -78,20 +78,29 @@ def read_rows(input_id, sheet_name, start_row, max_rows):
         cached = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
         require(sheet_name is None or sheet_name in book.sheetnames, 'sheet_not_found')
         sheet = book[sheet_name or book.sheetnames[0]]
-        require(sheet.max_column <= 512, 'worksheet_width_limit')
-        require(start_row <= max(sheet.max_row, 1), 'row_out_of_range')
-        end_row = min(sheet.max_row, start_row + max_rows - 1)
+        require(sheet.max_column is None or sheet.max_column <= 512, 'worksheet_width_limit')
+        require(sheet.max_row is None or start_row <= max(sheet.max_row, 1), 'row_out_of_range')
+        # Optional worksheet dimensions may be absent; one lookahead row proves continuation.
+        end_row, more = start_row - 1, False
+        stop_row = start_row + max_rows
         rows = []
-        saved_rows = cached[sheet.title].iter_rows(min_row=start_row, max_row=end_row)
-        for number, (row, saved) in enumerate(zip(sheet.iter_rows(min_row=start_row, max_row=end_row), saved_rows), start_row):
+        saved_rows = cached[sheet.title].iter_rows(min_row=start_row, max_row=stop_row)
+        for number, (row, saved) in enumerate(zip(sheet.iter_rows(min_row=start_row, max_row=stop_row), saved_rows), start_row):
+            require(len(row) <= 512, 'worksheet_width_limit')
+            if number == stop_row:
+                more = True
+                continue
             cells = {cell.coordinate: {'formula': cell.value, 'cached': value.value}
                      if cell.data_type == 'f' else cell.value
                      for cell, value in zip(row, saved) if cell.value is not None}
             rows.append({'row': number, 'cells': cells})
+            end_row = number
+        require(rows or start_row == 1, 'row_out_of_range')
+        last_row = sheet.max_row if sheet.max_row is not None else (None if more else end_row)
         return {'status': 'read', 'source': {key: item[key] for key in ('id', 'name', 'path', 'sha256')},
                 'worksheets': book.sheetnames, 'sheet': sheet.title, 'start_row': start_row,
-                'end_row': end_row, 'last_row': sheet.max_row, 'rows': rows,
-                'next_row': end_row + 1 if end_row < sheet.max_row else None,
+                'end_row': end_row, 'last_row': last_row, 'rows': rows,
+                'next_row': end_row + 1 if more else None,
                 'scope': 'Selected sheet rows only; repeat for remaining rows and sheets. Formula caches are saved values, not a recalculation.'}
     finally:
         book.close()
