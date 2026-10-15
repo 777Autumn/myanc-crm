@@ -137,13 +137,17 @@ class Store:
             result[key] = value
         return result
 
-    def get(self, kind, identifier):
+    def get(self, kind, identifier, *, recheck=True):
         if kind == 'banquets' and isinstance(identifier, str) and re.fullmatch(r'YAN-[0-9]{4,}', identifier):
             matches = [row for row in self.list(kind) if row.get('number') == identifier]
             if len(matches) > 1:
                 raise ValueError('Duplicate banquet number; reconcile the Base.')
             if not matches:
                 return None
+            # A read-only result may use this request's complete, validated list.
+            # Writes/approvals still re-read the resolved record before staging.
+            if not recheck:
+                return matches[0]
             row = self.get(kind, matches[0]['record_id'])
             if row is None or row.get('number') != identifier:
                 raise ValueError('Banquet number changed; read again.')
@@ -240,7 +244,7 @@ def read(command, request, backend, config, principal):
     store = Store(backend)
     store.read_schema(('banquets', 'followups') if command == 'banquet' else ('banquets',))
     if command == 'banquet':
-        row = store.get('banquets', request.get('banquet_id'))
+        row = store.get('banquets', request.get('banquet_id'), recheck=False)
         if row is None:
             return {'status': 'not_found'}
         history = [r for r in store.list('followups') if r['banquet_id'] == row['record_id']]

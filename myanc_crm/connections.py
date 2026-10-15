@@ -4,7 +4,7 @@ Nothing in this module is a model-facing CLI. The gateway supplies the principal
 protected configuration supplies every profile, application and resource route.
 """
 
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from datetime import datetime
 import base64
 import hashlib
@@ -18,7 +18,7 @@ import tempfile
 import time
 from urllib.parse import urlsplit
 
-from . import core, write_locks
+from . import core, write_locks, timing
 
 
 READ_COMMANDS = frozenset({"customer", "customers", "banquet", "banquets", "banquet-context", "handoff"})
@@ -142,10 +142,11 @@ class Connections:
             except FileExistsError:
                 pass
         core._validate_private_file(self.path)
-        with core._private_umask():
-            db = sqlite3.connect(self.path, timeout=10)
-            db.row_factory = sqlite3.Row
-            try:
+        with core._private_umask(), ExitStack() as stack:
+            with timing.measure("connection_db_setup"):
+                db = sqlite3.connect(self.path, timeout=10)
+                stack.callback(db.close)
+                db.row_factory = sqlite3.Row
                 db.execute("CREATE TABLE IF NOT EXISTS connections (subject TEXT PRIMARY KEY, "
                            "profile TEXT NOT NULL, account TEXT NOT NULL, status TEXT NOT NULL, "
                            "version INTEGER NOT NULL, expires REAL NOT NULL DEFAULT 0, "
@@ -159,15 +160,15 @@ class Connections:
                 db.execute("CREATE TABLE IF NOT EXISTS connection_work_scope (work TEXT PRIMARY KEY, "
                            "private INTEGER NOT NULL CHECK(private IN (0,1)))")
                 db.commit()
-                yield db
-            finally:
-                db.close()
+            yield db
 
     @contextmanager
     def locked(self, principal):
         with self.database() as db:
             try:
-                with write_locks.acquire(self.path.parent, ["connection-" + self.key(principal)]):
+                with ExitStack() as stack:
+                    with timing.measure("connection_lock_wait"):
+                        stack.enter_context(write_locks.acquire(self.path.parent, ["connection-" + self.key(principal)]))
                     yield db
             except write_locks.WriteBlocked as exc:
                 if exc.code == "crm_write_busy":
@@ -208,8 +209,9 @@ class Connections:
     def _cli(self, profile, args, *, timeout=10):
         env = self.environment(profile)
         try:
-            completed = self.run([self.cli, *args, "--profile", profile], capture_output=True,
-                                 text=True, encoding="utf-8", timeout=timeout, env=env, check=False, shell=False)
+            with timing.measure("connection_cli"):
+                completed = self.run([self.cli, *args, "--profile", profile], capture_output=True,
+                                     text=True, encoding="utf-8", timeout=timeout, env=env, check=False, shell=False)
             if completed.returncode:
                 # This endpoint's native 1.0.90 response distinguishes revoked
                 # user tokens from transport failures. Never parse message text.
@@ -562,7 +564,8 @@ class PersonalReadRunner:
         self.connections.require(self.principal, self.token)
         self.connections.check_version(self.binding)
         kwargs["env"] = self.connections.environment(self.binding["profile"])
-        completed = self.connections.run([self.connections.cli, *args, "--profile", self.binding["profile"], "--as", "user"], **kwargs)
+        with timing.measure("resource_cli"):
+            completed = self.connections.run([self.connections.cli, *args, "--profile", self.binding["profile"], "--as", "user"], **kwargs)
         self.connections.check_version(self.binding)
         self.connections.require(self.principal, self.token)
         self.connections.check_version(self.binding)

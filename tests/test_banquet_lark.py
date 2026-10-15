@@ -53,7 +53,7 @@ class BanquetAdapterTests(unittest.TestCase):
                 row = result['banquet'] if command == 'banquet' else result['items'][0]
                 self.assertEqual(23, row['estimated_tables'])
                 self.assertNotIn('tblHandoffs', [table for _, table in calls])
-                self.assertEqual(5 if command == 'banquet' else 2, len(calls))
+                self.assertEqual(4 if command == 'banquet' else 2, len(calls))
                 # Required schema validation still precedes any record reads.
                 self.schema['tblBanquets']['预计桌数']['field_id'] = 'fldWrong'
                 calls.clear()
@@ -70,6 +70,28 @@ class BanquetAdapterTests(unittest.TestCase):
             self.schema['tblHandoffs']['关联婚宴']['property']['table_id']='tblBanquets'
             self.schema['tblBanquets']['销售负责人']['field_id']='fldWrong'
             with self.assertRaises(lark.LarkBackendError):self.store.read_schema()
+
+    def test_read_number_uses_fresh_list_record_without_second_get(self):
+        calls = []
+        def run(argv, **kwargs):
+            operation = argv[2]
+            table = argv[argv.index('--table-id') + 1]
+            calls.append((operation, table))
+            if operation == '+field-list':
+                data = {'ok': True, 'identity': 'bot', 'data': {'items': list(self.schema[table].values())}}
+            else:
+                if operation == '+record-get':
+                    raise subprocess.TimeoutExpired(argv, 30)
+                rows = [{'record_id': 'recBanquet', 'fields': {'业务编号': 'YAN-0006', '预计桌数': 23}}] if table == 'tblBanquets' else []
+                Path(kwargs['cwd'], 'records.ndjson').write_text(''.join(json.dumps(row) + '\n' for row in rows), encoding='utf-8')
+                data = {'format': 'ndjson', 'record_file': 'records.ndjson', 'records_count': len(rows), 'has_more': False}
+            return subprocess.CompletedProcess(argv, 0, stdout=json.dumps(data), stderr='')
+        self.backend.runner = run
+        result = banquet.read('banquet', {'banquet_id': 'YAN-0006'}, self.backend, CONFIG, PRINCIPAL)
+        self.assertEqual('found', result['status'])
+        self.assertEqual(23, result['banquet']['estimated_tables'])
+        self.assertEqual(4, len(calls))
+        self.assertNotIn(('+record-get', 'tblBanquets'), calls)
 
     def test_native_cli_link_table_is_checked_and_bound_to_preview(self):
         for values in self.schema.values():
