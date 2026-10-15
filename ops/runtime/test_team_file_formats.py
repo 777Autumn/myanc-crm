@@ -1,5 +1,6 @@
 """Fictional packages exercise parser decisions and editable media round trips."""
 import io
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -71,6 +72,18 @@ class FileFormatsTests(unittest.TestCase):
         self.assertNotEqual(bad.returncode, 0)
         self.assertEqual(bad.stdout, b'')
         self.assertNotIn(b'private fictional', bad.stderr)
+
+    @unittest.skipUnless(os.name == 'posix', 'production parser resource limits require POSIX')
+    def test_pdf_read_returns_every_saved_page_not_a_check_claim(self):
+        command = [sys.executable, '-I', str(Path(__file__).with_name('team_file_pdf.py')), '--read-content']
+        data = pdf_bytes(lambda w: w.add_blank_page(width=612, height=792))
+        good = subprocess.run(command, input=data, capture_output=True, timeout=15)
+        self.assertEqual(good.returncode, 0)
+        self.assertEqual(json.loads(good.stdout), {'format': 'pdf_text_layer', 'parts': [
+            {'name': 'page-1', 'text': ''}, {'name': 'page-2', 'text': ''}]})
+        bad = subprocess.run(command, input=b'private malformed content', capture_output=True, timeout=15)
+        self.assertNotEqual(bad.returncode, 0)
+        self.assertEqual(bad.stdout, b'')
 
 
 if __name__ == '__main__':

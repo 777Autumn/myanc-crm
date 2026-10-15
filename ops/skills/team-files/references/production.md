@@ -288,19 +288,35 @@ write revisions under new names/directories.
 An imported colleague's artifact is the selected source, not access to their
 private history. Ask for an absent editable original when required for revision.
 
-For rendered Word/Excel/PDF, prepare each delivery using the final render's
-`manifest_ref`, the chosen artifact basename, every actually inspected page name
-and every saved Office/PDF filename actually read. For a one-page Word/PDF set:
+For each final Office/PDF in the render manifest, read its actual saved content
+through the host before preparing delivery. Use `manifest_ref` and its exact
+artifact basename; inspect all returned content parts against the source.
+Word parts include body/tables and headers/footers; spreadsheet XML retains
+cell references, formulas and caches. PDF text layers can omit images, so the
+existing all-page visual inspection remains required. For a Word/PDF set:
+
+```sh
+/opt/team-files/bin/python /usr/local/libexec/team_file_render.py \
+  --read-final '<manifest_ref>' --artifact '<final.docx>'
+/opt/team-files/bin/python /usr/local/libexec/team_file_render.py \
+  --read-final '<manifest_ref>' --artifact '<final.pdf>'
+```
+
+Then prepare each artifact using every actually inspected page name. For one page:
 
 ```sh
 /opt/team-files/bin/python /usr/local/libexec/team_file_render.py \
   --prepare-delivery '<manifest_ref>' --artifact '<final.docx>' \
-  --inspected-page 'page-1.png' --read-content '<final.docx>' --read-content '<final.pdf>'
+  --inspected-page 'page-1.png'
 ```
 
 Use the actual names/count from that manifest; repeat flags for additional pages.
-This checks current work, source and rendered-file hashes and complete declared
-inspection coverage. It cannot establish visual correctness or truth of a quote.
+This requires host-recorded reads of every final Office/PDF's exact path and hash.
+A source-file read or a caller `--read-content` declaration cannot substitute.
+The host also enforces this at actual sending. Neither the receipt nor its hash
+establishes comprehension, visual correctness or truth of a quote. Content read
+limits fail closed, never issue partial complete receipts; report a supported
+size/format limitation rather than editing evidence or removing checks.
 `source_changed_render_new_revision` or `output_changed_render_new_revision`
 requires a fresh render and fresh readback/inspection after the last edit.
 On `prepared_not_sent`, pass the returned request file unchanged to the existing

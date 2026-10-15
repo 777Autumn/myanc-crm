@@ -6,12 +6,14 @@ gateway passes snapshot bytes through stdin and applies its own wall timeout.
 This checks structure/content policy, not visual quality or business facts.
 """
 import io
+import json
 import sys
 
 MAX_BYTES = 20 << 20
 MAX_EXPANDED = 100 << 20
 MAX_PAGES = 200
 MAX_MEMORY = 512 << 20
+MAX_READ_CONTENT = 512 << 10
 FORBIDDEN = frozenset({
     '/AA', '/JS', '/JavaScript', '/EmbeddedFiles', '/EF',
     '/AcroForm', '/XFA', '/RichMedia', '/RichMediaContent', '/Launch',
@@ -117,7 +119,8 @@ def main():
     resource.setrlimit(resource.RLIMIT_CPU, (10, 10))
     resource.setrlimit(resource.RLIMIT_FSIZE, (0, 0))
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-    if len(sys.argv) != 1:
+    read_content = sys.argv[1:] == ['--read-content']
+    if sys.argv[1:] and not read_content:
         return 2
     guard = mac_memory_guard() if sys.platform == 'darwin' else None
     try:
@@ -126,11 +129,27 @@ def main():
         except ImportError:
             return 2
         try:
-            validate_pdf(sys.stdin.buffer.read(MAX_BYTES + 1))
+            data = sys.stdin.buffer.read(MAX_BYTES + 1)
+            pages = validate_pdf(data)
+            if read_content:
+                reader = pypdf.PdfReader(io.BytesIO(data), strict=True)
+                parts = []
+                size = 0
+                for number, page in enumerate(reader.pages, 1):
+                    text = page.extract_text() or ''
+                    size += len(text.encode('utf-8'))
+                    if size > MAX_READ_CONTENT:
+                        raise ValueError('content budget exceeded')
+                    parts.append({'name': f'page-{number}', 'text': text})
+                if len(parts) != pages:
+                    raise ValueError('page coverage incomplete')
+                result = json.dumps({'format': 'pdf_text_layer', 'parts': parts}, ensure_ascii=False)
+                if len(result.encode('utf-8')) > MAX_READ_CONTENT:
+                    raise ValueError('content budget exceeded')
         except Exception:
             # Never put received document content in host or CI logs.
             return 1
-        sys.stdout.write('PDF_OK_V1\n')
+        sys.stdout.write(result if read_content else 'PDF_OK_V1\n')
         return 0
     finally:
         if guard is not None:

@@ -82,6 +82,41 @@ class ContextSourceTests(unittest.TestCase):
 
 
 class PreparedDeliveryTests(unittest.TestCase):
+    def test_caller_read_claim_cannot_replace_host_final_content_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            context, target = self.fixture(Path(tmp).resolve())
+            context['content_reads'] = []
+            with patch('team_file_render.subprocess.run', return_value=subprocess.CompletedProcess(
+                    [], 0, json.dumps(context).encode(), b'')), self.assertRaises(ValueError):
+                renderer.prepare_delivery('render-1/render.json', 'revision.docx',
+                                          ['page-1.png'], ['revision.docx', 'revision.pdf'])
+            self.assertEqual(list(target.glob('delivery-request-*')), [])
+
+    def test_final_read_cli_supplies_actual_host_content_without_sending(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            context, target = self.fixture(Path(tmp).resolve())
+            calls = []
+            expected = {'status': 'content_read', 'work_id': 'this-work',
+                        'path': 'render-1/revision.docx', 'sha256': hashlib.sha256(b'updated fields').hexdigest(),
+                        'content_sha256': 'c' * 64,
+                        'content': {'format': 'ooxml_content_parts', 'parts': [{'name': 'word/document.xml', 'text': 'Actual final content'}]}}
+            def host(args, **kwargs):
+                calls.append(args[-1])
+                if args[-1] == 'work-context':
+                    result = context
+                else:
+                    self.assertEqual(args[-1], 'file-read')
+                    self.assertEqual(json.loads(kwargs['input']), {k: expected[k] for k in ('work_id', 'path', 'sha256')})
+                    result = expected
+                return subprocess.CompletedProcess(args, 0, json.dumps(result).encode(), b'')
+            out = io.StringIO()
+            with patch('sys.argv', ['render', '--read-final', 'render-1/render.json', '--artifact', 'revision.docx']), \
+                    patch('team_file_render.subprocess.run', side_effect=host), redirect_stdout(out):
+                renderer.main()
+            self.assertEqual(json.loads(out.getvalue()), expected)
+            self.assertEqual(calls, ['work-context', 'file-read'])
+            self.assertEqual(list(target.glob('delivery-request-*')), [])
+
     def fixture(self, root):
         (root / 'inputs').mkdir()
         output = root / 'outputs'
@@ -98,7 +133,9 @@ class PreparedDeliveryTests(unittest.TestCase):
                     'files': {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in target.iterdir()}}
         (target / 'render.json').write_text(json.dumps(manifest), encoding='utf-8')
         context = {'enabled': True, 'work_id': 'this-work', 'output_dir': str(output),
-                   'latest_version': 3, 'inputs': [], 'artifacts': []}
+                   'latest_version': 3, 'inputs': [], 'artifacts': [],
+                   'content_reads': [{'path': 'render-1/' + name, 'sha256': manifest['files'][name],
+                                      'content_sha256': 'd' * 64} for name in ('revision.docx', 'revision.pdf')]}
         return context, target
 
     def test_revision_cannot_reuse_old_render_or_incomplete_inspection(self):

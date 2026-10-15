@@ -537,8 +537,26 @@ def checked_manifest(context, reference):
     return path, result, pages, hashlib.sha256(data).hexdigest()
 
 
-def prepare_delivery(reference, artifact, inspected_pages, read_contents):
-    """Bind user-reported inspection to saved bytes; never perform a send."""
+def read_final(reference, artifact):
+    """Return actual final content through the existing authenticated file host."""
+    context = work_context()
+    path, result, _, _ = checked_manifest(context, reference)
+    if artifact not in result['files'] or Path(artifact).suffix.lower() not in ('.docx', '.xlsx', '.pptx', '.pdf'):
+        raise ValueError('artifact not in final render')
+    relative = (path.parent / artifact).relative_to(Path(context['output_dir']).resolve()).as_posix()
+    request = {'work_id': context['work_id'], 'path': relative, 'sha256': result['files'][artifact]}
+    reply = subprocess.run(['/usr/local/bin/cc-connect-file', 'file-read'],
+                           input=json.dumps(request).encode(), capture_output=True, timeout=35, check=True)
+    read = json.loads(reply.stdout)
+    if (read.get('status') != 'content_read' or any(read.get(k) != v for k, v in request.items())
+            or not isinstance(read.get('content'), dict) or not read['content'].get('parts')
+            or not re.fullmatch(r'[0-9a-f]{64}', read.get('content_sha256', ''))):
+        raise ValueError('final content read evidence missing')
+    return read
+
+
+def prepare_delivery(reference, artifact, inspected_pages, read_contents=()):
+    """Require host-read final bytes and caller page inspection; never send."""
     context = work_context()
     for item in context['artifacts']:
         if item['status'] in ('unknown', 'submitted'):
@@ -550,8 +568,15 @@ def prepare_delivery(reference, artifact, inspected_pages, read_contents):
     path, result, pages, _ = checked_manifest(context, reference)
     files = {name for name in result['files'] if Path(name).suffix.lower() in ('.docx', '.xlsx', '.pptx', '.pdf')}
     if (set(inspected_pages) != set(pages) or len(inspected_pages) != len(pages)
-            or set(read_contents) != files or len(read_contents) != len(files)):
+            or (read_contents and (set(read_contents) != files or len(read_contents) != len(files)))):
         raise ValueError('final saved content and page inspection incomplete')
+    reads = context.get('content_reads', [])
+    for name in files:
+        relative = (path.parent / name).relative_to(Path(context['output_dir']).resolve()).as_posix()
+        matches = [r for r in reads if r.get('path') == relative and r.get('sha256') == result['files'][name]
+                   and isinstance(r.get('content_sha256'), str) and re.fullmatch(r'[0-9a-f]{64}', r['content_sha256'])]
+        if len(matches) != 1:
+            raise ValueError('final content read evidence missing')
     if artifact not in files:
         raise ValueError('artifact not in final render')
     relative = (path.parent / artifact).relative_to(Path(context['output_dir']).resolve()).as_posix()
@@ -569,7 +594,7 @@ def prepare_delivery(reference, artifact, inspected_pages, read_contents):
         json.dump(request, stream, ensure_ascii=False)
     return {'status': 'prepared_not_sent', 'request_file': str(request_path),
             'artifact': relative, 'sha256': request['sha256'],
-            'inspection_scope': 'Caller-reported saved-content and page inspection; hashes and coverage checked, not visual correctness.'}
+            'inspection_scope': 'Host supplied actual saved content for every final Office/PDF hash; page inspection remains caller-reported. Neither proves visual correctness or comprehension.'}
 
 
 def source_ledger(reference, quotes_file):
@@ -905,12 +930,13 @@ def main():
     source.add_argument('--input-id')
     source.add_argument('--output-file', help='relative saved source under current work output_dir')
     source.add_argument('--prepare-delivery', help='relative render.json under current work output_dir')
+    source.add_argument('--read-final', help='read actual final artifact through the host; relative render.json')
     source.add_argument('--source-ledger', help='relative selected-PDF render.json')
     parser.add_argument('--quotes-file', help='relative saved page rows under output_dir')
     parser.add_argument('--text-cell', action='append', default=[])
     parser.add_argument('--artifact')
     parser.add_argument('--inspected-page', action='append', default=[])
-    parser.add_argument('--read-content', action='append', default=[])
+    parser.add_argument('--read-content', action='append', default=[], help='legacy filename list; never substitutes for host content-read evidence')
     parser.add_argument('--output-dir')
     parser.add_argument('--gateway', default='/usr/local/bin/cc-connect-anc', help='matching candidate binary; local validation only')
     args = parser.parse_args()
@@ -923,6 +949,11 @@ def main():
             return
         if args.quotes_file:
             parser.error('--quotes-file requires --source-ledger')
+        if args.read_final is not None:
+            if args.work_root or args.output_dir or not args.artifact or args.text_cell or args.inspected_page or args.read_content:
+                parser.error('final read requires only --artifact and current context')
+            print(json.dumps(read_final(args.read_final, args.artifact), ensure_ascii=False))
+            return
         if args.prepare_delivery is not None:
             if args.work_root or args.output_dir or not args.artifact or args.text_cell:
                 parser.error('delivery preparation requires --artifact and current context only')
@@ -962,6 +993,7 @@ def main():
                 'source changed after rendering': 'source_changed_render_new_revision',
                 'rendered file changed': 'output_changed_render_new_revision',
                 'final saved content and page inspection incomplete': 'final_inspection_incomplete',
+                'final content read evidence missing': 'final_content_read_required',
                 'selected input changed': 'selected_input_changed',
                 'selected input not found': 'selected_input_not_found',
                 'render receipt does not match work': 'render_work_mismatch',

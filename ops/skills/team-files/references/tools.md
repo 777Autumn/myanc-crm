@@ -8,7 +8,8 @@ Keep commands and local paths internal; employees work entirely in Feishu.
 
 | Command | Input | Result |
 |---|---|---|
-| `work-context` | `{}` | `enabled`, `work_id`, selected `inputs` (`id/name/path/sha256`), `output_dir`, `latest_version`, `artifacts` |
+| `work-context` | `{}` | `enabled`, `work_id`, selected `inputs` (`id/name/path/sha256`), `output_dir`, `latest_version`, `artifacts`, host `content_reads` |
+| `file-read` | `work_id`, `path`, `sha256` | `content_read`, exact path/hash, `content_sha256`, actual content parts; no send |
 | `file-deliver` | `work_id`, `path`, `sha256`, `expected_version` | `delivery_id`, `version`, `status`, name/path/hash and optional `message_receipt` |
 | `file-status` | `work_id`, `delivery_id` | The persisted delivery state/receipt for that work |
 
@@ -44,7 +45,8 @@ version and sends only that snapshot. A version conflict requires reading curren
 context and identifying the intended artifact before making another request.
 
 For rendered Word/Excel/PDF, use [document production](production.md)'s
-`--prepare-delivery` after actual saved-content and page inspection. It creates
+`--read-final` for each actual saved Office/PDF, then `--prepare-delivery` after
+reviewing that returned content and the final pages. It creates
 this same request from the matching final `render.json` and fresh work context;
 feed the returned request file unchanged to this client. It adds no transport,
 recipient, permission or host-validation exception. An uncertain existing
@@ -77,6 +79,10 @@ a specific `code`, such as `file_format_unsupported`, `file_work_scope_mismatch`
 `file_version_conflict`. This attempt did not send a file. Preserve the output
 and resolve the reported cause; scope/version conflicts require fresh context
 and identification of the intended work/artifact.
+`file_content_read_required` requires the actual final Office/PDF content read;
+the protected host record must match its current work/path/hash. Source-file
+reads, local JSON receipts or declarations cannot replace it. Retain failures;
+oversized content is blocked without a partial success receipt.
 The local `file_access_not_prepared` rejection adds `stage: local_preflight`,
 `request_state: not_sent` and a safe `reason`: `output_changed` means the selected
 bytes or their hash changed; `invalid_output` means a missing/invalid path or file;
