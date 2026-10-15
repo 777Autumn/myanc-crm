@@ -52,6 +52,15 @@ Office and preview workers share memory/CPU/file-size limits. Completed output
 files use `0640` inside a `2750` directory, inheriting the existing outputs
 handoff group; scratch and profiles stay private even with service umask `0077`.
 
+Ordinary employee work uses `--input-id` or `--output-file` to resolve the source
+from the authenticated `work-context`; explicit paths remain the offline entrance.
+Selected-PDF ledgers copy source IDs and bind page rows to the render's images.
+`--prepare-delivery` checks final source/output hashes and caller-reported inspection
+coverage, then writes a request for the existing client; it never sends files.
+These checks do not establish visual correctness or the truth of quoted facts.
+Unknown/submitted or matching prior deliveries return a fresh status read instead
+of a new request. Host permissions, format validation and delivery states are unchanged.
+
 Offline actual rendering is enabled by `TEAM_FILES_TEST_GATEWAY=<paired binary>`:
 the ordinary renderer tests apply the existing Linux `libseccomp.so.2` filter
 to deny `socket(AF_UNIX)` before rendering, matching the managed Claude sandbox.

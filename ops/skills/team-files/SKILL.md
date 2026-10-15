@@ -53,7 +53,11 @@ description: 读取员工选定的文档、表格、PDF和图片，制作或修�
    If a helper file is needed, keep it in the current
    allowed workspace, separate from delivered artifacts.
 4. Complete the saved-output readback and final-page inspection in
-   [document production](references/production.md) before delivery. For byte hashes,
+   [document production](references/production.md) before delivery. For rendered
+   Word/Excel/PDF, use its context-bound render and delivery preparation commands:
+   they copy the selected IDs, final paths, hashes and current version. A revision
+   requires a fresh matching render, readback and page inspection before preparation.
+   For other supported artifacts' byte hashes,
    use `sha256sum -- '<absolute artifact path>'` on Linux. On macOS, run the
    Python snippet below with the installed `/opt/team-files/bin/python -I -X utf8`,
    passing this work's artifact paths as arguments; shell-quote each path.

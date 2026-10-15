@@ -43,6 +43,13 @@ checks scope, ownership, file format, size and hash, freezes bytes, claims a new
 version and sends only that snapshot. A version conflict requires reading current
 context and identifying the intended artifact before making another request.
 
+For rendered Word/Excel/PDF, use [document production](production.md)'s
+`--prepare-delivery` after actual saved-content and page inspection. It creates
+this same request from the matching final `render.json` and fresh work context;
+feed the returned request file unchanged to this client. It adds no transport,
+recipient, permission or host-validation exception. An uncertain existing
+delivery yields a status read, not a new send request.
+
 For a revision, read the chosen artifact's relative `path` under `output_dir` and
 verify its `sha256` before editing. Missing or changed bytes require locating the
 matching file or requesting it again; memory does not establish the prior version.
