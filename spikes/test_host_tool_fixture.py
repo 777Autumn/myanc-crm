@@ -10,13 +10,37 @@ import unittest
 from contextlib import closing
 from unittest import mock
 
-from host_tool_fixture import PersistentFakeFeishu
-from myanc_crm import core
+from host_tool_fixture import PersistentFakeFeishu, PersistentSalesStore
+from myanc_crm import banquet, core
 from test_core import NOW
 from test_host_tools import CONFIG, PRINCIPAL, SECRET, TOKEN
 
 
 class OwnerFixtureTests(unittest.TestCase):
+    def test_banquet_read_accepts_production_get_contract_and_returns_copies(self):
+        with tempfile.TemporaryDirectory() as path, mock.patch.dict(
+                os.environ, {"MYANC_SPIKE_SEED": "customer-trial"}):
+            backend = PersistentFakeFeishu(Path(path))
+            store = PersistentSalesStore(backend)
+            identifier = store.write("banquets", None, {
+                "name": "Fictional banquet", "estimated_tables": 20,
+                "owner": [{"id": "ou_member", "name": "Fixture owner"}],
+            })
+            with mock.patch.object(banquet, "Store", side_effect=PersistentSalesStore):
+                result = banquet.read("banquet", {"banquet_id": identifier},
+                                      backend, CONFIG, PRINCIPAL)
+            self.assertEqual("found", result["status"])
+            self.assertEqual(20, result["banquet"]["estimated_tables"])
+            self.assertEqual([], result["history"])
+            copied = store.get("banquets", identifier, recheck=False)
+            copied["estimated_tables"] = 99
+            copied["owner"][0]["name"] = "Caller edit"
+            for options in ({}, {"recheck": True}, {"recheck": False}):
+                with self.subTest(options=options):
+                    fresh = store.get("banquets", identifier, **options)
+                    self.assertEqual(20, fresh["estimated_tables"])
+                    self.assertEqual("Fixture owner", fresh["owner"][0]["name"])
+
     def test_daily_history_without_change_ids_allows_approved_backfill(self):
         with tempfile.TemporaryDirectory() as path, mock.patch.dict(
                 os.environ, {"MYANC_SPIKE_SEED": "daily-followup"}):

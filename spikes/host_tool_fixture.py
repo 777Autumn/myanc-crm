@@ -133,7 +133,7 @@ class PersistentSalesStore:
     def read_schema(self, kinds=None):
         return {'banquets': 'synthetic-fixed-schema'}
 
-    def get(self, kind, identifier):
+    def get(self, kind, identifier, *, recheck=True):
         return copy.deepcopy(self.backend.banquet_rows.get(kind, {}).get(identifier))
 
     def list(self, kind):
