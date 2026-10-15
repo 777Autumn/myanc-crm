@@ -12,7 +12,15 @@ misordered, missing or otherwise unreadable text, render the selected original
 PDF with the installed tool below and visually read the affected page images
 before answering, including read-only requests. If affected pages cannot be
 identified, inspect every page. Use `render.json` to reconcile page coverage;
-rendering alone does not complete reading. Inspection previews stay inside this
+rendering alone does not complete reading. For an original PDF, the same render
+command also supplies `source_details` in `render.json`: each page's hash, size
+and three overlapping pixel regions with filenames, hashes and `[left, top,
+right, bottom]` coordinates. Read the whole-page preview and all three detail
+images for every affected page before transcribing its dates, amounts or payment
+conditions, even when the first view seems clear. They cover the page edges too;
+do not inspect only a guessed date location. Detail images are preparation, not
+verified facts. If a required view is missing or unreadable, preserve that gap
+and do not claim the page's date or condition is absent. Inspection previews stay inside this
 work and need no new business delivery or approval. If the supported render/read
 actually fails or permission is denied, preserve the evidence and stop under the
 existing rules; report the affected pages and remaining uncertainty. State which
@@ -29,7 +37,10 @@ quoted words separate from the interpretation; a blank field is not evidence of
 absence. Do not fill dates from the filename, an earlier summary or another page.
 
 In a separate tool call, reopen the saved ledger and compare its rows with the
-actual source page images before answering. Check the date and each qualifier
+actual source page overview and detail images before answering. Keep the relevant
+detail filename with each quoted date or payment condition so the comparison
+can return to the same pixels; rereading your own note alone is not source verification.
+Check the date and each qualifier
 against their quoted words, including the page header/footer. Correct a mismatch
 in the saved file and reopen it again; a correct draft in memory is insufficient.
 If a date or condition is hard to read, inspect a closer view of that original
@@ -155,6 +166,10 @@ original. XLSX produces a recalculated editable copy and a PDF with page preview
 the input workbook stays unchanged. PDF input is retained unchanged. Every PDF page receives a PNG preview;
 `render.json` records hashes and page count. It deliberately says
 `rendered_not_visually_verified`: this is preparation, not acceptance.
+Original PDF inputs also receive `detail-*.png` views and `source_details`;
+Office inputs do not add this source-inspection work to their exports. Detail
+views are not extra PDF pages: reconcile `page-*.png` against `pages` as before,
+then reconcile the required source detail views separately by their hashes.
 The CLI returns a compact receipt with artifact paths, page count, formula-check
 summary and the `manifest` path. Read that `render.json` for complete page names,
 hashes and formula coordinates; bounded sections avoid truncated inspection.

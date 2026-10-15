@@ -388,6 +388,41 @@ def prepare_paths(work_root, source, destination):
     return source, target, outputs
 
 
+def source_page_details(preview):
+    """Retain hash-bound, overlapping pixel views of a prepared source page.
+
+    The caller supplies a page in its new private render directory. These are
+    inspection aids, never OCR, a transcription, or proof of visual correctness.
+    """
+    from PIL import Image
+    preview = Path(preview)
+    match = re.fullmatch(r'page-(\d+)\.png', preview.name)
+    if not match or not 1 <= int(match[1]) <= 200 or preview.is_symlink():
+        raise ValueError('invalid source page preview')
+    with preview.open('rb') as stream:
+        data = stream.read((16 << 20) + 1)
+    if not 0 < len(data) <= 16 << 20:
+        raise ValueError('source page preview size exceeded')
+    with Image.open(io.BytesIO(data)) as image:
+        width, height = image.size
+        if image.format != 'PNG' or not (0 < width <= 1800 and 0 < height <= 1800):
+            raise ValueError('unsupported source page preview')
+        result = {'page': int(match[1]), 'page_file': preview.name,
+                  'page_sha256': hashlib.sha256(data).hexdigest(),
+                  'size': [width, height], 'regions': []}
+        # Fixed overlap includes the edges and prevents a line at a split from
+        # being available only as two fragments. Preserve pixels, do not redraw.
+        for number, (start, end) in enumerate(((0, 4), (3, 7), (6, 10)), 1):
+            box = [0, height * start // 10, width, (height * end + 9) // 10]
+            name = f'detail-{match[1]}-{number}.png'
+            path = preview.with_name(name)
+            with image.crop(tuple(box)) as detail, path.open('xb') as stream:
+                detail.save(stream, format='PNG')
+            result['regions'].append({'file': name, 'box': box,
+                                      'sha256': hashlib.sha256(path.read_bytes()).hexdigest()})
+        return result
+
+
 def render(work_root, source, destination, gateway):
     if os.name != 'posix' or os.geteuid() == 0:
         raise ValueError('render as the ordinary employee runtime account')
@@ -440,9 +475,12 @@ def render(work_root, source, destination, gateway):
     previews = sorted(target.glob('page-*.png'))
     if len(previews) != page_count:
         raise RuntimeError('not every PDF page has a preview')
+    source_details = [source_page_details(page) for page in previews] if not office else None
     result = {'status': 'rendered_not_visually_verified', 'source_sha256': hashlib.sha256(data).hexdigest(),
               'pages': page_count, 'files': {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
                                            for p in sorted(target.iterdir()) if p.is_file()}}
+    if source_details is not None:
+        result['source_details'] = sorted(source_details, key=lambda page: page['page'])
     if spreadsheet:
         result['xlsx'] = xlsx_result
     (target / 'render.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
@@ -647,6 +685,8 @@ def main():
         receipt['xlsx'] = {key: value for key, value in result['xlsx'].items()
                            if key in ('formula_count', 'formula_caches_checked',
                                       'equals_text_requires_task_review')}
+    if 'source_details' in result:
+        receipt['source_detail_views'] = sum(len(page['regions']) for page in result['source_details'])
     print(json.dumps(receipt, ensure_ascii=False))
 
 
