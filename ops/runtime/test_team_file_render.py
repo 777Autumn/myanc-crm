@@ -623,6 +623,8 @@ class ActualRenderTests(unittest.TestCase):
             self.assertEqual(source.read_bytes(), original)
             self.assertEqual(result['xlsx']['formula_count'], 7)
             self.assertTrue(result['xlsx']['formula_caches_checked'])
+            self.assertNotIn('source_details', result)
+            self.assertFalse(list(saved.parent.glob('detail-*.png')))
             self.assertEqual(len(result['xlsx']['equals_text_cells']), 2)
             self.assertTrue(result['xlsx']['equals_text_requires_task_review'])
             self.assertEqual(result['status'], 'rendered_not_visually_verified')
