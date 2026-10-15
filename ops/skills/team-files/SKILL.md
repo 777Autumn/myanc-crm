@@ -54,7 +54,7 @@ description: 读取员工选定的文档、表格、PDF和图片，制作或修�
    allowed workspace, separate from delivered artifacts.
 4. Complete the saved-output readback and final-page inspection in
    [document production](references/production.md) before delivery. For rendered
-   Word/Excel/PDF, use its context-bound render and delivery preparation commands:
+   Word/Excel/PDF, use its context-bound render, final-content read and delivery preparation commands:
    they copy the selected IDs, final paths, hashes and current version. A revision
    requires a fresh matching render, readback and page inspection before preparation.
    For other supported artifacts' byte hashes,

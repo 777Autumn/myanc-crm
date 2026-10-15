@@ -154,7 +154,7 @@ class ConnectionTests(unittest.TestCase):
     def test_server_revocation_with_unexpired_local_token_invalidates_each_entry(self):
         # Native CLI 1.0.90: auth status exits zero with verified bot while user
         # verification fails; explicit user_info returns api/unknown code 20005.
-        for entry in ("status", "maintain", "read", "work-context", "file-deliver"):
+        for entry in ("status", "maintain", "read", "work-context", "file-read", "file-deliver"):
             with self.subTest(entry=entry):
                 self.fake.verify_failure, self.fake.api_error = False, None
                 self.connections.command("disconnect", self.principal)

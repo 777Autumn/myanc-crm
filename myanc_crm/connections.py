@@ -467,7 +467,7 @@ class Connections:
 
     def guard(self, command, principal, token, work_id, knowledge_subject=""):
         audience = self.route(principal)
-        private_commands = {*READ_COMMANDS, "work-resume", "work-context", "file-deliver", "file-status",
+        private_commands = {*READ_COMMANDS, "work-resume", "work-context", "file-read", "file-deliver", "file-status",
                             "knowledge_catalog", "knowledge_search", "knowledge_read"}
         # Lifecycle dependence applies to every personal read, even shared data.
         if command in READ_COMMANDS | HANDOFF_STAGES | BANQUET_STAGES and audience == "private":

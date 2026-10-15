@@ -55,9 +55,12 @@ handoff group; scratch and profiles stay private even with service umask `0077`.
 Ordinary employee work uses `--input-id` or `--output-file` to resolve the source
 from the authenticated `work-context`; explicit paths remain the offline entrance.
 Selected-PDF ledgers copy source IDs and bind page rows to the render's images.
-`--prepare-delivery` checks final source/output hashes and caller-reported inspection
-coverage, then writes a request for the existing client; it never sends files.
-These checks do not establish visual correctness or the truth of quoted facts.
+`--read-final` supplies actual final Office/PDF content through the authenticated
+host. `--prepare-delivery` requires host-recorded final-path/hash reads and
+caller-reported page inspection, then writes a request; it never sends files.
+The file host independently rejects Office/PDF delivery without that read record.
+Content records prove supplied content, not comprehension, visual correctness or
+the truth of quoted facts. A changed path/hash requires a new read.
 Unknown/submitted or matching prior deliveries return a fresh status read instead
 of a new request. Host permissions, format validation and delivery states are unchanged.
 
