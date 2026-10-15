@@ -1,0 +1,281 @@
+{
+  "schema": 1,
+  "scope": "Six fictional file-generation cases in two authorized private chats; no raw chats, identities or source materials in this index.",
+  "overall_result": "incomplete_one_pre_delivery_process_failure",
+  "implementation": {
+    "crm_merge": "b68921e002cadf205bb27bf17bc81a325c999e11",
+    "gateway_unchanged": "d4d2aa6ef2327bb343a82f139a00765a803c2134",
+    "knowledge_unchanged": "ada437cac33d156634b70b20948dc7abc09bec7e",
+    "pr": 169,
+    "pr_ci_run": 38780073632,
+    "exact_merge_push_ci_run": 38780511293,
+    "candidate_sha256": "de27c387f50fdbb84fdb6d61b30c3bdd91b80ed80863b8e83932959d9c1ee90a",
+    "native_recovery_tests": 12,
+    "crm_tests_run": 633,
+    "crm_tests_skipped": 18
+  },
+  "cases": [
+    {
+      "case": "A",
+      "sample": "original_failure_material",
+      "final_content_and_layout": "pass",
+      "pre_delivery_process": "pass",
+      "combined_result": "pass",
+      "pdf_pages": 2,
+      "artifacts": [
+        {
+          "extension": ".docx",
+          "sha256": "f927d2447444da84f519d894326c35369e798ebfa22e7e5b40b3aa7e625423da",
+          "accepted_version": 1,
+          "status": "accepted"
+        },
+        {
+          "extension": ".pdf",
+          "sha256": "0f21104c930e89e7c519ddc6d986ece961e11099a32321a372e886376f81a39a",
+          "accepted_version": 2,
+          "status": "accepted"
+        }
+      ]
+    },
+    {
+      "case": "B",
+      "sample": "original_failure_material",
+      "final_content_and_layout": "pass",
+      "pre_delivery_process": "fail",
+      "combined_result": "fail",
+      "pdf_pages": 2,
+      "artifacts": [
+        {
+          "extension": ".docx",
+          "sha256": "f8ba7e1276efab3985bb4dcd7e678aa6a4fbedfa5bf580373812022110cc9f2e",
+          "accepted_version": 1,
+          "status": "accepted"
+        },
+        {
+          "extension": ".pdf",
+          "sha256": "43e23e5dc4b42c631aa9ab80425a6fd2e4dc3526ecb85c4e5e06cc3fb89795e7",
+          "accepted_version": 2,
+          "status": "accepted"
+        }
+      ]
+    },
+    {
+      "case": "C",
+      "sample": "original_failure_material",
+      "final_content_and_layout": "pass",
+      "pre_delivery_process": "pass",
+      "combined_result": "pass",
+      "pdf_pages": 2,
+      "artifacts": [
+        {
+          "extension": ".docx",
+          "sha256": "cc26e1513f42ccaba5273f0726310002d7c52531f095abc6fa51ae143ae35ebc",
+          "accepted_version": 1,
+          "status": "accepted"
+        },
+        {
+          "extension": ".pdf",
+          "sha256": "20ebbdad7dbdf65fdc58af03b4c83e4a09a65831b693ea678712b76fb5cbf3dd",
+          "accepted_version": 2,
+          "status": "accepted"
+        }
+      ]
+    },
+    {
+      "case": "D",
+      "sample": "original_failure_material",
+      "final_content_and_layout": "pass",
+      "pre_delivery_process": "pass",
+      "combined_result": "pass",
+      "pdf_pages": 8,
+      "artifacts": [
+        {
+          "extension": ".xlsx",
+          "sha256": "3413e9ac4b37ac1cac7c28ba26358b493f89cf0843cc59989cd706b19a350070",
+          "accepted_version": 1,
+          "status": "accepted"
+        },
+        {
+          "extension": ".pdf",
+          "sha256": "5a9fc05f6505528a9856e337678c46770a35ac61f52635c3de9efa5ac4cbe5e9",
+          "accepted_version": 2,
+          "status": "accepted"
+        }
+      ]
+    },
+    {
+      "case": "E",
+      "sample": "holdout",
+      "final_content_and_layout": "pass",
+      "pre_delivery_process": "pass",
+      "combined_result": "pass",
+      "pdf_pages": 2,
+      "artifacts": [
+        {
+          "extension": ".docx",
+          "sha256": "2df3a96b02190dab15dc0633d79ab92afd7411dab34f1f79b59444114a3d42bd",
+          "accepted_version": 1,
+          "status": "accepted"
+        },
+        {
+          "extension": ".pdf",
+          "sha256": "337e309571d3a37f6234b911e920af5db20062eef0ee12d998c7b08a14b8a4a4",
+          "accepted_version": 2,
+          "status": "accepted"
+        }
+      ]
+    },
+    {
+      "case": "F",
+      "sample": "holdout",
+      "final_content_and_layout": "pass",
+      "pre_delivery_process": "pass",
+      "combined_result": "pass",
+      "pdf_pages": 2,
+      "artifacts": [
+        {
+          "extension": ".xlsx",
+          "sha256": "16da7b7ad1f842923e3cb08ce9379e35729f5281d94b7c863df226860bc7f483",
+          "accepted_version": 1,
+          "status": "accepted"
+        },
+        {
+          "extension": ".pdf",
+          "sha256": "dbc994741017829df7d71216cfd1e1c3c419afb0305b8fd56f09532ba14a64c2",
+          "accepted_version": 2,
+          "status": "accepted"
+        }
+      ]
+    }
+  ],
+  "generation_timings": [
+    {
+      "case": "A",
+      "received_to_reply_handler_log_seconds": 159.324,
+      "queue_seconds": null,
+      "queue_note": "no_queue_event_not_a_measured_zero",
+      "turn_seconds": 158.203398416,
+      "reply_handler_seconds": 0.521275458,
+      "action_host_call_count": 8,
+      "action_host_total_seconds": 6.050369666,
+      "action_project_lock_seconds": 8.32e-07
+    },
+    {
+      "case": "B",
+      "received_to_reply_handler_log_seconds": 178.103,
+      "queue_seconds": 18.762329,
+      "queue_note": "recorded",
+      "turn_seconds": 157.93597625,
+      "reply_handler_seconds": 0.526234166,
+      "action_host_call_count": 9,
+      "action_host_total_seconds": 5.99407446,
+      "action_project_lock_seconds": 8.34e-07
+    },
+    {
+      "case": "C",
+      "received_to_reply_handler_log_seconds": 248.757,
+      "queue_seconds": 8.236845375,
+      "queue_note": "recorded",
+      "turn_seconds": 239.143205917,
+      "reply_handler_seconds": 0.543122875,
+      "action_host_call_count": 18,
+      "action_host_total_seconds": 9.379059163,
+      "action_project_lock_seconds": 1.749e-06
+    },
+    {
+      "case": "D",
+      "received_to_reply_handler_log_seconds": 1807.392,
+      "queue_seconds": 246.029623875,
+      "queue_note": "recorded",
+      "turn_seconds": 1559.97625375,
+      "reply_handler_seconds": 0.513336458,
+      "action_host_call_count": 18,
+      "action_host_total_seconds": 9.34169321,
+      "action_project_lock_seconds": 1.753e-06
+    },
+    {
+      "case": "E",
+      "received_to_reply_handler_log_seconds": 200.445,
+      "queue_seconds": 27.243314292,
+      "queue_note": "recorded",
+      "turn_seconds": 171.858481833,
+      "reply_handler_seconds": 0.511059333,
+      "action_host_call_count": 9,
+      "action_host_total_seconds": 6.320982668,
+      "action_project_lock_seconds": 7.09e-07
+    },
+    {
+      "case": "F",
+      "received_to_reply_handler_log_seconds": 264.762,
+      "queue_seconds": null,
+      "queue_note": "no_queue_event_not_a_measured_zero",
+      "turn_seconds": 263.617239292,
+      "reply_handler_seconds": 0.522042625,
+      "action_host_call_count": 12,
+      "action_host_total_seconds": 7.186300249,
+      "action_project_lock_seconds": 1.25e-06
+    }
+  ],
+  "timing_limits": [
+    "These are generation requests, not simple-query benchmarks.",
+    "Action-host totals are only instrumented host calls and are nested within turns; they exclude general shell/render operations.",
+    "No pure model/network/SQLite lock/client-delivery decomposition; no P95 or causal speedup claim.",
+    "D had a 961.175 second adjacent-event gap of unknown cause and later completed naturally without intervention."
+  ],
+  "protection": {
+    "business_comparison": "pass",
+    "ledger_counts": {
+      "approvals": 53,
+      "staged_changes": 53,
+      "write_intents": 4,
+      "write_fences": 0,
+      "handoff_events": 12
+    },
+    "installed_controls_unchanged_after_acceptance": true,
+    "runtime_process_unchanged_after_acceptance": true,
+    "dirty_files_preserved": 38,
+    "prior_evidence_files_preserved": 1580
+  },
+  "remaining_priorities": [
+    "B: bind saved-final-file reading evidence to actual final bytes instead of caller coverage claims alone.",
+    "Use scoped edits for revision labels; D recovered an intermediate historical-version replacement.",
+    "Replace demonstrated manual long-ID/path transcription points with returned references.",
+    "Measure unexplained waiting separately; no performance refactor in this batch."
+  ],
+  "evidence_sha256": {
+    "A-content-independent-review-spec-01.json": "14ad1ee28ffb24a39a344e889d1732e090e3470babc123539210c933acb5411b",
+    "a-standards-process-final-01.json": "74a23489392b80d82900e2ec118ba1f544d78a7b674415b0b69e4766863fd99c",
+    "a-file-inventory-01.json": "86a99b8fcdf8fbbda2d6b74acf2ea9366366ed222fc92ebfb64016fe1abd1c4e",
+    "B-content-independent-review-spec-01.json": "86a2d22bf42b1ce4233344b743e6281f4afbfd98416177171fa4716beb81c326",
+    "b-standards-final-01.json": "7e26eee2c454b606c9aafa1ceed372f325a1cc827db4cfb08891b660abaa91f7",
+    "b-file-inventory-01.json": "d8bc93032202d138af583b75cffe231a2af1830dce81c1a45cf500e9e4dd713c",
+    "C-content-independent-review-spec-01.json": "4d2b77eda0ccf0c7391fe29b978b05598e1bf30eb41776cf7fa6d91e9077d547",
+    "c-standards-process-final-01.json": "bf2f249e170e8f87a3aab0273961990596112a2fbbc13029dfa26e894e47d50c",
+    "c-file-inventory-01.json": "9a0ffb2d8a3a2bd636df84c884586eb03516294c4e62ce6bd04a180cf833d5d4",
+    "D-content-independent-review-spec-01.json": "cdd4312fc33ee0bad790809d030f39c3860765866752f6224c73059083d57afd",
+    "d-standards-final-01.json": "48b4c238f2907200fe7af16228f7e3fc673240eeef4bb42a229646c7ca86ef1f",
+    "d-file-inventory-01.json": "6ce2ac78a456e7c314086fccb67b2c9521a33132e25b10e352dda4f62e454590",
+    "E-content-independent-review-spec-01.json": "e03c6928e624ee8d60a36f27978b7d5c69a42baf5a071bca5f8fc5fa8766be5c",
+    "e-standards-final-01.json": "f57ff6551e621967574b95ecf0b1ebf1818ed6a3542aaf3ddb73b75e2f761200",
+    "e-file-inventory-01.json": "00c03e762cb72e19ee6df47ae548da637bcc8c7918ba7a28afb1114c69187c48",
+    "F-content-independent-review-spec-01.json": "bfa8895b4696a7683b955c2abc28f39b454a7b5ac2734c09f9197a02185bd225",
+    "f-standards-final-01.json": "65985462b1b69d281eaefff1673b514b0e5820ae9b11426bb5e5991e6c0f3998",
+    "f-file-inventory-01.json": "c71a4a0f4244d00d5eb4ce38da66a77e42cafdadc963a48da8aeb80abcf8a44f",
+    "query-timing-capture-1792094412887322600.json": "90d0fc57368ea8f4ce0f6b09c6536137944529825ff86df8461dbd7cd688076c",
+    "query-timing-capture-1792094804225818700.json": "9fb62852d57414c7ccdaafef1005302bb6e01c8e7ab1974f09c5acb8f9c41b99",
+    "business-final-comparison-01.json": "2dc26c96ea038dc5b113c231461f70d4c1396696f8b3d7cfd02b55a03b62c3c4",
+    "runtime-current-1792094737867301600.json": "1a8d5fec051de0cba56aca22d93298931e0eba481ec6289e91b9bf8196998d96",
+    "preservation-1792094459876020400.json": "049cf009abb82c5d4acf7922583832a2c7ac558b17659a2bd25a5cadc2c8d24b",
+    "spec-review-02.json": "fbda9d7eff7ab2d3908f60520586ca90eb7baeb41ec9ad8d6bf653f8413eebd0",
+    "standards-review-02.json": "7e15150e5dd200f8f90be54c7d585f08024af34b1ebccc707759b24593e9d3b6",
+    "github-delivery-01.json": "2b52e3574142940bad09476edaaa22d8f893dd2e3cd4ad08380bf8cda9a7894f",
+    "github-exact-merge-ci-01.json": "22644798bc0b79b6d101b952f4001530dcd0754b772c0bdc7ff494340db76237",
+    "candidate01-build-1792086698626471700.json": "1ef7f16938066796bc8366eb4e0ca783edbababe0a2a4bf6628aa69ace070282",
+    "original-failure-oracle-01.json": "230cd4f8e30c27d19de59f8be8df20364e11cf0ff22769a036d9003916feb5dc",
+    "native-fixture-1792086132057397100.json": "e25f11a9f8a578d81f32eafac4de283a66a52eb533556c54e7e8143919852f0e",
+    "maintenance/mac-phase1-prepare-1792088258141534000.json": "d272d85cbfaacdb8b748c8e7f1881eaa0b99e901f71d021154b660ad88771d9e",
+    "maintenance/mac-phase1-install-1792088310082561800.json": "b896d6563b2299ad89e676ff91d55a1588361f5954ef781ee8c52fd68f8efc24",
+    "maintenance/mac-phase1-start-1792088417895585700.json": "261fd38320c815f20c884b17e81a1632a6309323a31483ea3662daf63cf7a7e7",
+    "d-natural-completion-observation-01.json": "b9d7ef2839386945e0acf6fb72737440d331ffc6bd0acac6660654123ce1c5d3"
+  }
+}
