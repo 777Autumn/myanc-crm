@@ -18,7 +18,7 @@ CRM PR head `d1b12f3d32ab54a37392984ccf9489b3840ba051`、Gateway PR head
 合并后树与受审树一致。候选由正式入口构建：630 项 CRM 测试（18 skip）、18 项
 spikes、6 项配对 CUJ 通过；完整 Linux / Mac CI 按上述 exact SHA 核对。
 本地 Windows 全套测试的基线失败、临时文件及 Pi 时间戳碰撞证据均保留，不记为全绿。
-24 个隔离行为诊断中 22 pass、2 schema failure 也保留，不以重跑覆盖首轮。
+24 个隔离行为诊断中 22 pass、2 个结构化字段断言失败也保留，不以重跑覆盖首轮。
 
 候选 SHA-256：`603775cc12a186f0c04e79e949cffbb04ec294bf877f6622b85753e741662452`；
 候选 manifest SHA-256：`e80b6c51a61d4944bf51a871f4926ef3ad8f46cdb8f1c88712221e1940e5c057`。
@@ -149,7 +149,8 @@ Docling 效果验证；上述失败不能直接证明引入新解析器能解决
 `runtime-after-1792046658666197600.json`。原失败核验
 `runtime-after-1792045382311913900.json` 原样保留。
 
-最终独立验收记录为 `acceptance-final-independent-review.json`；验收执行和证据
+最终独立验收记录为 `acceptance-final-independent-review.json`，旧回读状态字段
+的更正附录为 `acceptance-final-independent-review-correction-01.json`；验收执行和证据
 审查完成，产品结果仍为失败。原工作区 38 个已修改/未跟踪文件、13,263 个旧证据
 及前批 314 个证据重新核验未变。本批完整 hash 索引在 GitHub 交付闭合后追加，
 报告提交本身不包含之后才产生的 CI/合并结果。
