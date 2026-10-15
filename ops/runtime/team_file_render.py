@@ -22,10 +22,21 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
 import zipfile
 import xml.etree.ElementTree as ET
 
 MAX_BYTES = 20 << 20
+
+
+class SourceMissingError(FileNotFoundError):
+    pass
+
+
+class WorkbookCheckError(ValueError):
+    def __init__(self, message, cells):
+        super().__init__(message)
+        self.cells = sorted(cells)
 
 
 def write_office_failure(profile, role, stage, error, *, returncode=None, cleanup_error=None):
@@ -203,8 +214,9 @@ def check_xlsx_result(before, data):
     sheets = {key.rsplit('!', 1)[0] for key in before} & {key.rsplit('!', 1)[0] for key in after}
     if formulas.keys() != saved.keys() or any(not same_xlsx_formula(value, saved[key], sheets) for key, value in formulas.items()):
         raise ValueError('saved workbook formulas changed; inspect the retained source')
-    if any(cell['type'] == 'e' or (cell['is_formula'] and not cell['cached']) for cell in after.values()):
-        raise ValueError('saved workbook contains an error or an uncalculated formula')
+    invalid = [key for key, cell in after.items() if cell['type'] == 'e' or (cell['is_formula'] and not cell['cached'])]
+    if invalid:
+        raise WorkbookCheckError('saved workbook contains an error or an uncalculated formula', invalid)
     # Only task intent distinguishes explanatory text from a formula saved as text.
     # Report the actual type; never silently convert either kind into a formula.
     text_cells = [key for key, cell in after.items() if not cell['is_formula']
@@ -216,6 +228,15 @@ def check_xlsx_result(before, data):
     return {'formula_cells': sorted(formulas), 'formula_count': len(formulas),
             'formula_caches_checked': True, 'equals_text_cells': text_cells,
             'equals_text_requires_task_review': bool(text_cells)}
+
+
+def check_text_cells(cells, declared):
+    if len(declared) > 1024 or any(not isinstance(key, str) or not 1 <= len(key) <= 128 for key in declared):
+        raise ValueError('invalid explanation cell declarations')
+    invalid = [key for key in declared if key not in cells or cells[key]['is_formula']
+               or cells[key]['type'] not in ('s', 'inlineStr', 'str')]
+    if invalid:
+        raise WorkbookCheckError('declared explanation cells must be text', invalid)
 
 
 def accounting_failure(operation, pid, returned, expected, error_number):
@@ -372,7 +393,10 @@ def pdf_check(data):
 
 def prepare_paths(work_root, source, destination):
     root = Path(work_root).resolve(strict=True)
-    source = Path(source).resolve(strict=True)
+    try:
+        source = Path(source).resolve(strict=True)
+    except FileNotFoundError as error:
+        raise SourceMissingError() from error
     outputs = root / 'outputs'
     if not outputs.is_dir() or outputs.is_symlink() or not (root / 'inputs').is_dir():
         raise ValueError('use the current work context directories')
@@ -386,6 +410,213 @@ def prepare_paths(work_root, source, destination):
     if source.suffix.lower() not in ('.docx', '.pptx', '.xlsx', '.pdf') or not source.is_file() or not 0 < source.stat().st_size <= MAX_BYTES:
         raise ValueError('unsupported input format/size')
     return source, target, outputs
+
+
+def work_context():
+    reply = subprocess.run(['/usr/local/bin/cc-connect-file', 'work-context'], input=b'{}',
+                           capture_output=True, timeout=30, check=True)
+    context = json.loads(reply.stdout)
+    if context.get('enabled') is not True:
+        raise ValueError('file work unavailable')
+    output = Path(context['output_dir'])
+    if not output.is_absolute() or output.name != 'outputs':
+        raise ValueError('invalid work output directory')
+    return context
+
+
+def work_path(context, relative):
+    """Resolve only a supplied relative reference in the authenticated work."""
+    if (not isinstance(relative, str) or not relative or '\\' in relative
+            or any(p in ('', '.', '..') for p in relative.split('/'))
+            or ':' in relative or Path(relative).is_absolute()):
+        raise ValueError('invalid relative work path')
+    root = Path(context['output_dir']).parent.resolve(strict=True)
+    path = root / relative
+    for parent in (path, *path.parents):
+        if parent == root:
+            break
+        if parent.is_symlink():
+            raise ValueError('linked work path')
+    try:
+        resolved = path.resolve(strict=True)
+    except FileNotFoundError as error:
+        raise SourceMissingError() from error
+    if not resolved.is_relative_to(root):
+        raise ValueError('file outside work')
+    info = resolved.stat()
+    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or not 0 < info.st_size <= MAX_BYTES:
+        raise ValueError('unsupported work file')
+    return resolved
+
+
+def context_source(input_id, output_file):
+    context = work_context()
+    output = Path(context['output_dir']).resolve(strict=True)
+    binding = {'work_id': context['work_id']}
+    if input_id is not None:
+        items = [v for v in context['inputs'] if v['id'] == input_id]
+        if len(items) != 1:
+            raise ValueError('selected input not found')
+        item = items[0]
+        path = Path(item['path'])
+        if not path.is_absolute() or path.parent != Path(context['output_dir']).parent / 'inputs':
+            raise ValueError('input outside work')
+        relative = 'inputs/' + path.name
+        binding['source_input'] = {key: item[key] for key in ('id', 'name', 'sha256')}
+    else:
+        relative = 'outputs/' + output_file
+    source = work_path(context, relative)
+    digest = hashlib.sha256(work_file_bytes(source)).hexdigest()
+    if input_id is not None and digest != item['sha256']:
+        raise ValueError('selected input changed')
+    binding.update(source_path=relative, source_sha256=digest)
+    target = output / ('render-' + uuid.uuid4().hex)
+    prepare_paths(output.parent, source, target)
+    return output.parent, source, target, binding
+
+
+def work_file_bytes(path):
+    before = path.lstat()
+    parents = {p: (p.stat().st_dev, p.stat().st_ino) for p in path.parents}
+    if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or not 0 < before.st_size <= MAX_BYTES:
+        raise ValueError('unsupported work file')
+    fd = os.open(path, os.O_RDONLY | getattr(os, 'O_BINARY', 0)
+                 | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_NONBLOCK', 0))
+    with os.fdopen(fd, 'rb') as stream:
+        opened = os.fstat(stream.fileno())
+        data = stream.read(MAX_BYTES + 1)
+        after = os.fstat(stream.fileno())
+    current = path.lstat()
+    identity = lambda s: (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns, s.st_nlink)
+    if (identity(before) != identity(opened) or identity(before) != identity(after)
+            or identity(before) != identity(current) or len(data) != before.st_size
+            or before.st_ctime_ns != current.st_ctime_ns or opened.st_ctime_ns != after.st_ctime_ns):
+        raise ValueError('work file changed during read')
+    for parent, expected in parents.items():
+        info = parent.lstat()
+        if not stat.S_ISDIR(info.st_mode) or (info.st_dev, info.st_ino) != expected:
+            raise ValueError('work directory changed during read')
+    return data
+
+
+def checked_manifest(context, reference):
+    path = work_path(context, 'outputs/' + reference)
+    data = work_file_bytes(path)
+    result = json.loads(data)
+    if (not isinstance(result, dict) or path.name != 'render.json' or result.get('work_id') != context['work_id']
+            or result.get('status') != 'rendered_not_visually_verified'
+            or type(result.get('pages')) is not int or not 1 <= result['pages'] <= 200
+            or not isinstance(result.get('files'), dict) or not 1 <= len(result['files']) <= 1000):
+        raise ValueError('render receipt does not match work')
+    source = work_path(context, result['source_path'])
+    if hashlib.sha256(work_file_bytes(source)).hexdigest() != result['source_sha256']:
+        raise ValueError('source changed after rendering')
+    selected = result.get('source_input')
+    if selected is not None:
+        if not isinstance(selected, dict):
+            raise ValueError('invalid source input binding')
+        matches = [item for item in context['inputs']
+                   if all(item.get(k) == selected.get(k) for k in ('id', 'name', 'sha256'))]
+        if (len(matches) != 1 or selected['sha256'] != result['source_sha256']
+                or Path(matches[0]['path']).resolve(strict=True) != source):
+            raise ValueError('selected input changed')
+    pages = []
+    for name, digest in result['files'].items():
+        if not isinstance(name, str) or Path(name).name != name or '/' in name or '\\' in name:
+            raise ValueError('invalid render member')
+        relative = (path.parent / name).relative_to(Path(context['output_dir']).parent.resolve()).as_posix()
+        saved = work_path(context, relative)
+        if hashlib.sha256(work_file_bytes(saved)).hexdigest() != digest:
+            raise ValueError('rendered file changed')
+        if re.fullmatch(r'page-[0-9]+\.png', name):
+            pages.append(name)
+    if sorted(int(name[5:-4]) for name in pages) != list(range(1, result['pages'] + 1)):
+        raise ValueError('render page coverage incomplete')
+    if work_file_bytes(path) != data:
+        raise ValueError('render receipt changed during check')
+    return path, result, pages, hashlib.sha256(data).hexdigest()
+
+
+def prepare_delivery(reference, artifact, inspected_pages, read_contents):
+    """Bind user-reported inspection to saved bytes; never perform a send."""
+    context = work_context()
+    for item in context['artifacts']:
+        if item['status'] in ('unknown', 'submitted'):
+            reply = subprocess.run(['/usr/local/bin/cc-connect-file', 'file-status'],
+                                   input=json.dumps({'work_id': context['work_id'],
+                                                     'delivery_id': item['delivery_id']}).encode(),
+                                   capture_output=True, timeout=30, check=True)
+            return {'status': 'reconcile_delivery', 'delivery': json.loads(reply.stdout)}
+    path, result, pages, _ = checked_manifest(context, reference)
+    files = {name for name in result['files'] if Path(name).suffix.lower() in ('.docx', '.xlsx', '.pptx', '.pdf')}
+    if (set(inspected_pages) != set(pages) or len(inspected_pages) != len(pages)
+            or set(read_contents) != files or len(read_contents) != len(files)):
+        raise ValueError('final saved content and page inspection incomplete')
+    if artifact not in files:
+        raise ValueError('artifact not in final render')
+    relative = (path.parent / artifact).relative_to(Path(context['output_dir']).resolve()).as_posix()
+    for item in context['artifacts']:
+        if item['path'] == relative and item['sha256'] == result['files'][artifact]:
+            reply = subprocess.run(['/usr/local/bin/cc-connect-file', 'file-status'],
+                                   input=json.dumps({'work_id': context['work_id'],
+                                                     'delivery_id': item['delivery_id']}).encode(),
+                                   capture_output=True, timeout=30, check=True)
+            return {'status': 'reconcile_delivery', 'delivery': json.loads(reply.stdout)}
+    request = {'work_id': context['work_id'], 'path': relative,
+               'sha256': result['files'][artifact], 'expected_version': context['latest_version']}
+    request_path = path.with_name('delivery-request-' + uuid.uuid4().hex + '.json')
+    with request_path.open('x', encoding='utf-8') as stream:
+        json.dump(request, stream, ensure_ascii=False)
+    return {'status': 'prepared_not_sent', 'request_file': str(request_path),
+            'artifact': relative, 'sha256': request['sha256'],
+            'inspection_scope': 'Caller-reported saved-content and page inspection; hashes and coverage checked, not visual correctness.'}
+
+
+def source_ledger(reference, quotes_file):
+    context = work_context()
+    path, manifest, _, manifest_digest = checked_manifest(context, reference)
+    source = manifest.get('source_input')
+    if not source or not manifest['source_path'].lower().endswith('.pdf'):
+        raise ValueError('source ledger requires selected PDF render')
+    data = work_file_bytes(work_path(context, 'outputs/' + quotes_file))
+    rows = json.loads(data)
+    if len(data) > 64000 or not isinstance(rows, list) or not 1 <= len(rows) <= 400:
+        raise ValueError('source ledger rows exceeded')
+    details = {v['page']: v for v in manifest['source_details']}
+    if (len(details) != len(manifest['source_details'])
+            or set(details) != set(range(1, manifest['pages'] + 1))):
+        raise ValueError('source detail coverage incomplete')
+    saved = []
+    for row in rows:
+        if (not isinstance(row, dict) or set(row) - {'page', 'quote', 'meaning', 'observation'}
+                or type(row.get('page')) is not int or row['page'] not in details
+                or not isinstance(row.get('quote'), str) or len(row['quote']) > 2000
+                or not isinstance(row.get('meaning'), str) or not 0 < len(row['meaning']) <= 2000):
+            raise ValueError('invalid page-specific source row')
+        observation = row.get('observation', 'quoted')
+        if (observation not in ('quoted', 'not_printed', 'illegible')
+                or (observation == 'quoted' and not row['quote'])
+                or (observation != 'quoted' and row['quote'])):
+            raise ValueError('invalid source observation')
+        page = details[row['page']]
+        files = [page['page_file'], *(v['file'] for v in page['regions'])]
+        if (len(files) != 4 or len(set(files)) != 4 or any(name not in manifest['files'] for name in files)
+                or not re.fullmatch(r'page-0*' + str(row['page']) + r'\.png', page['page_file'])
+                or page['page_sha256'] != manifest['files'][page['page_file']]
+                or any(region['sha256'] != manifest['files'][region['file']]
+                       or not re.fullmatch(r'detail-0*' + str(row['page']) + r'-[123]\.png', region['file'])
+                       for region in page['regions'])):
+            raise ValueError('source detail coverage incomplete')
+        saved.append(dict(row, observation=observation, page_file=page['page_file'],
+                          detail_files=files[1:],
+                          citation=f"{source['name']} | input_id={source['id']} | sha256={source['sha256']} | page={row['page']}"))
+    ledger = path.with_name('source-ledger-' + uuid.uuid4().hex + '.json')
+    value = {'status': 'source_transcription_requires_visual_review', 'source': source,
+             'render_manifest_sha256': manifest_digest, 'rows': saved}
+    with ledger.open('x', encoding='utf-8') as stream:
+        json.dump(value, stream, ensure_ascii=False, indent=2)
+    return {'status': value['status'], 'ledger': str(ledger), 'rows': len(saved),
+            'sha256': hashlib.sha256(ledger.read_bytes()).hexdigest()}
 
 
 def source_page_details(preview):
@@ -423,7 +654,7 @@ def source_page_details(preview):
         return result
 
 
-def render(work_root, source, destination, gateway):
+def render(work_root, source, destination, gateway, *, binding=None, text_cells=()):
     if os.name != 'posix' or os.geteuid() == 0:
         raise ValueError('render as the ordinary employee runtime account')
     source, target, outputs = prepare_paths(work_root, source, destination)
@@ -431,6 +662,8 @@ def render(work_root, source, destination, gateway):
         data = stream.read(MAX_BYTES + 1)
     if not 0 < len(data) <= MAX_BYTES:
         raise ValueError('input size changed')
+    if binding is not None and hashlib.sha256(data).hexdigest() != binding['source_sha256']:
+        raise ValueError('selected input changed')
     office = source.suffix.lower() != '.pdf'
     if office:
         office_check(gateway, source.name, data)
@@ -438,6 +671,10 @@ def render(work_root, source, destination, gateway):
         pdf_check(data)
     spreadsheet = source.suffix.lower() == '.xlsx'
     before = xlsx_cells(data) if spreadsheet else None
+    if text_cells:
+        if not spreadsheet:
+            raise ValueError('text cell declarations require XLSX')
+        check_text_cells(before, text_cells)
     target.mkdir(mode=0o700)
     with tempfile.TemporaryDirectory(prefix='.render-', dir=outputs) as scratch_name:
         scratch = Path(scratch_name)
@@ -464,6 +701,12 @@ def render(work_root, source, destination, gateway):
                 updated_data = updated.read_bytes()
                 office_check(gateway, updated.name, updated_data)
                 xlsx_result = check_xlsx_result(before, updated_data)
+                if text_cells:
+                    after = xlsx_cells(updated_data)
+                    check_text_cells(after, text_cells)
+                    changed = [key for key in text_cells if after[key]['value'] != before[key]['value']]
+                    if changed:
+                        raise WorkbookCheckError('declared explanation cells changed', changed)
         else:
             pdf.write_bytes(data)
         pdf_check(pdf.read_bytes())
@@ -479,9 +722,12 @@ def render(work_root, source, destination, gateway):
     result = {'status': 'rendered_not_visually_verified', 'source_sha256': hashlib.sha256(data).hexdigest(),
               'pages': page_count, 'files': {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
                                            for p in sorted(target.iterdir()) if p.is_file()}}
+    if binding is not None:
+        result.update(binding)
     if source_details is not None:
         result['source_details'] = sorted(source_details, key=lambda page: page['page'])
     if spreadsheet:
+        xlsx_result['declared_text_cells'] = sorted(set(text_cells))
         result['xlsx'] = xlsx_result
     (target / 'render.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     # The setgid outputs directory supplies the existing model/host handoff
@@ -648,13 +894,51 @@ def main():
         preview_worker(*sys.argv[2:])
         return
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--work-root', required=True)
-    parser.add_argument('--input', required=True)
-    parser.add_argument('--output-dir', required=True)
+    parser.add_argument('--work-root')
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument('--input')
+    source.add_argument('--input-id')
+    source.add_argument('--output-file', help='relative saved source under current work output_dir')
+    source.add_argument('--prepare-delivery', help='relative render.json under current work output_dir')
+    source.add_argument('--source-ledger', help='relative selected-PDF render.json')
+    parser.add_argument('--quotes-file', help='relative saved page rows under output_dir')
+    parser.add_argument('--text-cell', action='append', default=[])
+    parser.add_argument('--artifact')
+    parser.add_argument('--inspected-page', action='append', default=[])
+    parser.add_argument('--read-content', action='append', default=[])
+    parser.add_argument('--output-dir')
     parser.add_argument('--gateway', default='/usr/local/bin/cc-connect-anc', help='matching candidate binary; local validation only')
     args = parser.parse_args()
     try:
-        result = render(args.work_root, args.input, args.output_dir, args.gateway)
+        if args.source_ledger is not None:
+            if (args.work_root or args.output_dir or not args.quotes_file or args.artifact
+                    or args.inspected_page or args.read_content or args.text_cell):
+                parser.error('source ledger requires only a manifest and --quotes-file')
+            print(json.dumps(source_ledger(args.source_ledger, args.quotes_file), ensure_ascii=False))
+            return
+        if args.quotes_file:
+            parser.error('--quotes-file requires --source-ledger')
+        if args.prepare_delivery is not None:
+            if args.work_root or args.output_dir or not args.artifact or args.text_cell:
+                parser.error('delivery preparation requires --artifact and current context only')
+            print(json.dumps(prepare_delivery(args.prepare_delivery, args.artifact,
+                                              args.inspected_page, args.read_content), ensure_ascii=False))
+            return
+        if args.artifact or args.inspected_page or args.read_content:
+            parser.error('inspection arguments require --prepare-delivery')
+        if args.input is not None:
+            if not args.work_root or not args.output_dir:
+                parser.error('--input requires --work-root and --output-dir')
+            if args.text_cell:
+                result = render(args.work_root, args.input, args.output_dir, args.gateway, text_cells=args.text_cell)
+            else:
+                result = render(args.work_root, args.input, args.output_dir, args.gateway)
+        else:
+            if args.work_root or args.output_dir:
+                parser.error('context references choose their own work and new render directory')
+            root, selected, target, binding = context_source(args.input_id, args.output_file)
+            args.output_dir = str(target)
+            result = render(root, selected, target, args.gateway, binding=binding, text_cells=args.text_cell)
     except FileExistsError:
         parser.exit(1, 'Output directory already exists; preserve it and choose a new directory name '
                     'inside this work outputs; do not create it beforehand. No delivery was attempted.\n')
@@ -668,6 +952,25 @@ def main():
             'document process accounting unavailable': 'document_accounting_unavailable',
             'document process group exceeded memory budget': 'document_memory_budget',
         }.get(str(error)) if type(error) is RuntimeError else None
+        if type(error) is ValueError:
+            reason = {
+                'source changed after rendering': 'source_changed_render_new_revision',
+                'rendered file changed': 'output_changed_render_new_revision',
+                'final saved content and page inspection incomplete': 'final_inspection_incomplete',
+                'selected input changed': 'selected_input_changed',
+                'selected input not found': 'selected_input_not_found',
+                'render receipt does not match work': 'render_work_mismatch',
+                'render page coverage incomplete': 'render_page_coverage_incomplete',
+                'saved workbook contains an error or an uncalculated formula': 'xlsx_result_invalid',
+                'saved workbook formulas changed; inspect the retained source': 'xlsx_formula_changed',
+            }.get(str(error))
+        if isinstance(error, WorkbookCheckError):
+            reason = {'declared explanation cells must be text': 'xlsx_text_cell_type',
+                      'declared explanation cells changed': 'xlsx_text_cell_changed'}.get(str(error), 'xlsx_result_invalid')
+            print(json.dumps({'status': 'not_prepared', 'code': reason, 'cells': error.cells[:50],
+                              'cell_count': len(error.cells), 'delivery_attempted': False}, ensure_ascii=False))
+        if isinstance(error, SourceMissingError):
+            reason = 'input_missing_refresh_work_context'
         if isinstance(error, subprocess.TimeoutExpired):
             reason = 'document_tool_timeout'
         elif (isinstance(error, BlockingIOError) and error.errno in (errno.EAGAIN, errno.EWOULDBLOCK)
@@ -681,6 +984,11 @@ def main():
                'manifest': str(target / 'render.json'),
                'files': [str(target / name) for name in result['files']
                          if Path(name).suffix.lower() in ('.docx', '.xlsx', '.pptx', '.pdf')]}
+    if 'work_id' in result:
+        receipt['manifest_ref'] = target.name + '/render.json'
+        receipt['source_path'] = result['source_path']
+        if 'source_input' in result:
+            receipt['source_input'] = result['source_input']
     if 'xlsx' in result:
         receipt['xlsx'] = {key: value for key, value in result['xlsx'].items()
                            if key in ('formula_count', 'formula_caches_checked',

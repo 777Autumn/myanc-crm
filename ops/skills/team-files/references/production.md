@@ -21,20 +21,34 @@ conditions, even when the first view seems clear. They cover the page edges too;
 do not inspect only a guessed date location. Detail images are preparation, not
 verified facts. If a required view is missing or unreadable, preserve that gap
 and do not claim the page's date or condition is absent. Inspection previews stay inside this
-work and need no new business delivery or approval. If the supported render/read
-actually fails or permission is denied, preserve the evidence and stop under the
-existing rules; report the affected pages and remaining uncertainty. State which
+work and need no new business delivery or approval. Recover a local input/reference
+error through the bounded steps below. Permission denial, unsafe boundaries and
+unresolved runtime failures retain the existing stop rule; report the affected
+pages and remaining uncertainty. State which
 figures remain illegible after inspection and need verification. Preserve the original PDF;
 extracted text does not preserve its layout and is not an editable replacement.
 Native Feishu images appear in `work-context.inputs`, with saved paths and hashes.
 
-Before summarizing across pages, save a short source ledger in the working notes
-file. First transcribe the relevant words from each actual page image, then derive
-the business fields from those quotes. For each row keep the selected input ID/hash,
-page number, date quote and its location (including header/footer), amount/status
-quote, supporting record and the exact qualifier attached to that fact. Keep the
-quoted words separate from the interpretation; a blank field is not evidence of
-absence. Do not fill dates from the filename, an earlier summary or another page.
+Before summarizing a selected PDF, save page-specific rows under the current
+output directory: `[{"page":1,"quote":"actual words","meaning":"interpretation"}]`.
+Keep dates, amounts, supporting records and their qualifiers on their own cited
+page. An absence/illegibility observation uses `quote: ""` and
+`observation: "not_printed"` or `"illegible"`; a blank quote by itself is insufficient.
+Record the location (header/body/footer) in the meaning. Use the source render's
+returned `manifest_ref` and this saved rows file:
+
+```sh
+/opt/team-files/bin/python /usr/local/libexec/team_file_render.py \
+  --source-ledger '<manifest_ref>' --quotes-file '<relative rows filename>'
+```
+
+The helper binds each page to its exact overview/detail files and copies the
+current selected input ID, name and hash into the saved ledger. Use its `source`
+fields and row `citation` directly when generating files; do not retype IDs.
+The helper does not verify the transcribed words or their interpretation.
+After the visual comparison below, base the first answer on these same page rows.
+Say "both pages" only when separate checked rows support the statement for each
+page. Dates and absence claims cannot come from filenames or another page.
 
 In a separate tool call, reopen the saved ledger and compare its rows with the
 actual source page overview and detail images before answering. Keep the relevant
@@ -108,6 +122,12 @@ readback after the selected original has been read.
   Write explanations as text (`write_string`, or an explicit string cell type),
   especially text beginning with `=`. Use formulas only for actual calculations;
   preserve valid formulas when revising an imported workbook.
+  Declare each equals-prefixed explanation cell with `--text-cell 'Sheet!A1'`
+  when rendering. The helper rejects a declared explanation still stored as a
+  formula before conversion, and checks its type/value again in the saved copy.
+  It never guesses cell intent or changes a formula automatically. On a type
+  rejection, correct only the intended explanation cells in a new revision,
+  preserving genuine calculations, then render that revision.
   For a new budget, put a short business title on its own row and retain long
   source/test identifiers on a separate wrapped row. Set wrap and sufficient
   row height explicitly for merged titles. Set column widths, orientation,
@@ -120,16 +140,21 @@ readback after the selected original has been read.
 
 ## Update, render, inspect
 
-Keep the managed workspace as the shell's working directory. Use absolute paths
-from the current work context; file preparation needs no `cd` or temporary
-extraction directory. Run the installed helper as one command:
+Keep the managed workspace as the shell's working directory. Generation code
+obtains `output_dir` from the actual `work-context` JSON and joins the short
+output filename; retain that filename for the next command. Render a saved
+revision with its relative output filename:
 
 ```sh
 /opt/team-files/bin/python /usr/local/libexec/team_file_render.py \
-  --work-root '<current work root: parent of output_dir>' \
-  --input '<selected DOCX, XLSX, PPTX or PDF path>' \
-  --output-dir '<output_dir/new unique render directory>'
+  --output-file '<saved revision filename under output_dir>'
 ```
+
+For a selected original, replace `--output-file` with `--input-id '<exact input ID>'`.
+The helper reads fresh work context, checks the selected hash, chooses a new render
+directory, and returns `manifest_ref`. Use its returned paths directly. The legacy
+explicit `--work-root/--input/--output-dir` entrance remains for fixed offline
+fixtures; ordinary work uses the context-bound references.
 
 Inspect its returned files in separate permitted read calls. Do not append
 directory switches, relative `ls` probes or other shell diagnostics to this
@@ -140,6 +165,21 @@ if an operation is denied, preserve the stop rule and report the unfinished step
 Let the helper create the new render directory; pass a path that does not yet
 exist. If it reports an existing output directory, preserve that directory and
 choose a new name; this input error does not require broader permissions.
+
+For `input_missing_refresh_work_context`, re-identify the same selected source
+or saved revision from current context, then actually rerun the context-bound
+render command; merely finding the corrected path does not finish recovery.
+For `xlsx_text_cell_type`, use the returned cell coordinates to correct the
+declared explanations. For `xlsx_result_invalid`, inspect the retained converted
+copy's reported error/cache cells and correct their source formulas or intended
+text types. Keep genuine formulas and the validation checks. Save a new revision
+and perform one corrected render attempt for the identified local defect; a
+second failure remains unresolved and must be reported with its evidence.
+After a successful retry, continue saved-content readback, all-page inspection
+and delivery preparation in the same task. A dependency, permission, busy/stale
+profile, process-accounting, timeout or unknown converter error is not a local
+path/type retry authorization. Preserve the runtime diagnostic and stop that
+conversion under the existing rule.
 
 On macOS, convert files within the same work one at a time. Wait for each
 converter to finish before starting the next; the work has one protected Office
@@ -247,8 +287,35 @@ write revisions under new names/directories.
 An imported colleague's artifact is the selected source, not access to their
 private history. Ask for an absent editable original when required for revision.
 
-Deliver through the existing `file-deliver` protocol only after readback and
-visual inspection. Refresh `latest_version` between file deliveries. Keep the
+For rendered Word/Excel/PDF, prepare each delivery using the final render's
+`manifest_ref`, the chosen artifact basename, every actually inspected page name
+and every saved Office/PDF filename actually read. For a one-page Word/PDF set:
+
+```sh
+/opt/team-files/bin/python /usr/local/libexec/team_file_render.py \
+  --prepare-delivery '<manifest_ref>' --artifact '<final.docx>' \
+  --inspected-page 'page-1.png' --read-content '<final.docx>' --read-content '<final.pdf>'
+```
+
+Use the actual names/count from that manifest; repeat flags for additional pages.
+This checks current work, source and rendered-file hashes and complete declared
+inspection coverage. It cannot establish visual correctness or truth of a quote.
+`source_changed_render_new_revision` or `output_changed_render_new_revision`
+requires a fresh render and fresh readback/inspection after the last edit.
+On `prepared_not_sent`, pass the returned request file unchanged to the existing
+controlled client, avoiding manual path/hash/version transcription:
+
+```sh
+/usr/local/bin/cc-connect-file file-deliver < '<request_file>'
+```
+
+Preparation never sends. On `reconcile_delivery`, inspect the returned fresh
+`file-status` receipt instead; no new request file was prepared. Resolve unknown
+or submitted status under the existing protocol before another attempt. A prior
+accepted matching artifact is already delivered; keep it and continue only the
+remaining files. Prepare the next member separately to obtain its current version.
+For other supported artifact formats, use the existing `file-deliver` protocol
+after the same saved-file and visual checks. Keep the
 set's revision label in each filename/content so PPT, PDF, poster and budget can
 be identified together; no new manifest or task platform is required. If a send
 becomes unknown, stop further delivery and reconcile its receipt before sending
