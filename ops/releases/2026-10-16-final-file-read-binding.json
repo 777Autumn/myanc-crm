@@ -1,0 +1,361 @@
+{
+  "schema": 1,
+  "at": "2026-10-16T03:28:57.462287+00:00",
+  "scope": "Case B actual final-file and hash-bound pre-send reading; three-case live acceptance, not universal document reliability.",
+  "implementation_result": "pass",
+  "source_delivery_result": "pass",
+  "online_cutover_result": "pass",
+  "live_acceptance_result": "pass_with_nonblocking_wording_finding",
+  "report_delivery": "This report-only commit must separately pass exact-head review, PR CI, gated merge and exact merge push CI; external receipts are retained locally.",
+  "sources": [
+    {
+      "repo": "777Autumn/myanc-crm",
+      "base": "d1849bee392870ebd46dca697c3f1e5b8b0cb536",
+      "reviewed_head": "3a1fe7ea020df0d15f51e359a99a95bcce37019c",
+      "merged": "c7044108296857eb448547fcf471953b55c105f1",
+      "tree": "2fef956f4f1823d1e9de4532a512b595246d25e9",
+      "pull_request": "https://github.com/777Autumn/myanc-crm/pull/172",
+      "push_ci": "https://github.com/777Autumn/myanc-crm/actions/runs/38838003732",
+      "jobs": {
+        "test": "success",
+        "mac-maintenance": "success"
+      }
+    },
+    {
+      "repo": "777Autumn/cc-connect-anc",
+      "base": "14f584609b5fcc3de796c5bc8ee742ac86671a9f",
+      "reviewed_head": "acd1ec2e1cc096bd60ba746d6696abb4d8e66c2d",
+      "merged": "e766dd3475a688c69b6bebc5ea4d3c94ceadc6ec",
+      "tree": "9fee972ee831f06c081ffee2018bbfb36bacd67c",
+      "pull_request": "https://github.com/777Autumn/cc-connect-anc/pull/74",
+      "push_ci": "https://github.com/777Autumn/cc-connect-anc/actions/runs/38839196377",
+      "jobs": {
+        "mac-codex (macos-latest)": "success",
+        "mac-codex (ubuntu-latest)": "success",
+        "lint": "success",
+        "unit-test": "success",
+        "smoke-test": "success",
+        "regression-test": "success",
+        "performance-test": "success"
+      }
+    }
+  ],
+  "knowledge_unchanged": "ada437cac33d156634b70b20948dc7abc09bec7e",
+  "candidate_sha256": "618d659a1005f709b36896e45e8e35a8345166286b3b89e204de4ecefa205136",
+  "candidate_manifest_sha256": "13c6df9f14dffa675be29caa964c7b801fd43dcced30e31edbc89671549b3b55",
+  "post_live_runtime": {
+    "verified_at": "2026-10-16T03:24:52.843065+00:00",
+    "same_process": true,
+    "same_sockets": true,
+    "same_controls": true,
+    "controls_sha256": "8e72b8cfda1c9ffd308e199b4221156129a70fa6721f0db42a97d4bcca8e93e7"
+  },
+  "cases": [
+    {
+      "case": "V27",
+      "process_result": "pass",
+      "facts_result": "pass_critical_facts_with_nonblocking_wording_finding",
+      "fact_checks": 14,
+      "pdf_pages": 2,
+      "artifacts": [
+        {
+          "sha256": "0eaca5a752e62b523348496886f0f81e89d0ea60b436278e7bfe40e9bc588941",
+          "content_sha256": "71196ffd7ae0164a9d676e8a817642c76eab8b28cc349f8f7051abe43de62c9e",
+          "read_version": 2,
+          "chunks_provided": 22,
+          "chunks_total": 22,
+          "bytes": 26374,
+          "status": "accepted",
+          "accepted_at": "2026-10-16T03:07:13.180Z",
+          "format": "docx"
+        },
+        {
+          "sha256": "858a01556ce6d3c188b065673ef92f46c279c17ef1791a0c1a82f680b78e6eec",
+          "content_sha256": "9350a9cd26e57fea8bd68b42976ce37f702b303775ba87b70b94acbaa91ca5b6",
+          "read_version": 2,
+          "chunks_provided": 2,
+          "chunks_total": 2,
+          "bytes": 239844,
+          "status": "accepted",
+          "accepted_at": "2026-10-16T03:07:22.093Z",
+          "format": "pdf"
+        }
+      ],
+      "finding_ids": [
+        "V27-NB-01"
+      ]
+    },
+    {
+      "case": "V28",
+      "process_result": "pass",
+      "facts_result": "pass",
+      "fact_checks": 15,
+      "pdf_pages": 2,
+      "artifacts": [
+        {
+          "sha256": "750ef1ad9f8ba21f970762068deb06e5ec018742db022f6e4fc236c56fd9728b",
+          "content_sha256": "cfffaccd84f370eea0bf4cbaaeb9b69640e5cae2d05ea877d727d345b4d6b446",
+          "read_version": 2,
+          "chunks_provided": 34,
+          "chunks_total": 34,
+          "bytes": 27321,
+          "status": "accepted",
+          "accepted_at": "2026-10-16T03:12:47.906Z",
+          "format": "docx"
+        },
+        {
+          "sha256": "3b235f3dd2d4879217ff3192cec6c949bf3ffbd932d755920b0a3180e0bbf0ef",
+          "content_sha256": "556e48e745e25fad4eadba7febec5fde2f64b404a30bc3a3ce224b9db1bfb38c",
+          "read_version": 2,
+          "chunks_provided": 2,
+          "chunks_total": 2,
+          "bytes": 254033,
+          "status": "accepted",
+          "accepted_at": "2026-10-16T03:13:03.822Z",
+          "format": "pdf"
+        }
+      ],
+      "finding_ids": []
+    },
+    {
+      "case": "V29",
+      "process_result": "pass",
+      "facts_result": "pass",
+      "fact_checks": 19,
+      "pdf_pages": 2,
+      "artifacts": [
+        {
+          "sha256": "59b1472330ba1994fb5cbab2e579c0218fa6c27699a00d6fbda76296eb7fb11a",
+          "content_sha256": "8d6d2cf4c691e0ba49d3b25873e0e2e71bbaafcad8968b046760185dfce5671b",
+          "read_version": 2,
+          "chunks_provided": 16,
+          "chunks_total": 16,
+          "bytes": 26156,
+          "status": "accepted",
+          "accepted_at": "2026-10-16T03:18:57.041Z",
+          "format": "docx"
+        },
+        {
+          "sha256": "6f2841be53720926f76abb6358de7eea8767c84eea517bd71820e52b6fd03bad",
+          "content_sha256": "949c79e2520f31ef8d9026660f0f1d4efea101d31a285daa8b7c1b0e608a0549",
+          "read_version": 2,
+          "chunks_provided": 2,
+          "chunks_total": 2,
+          "bytes": 229497,
+          "status": "accepted",
+          "accepted_at": "2026-10-16T03:19:06.532Z",
+          "format": "pdf"
+        }
+      ],
+      "finding_ids": []
+    }
+  ],
+  "actual_files": 6,
+  "actual_pdf_pages": 6,
+  "complete_final_segments": 78,
+  "business_scope": "One selected fictional record, associated customer/handoffs and five ledger snapshots; all unchanged, not tenant-wide.",
+  "preservation": {
+    "dirty_files": 38,
+    "prior_evidence_files": 344,
+    "older_evidence_files": 1580,
+    "result": "pass"
+  },
+  "retained_outcomes": [
+    {
+      "attempt": "first_live_V27",
+      "result": "process_fail",
+      "reason": "Final Word tool output truncated; post-send correct content does not erase missing full read."
+    },
+    {
+      "attempt": "first_live_V28",
+      "result": "process_fail_and_local_source_attribution_finding",
+      "reason": "Final Word output truncated; AF-01 source page finding retained."
+    },
+    {
+      "attempt": "second_live_V28",
+      "result": "recovered",
+      "reason": "PDF version conflict; context confirmed Word accepted before fresh PDF preparation/send."
+    },
+    {
+      "attempt": "second_live_V29_v1",
+      "result": "incomplete_discarded",
+      "reason": "3/60 old-version segments; replaced v2 has complete independent reads."
+    },
+    {
+      "attempt": "first_maintenance_start",
+      "result": "failed_then_one_reviewed_recovery",
+      "reason": "Unidentified physical process; original root cause remains unknown."
+    }
+  ],
+  "next_batch": [
+    {
+      "id": "AF-01",
+      "priority": "P2",
+      "status": "first-run evidence retained; did not recur on second V28",
+      "direction": "Preserve per-claim source-page attribution."
+    },
+    {
+      "id": "V27-NB-01",
+      "priority": "P3",
+      "status": "nonblocking for scoped B acceptance",
+      "direction": "Do not narrow generic event to wedding without source evidence."
+    },
+    {
+      "id": "V28-preparation-conflict",
+      "priority": "P3",
+      "status": "safely recovered",
+      "direction": "Prepare each delivery against current version immediately before send; retain conflict rejection."
+    },
+    {
+      "id": "startup-unknown-process",
+      "priority": "separate_maintenance_followup",
+      "status": "root cause unknown",
+      "direction": "Use preserved process evidence; do not remove startup guards."
+    }
+  ],
+  "limits": [
+    "Hashes and complete host provision do not prove semantic understanding or visual correctness.",
+    "Arbitrarily small downstream output budgets can still truncate; actual visible segments were checked for these cases.",
+    "Native trace omits image pixels; all final PDFs were independently rendered/viewed after download.",
+    "PDF text-layer ordering can be irregular despite readable rendering.",
+    "No performance refactor or benchmark, production Docling or EvoOntology integration."
+  ],
+  "local_evidence": [
+    {
+      "name": "baseline-01.json",
+      "sha256": "51fb22fec5efc7f07bc4df9b73a1e67de333959817dabec681d90603c4acc111"
+    },
+    {
+      "name": "github-delivery-01.json",
+      "sha256": "50ac70d6cf693bfb64893d759ede2552389c9b399c302cb30491fe493c1ffc41"
+    },
+    {
+      "name": "github-chunks-delivery-01.json",
+      "sha256": "cfaabb8feb7d8ad8ab7c8b230e5084d8075bdaa9a54d81002d5e8eff945a8a1b"
+    },
+    {
+      "name": "chunks-spec-final-01.json",
+      "sha256": "74384c5dbd078979584683660cf97842edc696f40813ccb614213acea999da68"
+    },
+    {
+      "name": "chunks-standards-final-01.json",
+      "sha256": "cc8bcc7dd81de7c868b55aefdd062f36727eebf61605d8292e1ce613b4ef6e63"
+    },
+    {
+      "name": "linux-export-1792114020361213900.json",
+      "sha256": "73727f0bc750bdd2a4abf5f90ec7c8eef28a2fe565e30cbb37237078d673a107"
+    },
+    {
+      "name": "linux-export-1792114020361213900.log",
+      "sha256": "2f02dd77ea116345b0d4259f9040c39f9346f5b0549cd3970a74f79f3fa1b08c"
+    },
+    {
+      "name": "linux-export-1792114803083044400.json",
+      "sha256": "a737df5583b7ec806476c1e38732015b8366c8d5640e603719bd67ad5a909889"
+    },
+    {
+      "name": "linux-export-1792115546116327300.json",
+      "sha256": "e3a674bb99f64b6b25a4c273f4c7c73c292948391f2c9231369487566d9d6961"
+    },
+    {
+      "name": "live-first-process-spec-final-01.json",
+      "sha256": "2cdefea5fcf90f914503dcf2c6210e6a89bf277494e29d82d55214aece1e14c0"
+    },
+    {
+      "name": "actual-files-facts-review-01.json",
+      "sha256": "7cf2dc5b7592188e85f37a2c51ac644f189943a0fbf58427124b13b243662b7c"
+    },
+    {
+      "name": "recovery-actual-standards-01.json",
+      "sha256": "827fcfc1feed201d519ea4256597934d8bf247634c5071ed1077bbe9f5c082e9"
+    },
+    {
+      "name": "maintenance-chunks/maintenance-reviewed.json",
+      "sha256": "68a2f81fd805cd230b02728f07aff7b2fc460d1cb18ab8309b6727552d815a7f"
+    },
+    {
+      "name": "maintenance-chunks/maintenance-actual-standards-01.json",
+      "sha256": "858771401635d26695b7cc5d380828b96516d3e76d8172be28891174deb80dd6"
+    },
+    {
+      "name": "chunks-validation-plan-01.json",
+      "sha256": "20bcad2a7aa65c33f9e9874a94b7c168331bc760df11437c56a70f023fc2e1b5"
+    },
+    {
+      "name": "chunks-live-prompts-01.json",
+      "sha256": "585df5ab6f5b97261aa3819e6cbcc795f0b07b0137853f18e2393d6deacbfdac"
+    },
+    {
+      "name": "materials-chunks/answer-review-02.json",
+      "sha256": "b7268ceffedae56fd1a7594c35a2d7906eed18532afddf455466dcb4679e17ad"
+    },
+    {
+      "name": "materials-chunks/root-answer-combination-review-01.json",
+      "sha256": "0f9d5bf1a51e5715bda7b06a5a88a85623af817e3102d9380f400ac18ba6cac9"
+    },
+    {
+      "name": "acceptance-trace-1792120916811314600.json",
+      "sha256": "38365610659366da64d036cf46dc369a2904e80372011548bf2f80d968a5d55d"
+    },
+    {
+      "name": "boundary-capture-1792120965843718600.json",
+      "sha256": "afb6e9f5a8db88e50d738debc044721d19be1a4003795ab1bbce157701293f04"
+    },
+    {
+      "name": "chunks-live-process-spec-final-01.json",
+      "sha256": "0a1f4c517cf91862ecf88f80423ca6a76fe32d5b19e4f4f39e3c66e563843096"
+    },
+    {
+      "name": "chunks-live-three-cases-facts-summary-01.json",
+      "sha256": "fbc335d7dccc1fb812ce10ad324cdbebac84cdec525956b7998e0d449211190a"
+    },
+    {
+      "name": "chunks-live-v27-process-spec-02.json",
+      "sha256": "df9894e849b0fbb1efe74686042b7ca27a957597dd1a1ddf46abb0e38bc15fc9"
+    },
+    {
+      "name": "chunks-live-v28-process-spec-02.json",
+      "sha256": "9b30130e4bcb4c35658cd5200e971a68ed9ff2c8cb9dcf6bd28498cb125dc477"
+    },
+    {
+      "name": "chunks-live-v29-process-spec-02.json",
+      "sha256": "75cbb1af8fa33901e032e22a7c853436f308ca36341aa9fe4b0388a4e6978191"
+    },
+    {
+      "name": "chunks-live-v27-facts-review-01.json",
+      "sha256": "2b0f12e65c024870ae23d80db2ce4bd583c5a466f18aebdd496095bcf023f303"
+    },
+    {
+      "name": "chunks-live-v28-facts-review-01.json",
+      "sha256": "c08c0e25ca9d78a2d36905e3834d4b82424c4adbc169775444242a56bbccb1d4"
+    },
+    {
+      "name": "chunks-live-v29-facts-review-01.json",
+      "sha256": "d25c8b30dc1720f825a80b9603bd311c2ab18cc18e0631970efda0496f8e6abc"
+    },
+    {
+      "name": "chunks-v28-fetch-builder-failure-01.json",
+      "sha256": "967bf2bdb8e595fe1cfc9c14e2723b6353b7a9ce9e970e9c1e07b80376ad8d89"
+    },
+    {
+      "name": "chunks-fetch-builder-v2-standards-01.json",
+      "sha256": "57beef22afad56ed35718a255b22ef56a1928040bc12995aad93d1e4ae751741"
+    },
+    {
+      "name": "runtime-chunks-1792121092843284100.json",
+      "sha256": "d54334bb98dd9c9a86679fca13c91a5fda3c7e3ad084163410d108e64995e098"
+    },
+    {
+      "name": "business-after-chunks-comparison-01.json",
+      "sha256": "9d0e5f9d39b4756468bf0f20dd608524b88417c71bd8d7e49b9ff4a01dae5d52"
+    },
+    {
+      "name": "preservation-1792121130587345200.json",
+      "sha256": "1212a6e63d511d901fb58d7a58d7235c94cb1c03cec3bb76d4b48a7a98cedd2f"
+    },
+    {
+      "name": "chunks-post-live-standards-01.json",
+      "sha256": "39b6911d54029e420bb3d9971f5ae44db4cdb6d86efced3002dcbaa86e2a35f7"
+    }
+  ]
+}
