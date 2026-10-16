@@ -302,6 +302,17 @@ existing all-page visual inspection remains required. For a Word/PDF set:
   --read-final '<manifest_ref>' --artifact '<final.pdf>'
 ```
 
+Each call returns one segment of at most 8 KiB. For `content_read_partial`, inspect
+the returned part and call the same command with `--chunk <next_chunk>`; continue
+until `content_read`. Keep enough tool output budget (at least 8192 tokens) and
+inspect each response separately. Do not hide, concatenate or discard output in a
+shell loop. If a tool truncates a segment, reread that same segment with sufficient
+output budget before continuing. The host tracks sequential provision, not whether
+a downstream tool displayed it or the model understood it. Missing segments and
+legacy single-response records cannot authorize delivery; changes to final bytes
+require a fresh read from chunk 0. All XML text is preserved, including revisions,
+formulas, caches, headers and footers.
+
 Then prepare each artifact using every actually inspected page name. For one page:
 
 ```sh
@@ -315,7 +326,7 @@ This requires host-recorded reads of every final Office/PDF's exact path and has
 A source-file read or a caller `--read-content` declaration cannot substitute.
 The host also enforces this at actual sending. Neither the receipt nor its hash
 establishes comprehension, visual correctness or truth of a quote. Content read
-limits fail closed, never issue partial complete receipts; report a supported
+limits fail closed, never treat a partial record as complete; report a supported
 size/format limitation rather than editing evidence or removing checks.
 `source_changed_render_new_revision` or `output_changed_render_new_revision`
 requires a fresh render and fresh readback/inspection after the last edit.

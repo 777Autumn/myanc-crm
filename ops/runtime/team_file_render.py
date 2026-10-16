@@ -537,18 +537,27 @@ def checked_manifest(context, reference):
     return path, result, pages, hashlib.sha256(data).hexdigest()
 
 
-def read_final(reference, artifact):
+def read_final(reference, artifact, chunk=0):
     """Return actual final content through the existing authenticated file host."""
+    if type(chunk) is not int or not 0 <= chunk < 512:
+        raise ValueError('final content read evidence missing')
     context = work_context()
     path, result, _, _ = checked_manifest(context, reference)
     if artifact not in result['files'] or Path(artifact).suffix.lower() not in ('.docx', '.xlsx', '.pptx', '.pdf'):
         raise ValueError('artifact not in final render')
     relative = (path.parent / artifact).relative_to(Path(context['output_dir']).resolve()).as_posix()
-    request = {'work_id': context['work_id'], 'path': relative, 'sha256': result['files'][artifact]}
+    request = {'work_id': context['work_id'], 'path': relative, 'sha256': result['files'][artifact], 'chunk': chunk}
     reply = subprocess.run(['/usr/local/bin/cc-connect-file', 'file-read'],
                            input=json.dumps(request).encode(), capture_output=True, timeout=35, check=True)
     read = json.loads(reply.stdout)
-    if (read.get('status') != 'content_read' or any(read.get(k) != v for k, v in request.items())
+    total, provided = read.get('chunks_total'), read.get('chunks_provided')
+    if (len(json.dumps(read, ensure_ascii=False, separators=(',', ':')).encode()) + 1 > 8192 or read.get('read_version') != 2
+            or any(type(n) is not int for n in (total, provided))
+            or not chunk < provided <= total <= 512
+            or read.get('status') != ('content_read' if chunk + 1 == total else 'content_read_partial')
+            or (chunk + 1 < total and read.get('next_chunk') != chunk + 1)
+            or (chunk + 1 == total and 'next_chunk' in read)
+            or any(read.get(k) != v for k, v in request.items())
             or not isinstance(read.get('content'), dict) or not read['content'].get('parts')
             or not re.fullmatch(r'[0-9a-f]{64}', read.get('content_sha256', ''))):
         raise ValueError('final content read evidence missing')
@@ -574,6 +583,9 @@ def prepare_delivery(reference, artifact, inspected_pages, read_contents=()):
     for name in files:
         relative = (path.parent / name).relative_to(Path(context['output_dir']).resolve()).as_posix()
         matches = [r for r in reads if r.get('path') == relative and r.get('sha256') == result['files'][name]
+                   and r.get('read_version') == 2 and type(r.get('chunks_total')) is int
+                   and type(r.get('chunks_provided')) is int and 1 <= r['chunks_total'] <= 512
+                   and r['chunks_provided'] == r['chunks_total']
                    and isinstance(r.get('content_sha256'), str) and re.fullmatch(r'[0-9a-f]{64}', r['content_sha256'])]
         if len(matches) != 1:
             raise ValueError('final content read evidence missing')
@@ -935,12 +947,15 @@ def main():
     parser.add_argument('--quotes-file', help='relative saved page rows under output_dir')
     parser.add_argument('--text-cell', action='append', default=[])
     parser.add_argument('--artifact')
+    parser.add_argument('--chunk', type=int, help='one final-content segment, starting at 0; follow next_chunk')
     parser.add_argument('--inspected-page', action='append', default=[])
     parser.add_argument('--read-content', action='append', default=[], help='legacy filename list; never substitutes for host content-read evidence')
     parser.add_argument('--output-dir')
     parser.add_argument('--gateway', default='/usr/local/bin/cc-connect-anc', help='matching candidate binary; local validation only')
     args = parser.parse_args()
     try:
+        if args.chunk is not None and (args.read_final is None or not 0 <= args.chunk < 512):
+            parser.error('--chunk requires --read-final and a value from 0 to 511')
         if args.source_ledger is not None:
             if (args.work_root or args.output_dir or not args.quotes_file or args.artifact
                     or args.inspected_page or args.read_content or args.text_cell):
@@ -952,7 +967,7 @@ def main():
         if args.read_final is not None:
             if args.work_root or args.output_dir or not args.artifact or args.text_cell or args.inspected_page or args.read_content:
                 parser.error('final read requires only --artifact and current context')
-            print(json.dumps(read_final(args.read_final, args.artifact), ensure_ascii=False))
+            print(json.dumps(read_final(args.read_final, args.artifact, args.chunk or 0), ensure_ascii=False, separators=(',', ':')))
             return
         if args.prepare_delivery is not None:
             if args.work_root or args.output_dir or not args.artifact or args.text_cell:
