@@ -82,6 +82,52 @@ class ContextSourceTests(unittest.TestCase):
 
 
 class PreparedDeliveryTests(unittest.TestCase):
+    def test_final_read_cli_returns_one_partial_segment_without_automatically_advancing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            context, target = self.fixture(Path(tmp).resolve())
+            expected = {'status': 'content_read_partial', 'work_id': 'this-work',
+                        'path': 'render-1/revision.docx', 'sha256': hashlib.sha256(b'updated fields').hexdigest(),
+                        'content_sha256': 'c' * 64, 'read_version': 2, 'chunk': 1,
+                        'chunks_total': 3, 'chunks_provided': 2, 'next_chunk': 2,
+                        'content': {'format': 'ooxml_content_parts', 'parts': [{'name': 'word/document.xml', 'text': 'actual part'}]}}
+            calls = []
+            def host(args, **kwargs):
+                calls.append(args[-1])
+                if args[-1] == 'work-context':
+                    result = context
+                else:
+                    self.assertEqual(args[-1], 'file-read')
+                    self.assertEqual(json.loads(kwargs['input']), {k: expected[k] for k in ('work_id', 'path', 'sha256', 'chunk')})
+                    result = expected
+                return subprocess.CompletedProcess(args, 0, json.dumps(result).encode(), b'')
+            out = io.StringIO()
+            with patch('sys.argv', ['render', '--read-final', 'render-1/render.json', '--artifact', 'revision.docx', '--chunk', '1']), \
+                    patch('team_file_render.subprocess.run', side_effect=host), redirect_stdout(out):
+                renderer.main()
+            self.assertEqual(json.loads(out.getvalue()), expected)
+            self.assertEqual(calls, ['work-context', 'file-read'])
+            self.assertEqual(list(target.glob('delivery-request-*')), [])
+            for change in ({'status': 'content_read'}, {'next_chunk': 1}, {'read_version': 0},
+                           {'chunks_provided': 1}, {'scope': 'x' * 8192}):
+                bad = dict(expected, **change)
+                with patch('team_file_render.work_context', return_value=context), \
+                        patch('team_file_render.subprocess.run', return_value=subprocess.CompletedProcess([], 0, json.dumps(bad).encode(), b'')), \
+                        self.assertRaises(ValueError):
+                    renderer.read_final('render-1/render.json', 'revision.docx', 1)
+
+    def test_partial_or_legacy_host_provision_cannot_prepare_delivery(self):
+        for proof in ({'read_version': 2, 'chunks_provided': 1, 'chunks_total': 3}, {}):
+            with self.subTest(proof=proof), tempfile.TemporaryDirectory() as tmp:
+                context, target = self.fixture(Path(tmp).resolve())
+                for item in context['content_reads']:
+                    for key in ('read_version', 'chunks_provided', 'chunks_total'):
+                        item.pop(key, None)
+                    item.update(proof)
+                with patch('team_file_render.subprocess.run', return_value=subprocess.CompletedProcess(
+                        [], 0, json.dumps(context).encode(), b'')), self.assertRaises(ValueError):
+                    renderer.prepare_delivery('render-1/render.json', 'revision.docx', ['page-1.png'])
+                self.assertEqual(list(target.glob('delivery-request-*')), [])
+
     def test_caller_read_claim_cannot_replace_host_final_content_evidence(self):
         with tempfile.TemporaryDirectory() as tmp:
             context, target = self.fixture(Path(tmp).resolve())
@@ -99,6 +145,7 @@ class PreparedDeliveryTests(unittest.TestCase):
             expected = {'status': 'content_read', 'work_id': 'this-work',
                         'path': 'render-1/revision.docx', 'sha256': hashlib.sha256(b'updated fields').hexdigest(),
                         'content_sha256': 'c' * 64,
+                        'read_version': 2, 'chunk': 0, 'chunks_total': 1, 'chunks_provided': 1,
                         'content': {'format': 'ooxml_content_parts', 'parts': [{'name': 'word/document.xml', 'text': 'Actual final content'}]}}
             def host(args, **kwargs):
                 calls.append(args[-1])
@@ -106,7 +153,7 @@ class PreparedDeliveryTests(unittest.TestCase):
                     result = context
                 else:
                     self.assertEqual(args[-1], 'file-read')
-                    self.assertEqual(json.loads(kwargs['input']), {k: expected[k] for k in ('work_id', 'path', 'sha256')})
+                    self.assertEqual(json.loads(kwargs['input']), {k: expected[k] for k in ('work_id', 'path', 'sha256', 'chunk')})
                     result = expected
                 return subprocess.CompletedProcess(args, 0, json.dumps(result).encode(), b'')
             out = io.StringIO()
@@ -135,7 +182,8 @@ class PreparedDeliveryTests(unittest.TestCase):
         context = {'enabled': True, 'work_id': 'this-work', 'output_dir': str(output),
                    'latest_version': 3, 'inputs': [], 'artifacts': [],
                    'content_reads': [{'path': 'render-1/' + name, 'sha256': manifest['files'][name],
-                                      'content_sha256': 'd' * 64} for name in ('revision.docx', 'revision.pdf')]}
+                                      'content_sha256': 'd' * 64, 'read_version': 2,
+                                      'chunks_total': 1, 'chunks_provided': 1} for name in ('revision.docx', 'revision.pdf')]}
         return context, target
 
     def test_revision_cannot_reuse_old_render_or_incomplete_inspection(self):

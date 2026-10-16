@@ -56,7 +56,10 @@ Ordinary employee work uses `--input-id` or `--output-file` to resolve the sourc
 from the authenticated `work-context`; explicit paths remain the offline entrance.
 Selected-PDF ledgers copy source IDs and bind page rows to the render's images.
 `--read-final` supplies actual final Office/PDF content through the authenticated
-host. `--prepare-delivery` requires host-recorded final-path/hash reads and
+host, one segment per invocation. Start at `--chunk 0`, inspect the result, then
+follow `next_chunk` until `content_read`; partial or legacy single-response records
+cannot authorize sending. Each response is limited to 8 KiB. `--prepare-delivery`
+requires host-recorded complete version-2 final-path/hash reads and
 caller-reported page inspection, then writes a request; it never sends files.
 The file host independently rejects Office/PDF delivery without that read record.
 Content records prove supplied content, not comprehension, visual correctness or

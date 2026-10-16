@@ -9,7 +9,7 @@ Keep commands and local paths internal; employees work entirely in Feishu.
 | Command | Input | Result |
 |---|---|---|
 | `work-context` | `{}` | `enabled`, `work_id`, selected `inputs` (`id/name/path/sha256`), `output_dir`, `latest_version`, `artifacts`, host `content_reads` |
-| `file-read` | `work_id`, `path`, `sha256` | `content_read`, exact path/hash, `content_sha256`, actual content parts; no send |
+| `file-read` | `work_id`, `path`, `sha256`, optional `chunk` (starts at 0) | One bounded segment; `content_read_partial` with `next_chunk`, then `content_read`; exact file/content hashes and host progress; no send |
 | `file-deliver` | `work_id`, `path`, `sha256`, `expected_version` | `delivery_id`, `version`, `status`, name/path/hash and optional `message_receipt` |
 | `file-status` | `work_id`, `delivery_id` | The persisted delivery state/receipt for that work |
 
@@ -46,7 +46,8 @@ context and identifying the intended artifact before making another request.
 
 For rendered Word/Excel/PDF, use [document production](production.md)'s
 `--read-final` for each actual saved Office/PDF, then `--prepare-delivery` after
-reviewing that returned content and the final pages. It creates
+reviewing every returned segment and the final pages. Follow `next_chunk` in separate
+calls; partial/legacy records cannot prepare or authorize delivery. It creates
 this same request from the matching final `render.json` and fresh work context;
 feed the returned request file unchanged to this client. It adds no transport,
 recipient, permission or host-validation exception. An uncertain existing
